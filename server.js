@@ -18,54 +18,317 @@ const wss = new WebSocket.Server({ server });
 const rooms = new Map();
 const clients = new Map();
 
+const IMG = (set, id, ext) => `https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/${set}/${id}.${ext}`;
+
 // ─── CARD DATABASE ───
 const CARD_DB = [
-  // LEADERS
-  { id:'L001', name:'Monkey D. Luffy', type:'LEADER', power:5000, color:'Red', attribute:'Strike', life:5, cost:0, counter:0, ability:'[Activate: Main] You may rest this Leader: Give up to 1 of your Characters +1000 power for this turn.' },
-  { id:'L002', name:'Roronoa Zoro', type:'LEADER', power:5000, color:'Green', attribute:'Slash', life:5, cost:0, counter:0, ability:'[Blocker] (You may rest this Leader to make it the target of an enemy attack.)' },
-  { id:'L003', name:'Nami', type:'LEADER', power:5000, color:'Blue', attribute:'Special', life:4, cost:0, counter:0, ability:'[Activate: Main] You may rest this Leader: Draw 1 card, then trash 1 card from your hand.' },
-  { id:'L004', name:'Trafalgar Law', type:'LEADER', power:5000, color:'Purple', attribute:'Slash', life:5, cost:0, counter:0, ability:'[On Your Turn] This Leader gains +1000 power for each DON!! attached to it.' },
-  // CHARACTERS
-  { id:'C001', name:'Nami', type:'CHARACTER', power:1000, color:'Red', attribute:'Special', cost:1, counter:2000, ability:'[On Play] Draw 1 card.' },
-  { id:'C002', name:'Usopp', type:'CHARACTER', power:2000, color:'Red', attribute:'Ranged', cost:2, counter:1000, ability:'[Blocker]' },
-  { id:'C003', name:'Sanji', type:'CHARACTER', power:4000, color:'Red', attribute:'Strike', cost:3, counter:1000, ability:'[Rush] (This card can attack on the turn it is played.)' },
-  { id:'C004', name:'Tony Tony Chopper', type:'CHARACTER', power:1000, color:'Red', attribute:'Strike', cost:1, counter:2000, ability:'[On Play] You may trash 1 card: Draw 2 cards.' },
-  { id:'C005', name:'Nico Robin', type:'CHARACTER', power:3000, color:'Red', attribute:'Special', cost:3, counter:1000, ability:'[When Attacking] Look at top 3 cards of your deck, put 1 in hand, rest on bottom.' },
-  { id:'C006', name:'Franky', type:'CHARACTER', power:5000, color:'Red', attribute:'Strike', cost:5, counter:0, ability:'[Blocker] [DON!! x1] This Character gains +2000 power.' },
-  { id:'C007', name:'Brook', type:'CHARACTER', power:3000, color:'Red', attribute:'Slash', cost:3, counter:1000, ability:'[Rush]' },
-  { id:'C008', name:'Jinbe', type:'CHARACTER', power:5000, color:'Red', attribute:'Strike', cost:5, counter:0, ability:'[Blocker] [On Play] Rest up to 2 of your opponent\'s Characters.' },
-  { id:'C009', name:'Portgas D. Ace', type:'CHARACTER', power:5000, color:'Red', attribute:'Special', cost:4, counter:0, ability:'[Rush] [On Play] Deal 1 damage to your opponent.' },
-  { id:'C010', name:'Sabo', type:'CHARACTER', power:6000, color:'Red', attribute:'Strike', cost:5, counter:0, ability:'[On Play] K.O. up to 1 of your opponent\'s Characters with 3000 power or less.' },
-  { id:'C011', name:'Whitebeard', type:'CHARACTER', power:8000, color:'Red', attribute:'Strike', cost:7, counter:0, ability:'[Blocker] [On Play] All your opponent\'s Characters get -2000 power this turn.' },
-  { id:'C012', name:'Shanks', type:'CHARACTER', power:7000, color:'Red', attribute:'Slash', cost:6, counter:0, ability:'[On Play] Your opponent discards 1 card.' },
-  { id:'C013', name:'Boa Hancock', type:'CHARACTER', power:4000, color:'Blue', attribute:'Special', cost:4, counter:1000, ability:'[On Play] Rest up to 1 of your opponent\'s Characters.' },
-  { id:'C014', name:'Crocodile', type:'CHARACTER', power:6000, color:'Purple', attribute:'Special', cost:5, counter:0, ability:'[On Play] Look at top 5 cards, take 1, rest on bottom.' },
-  { id:'C015', name:'Dracule Mihawk', type:'CHARACTER', power:7000, color:'Green', attribute:'Slash', cost:6, counter:0, ability:'[On Play] K.O. up to 1 Character with 5000 power or less.' },
-  // EVENTS
-  { id:'E001', name:'Gum-Gum Pistol', type:'EVENT', power:0, color:'Red', cost:2, counter:0, ability:'Give up to 1 of your Leader or Characters +4000 power during this battle. [Trigger] Give up to 1 of your Leader or Characters +2000 power.' },
-  { id:'E002', name:'Diable Jambe', type:'EVENT', power:0, color:'Red', cost:3, counter:0, ability:'K.O. up to 1 of your opponent\'s Characters with 3000 power or less. [Trigger] K.O. up to 1 Character with 2000 power or less.' },
-  { id:'E003', name:'Conqueror\'s Haki', type:'EVENT', power:0, color:'Red', cost:4, counter:0, ability:'Your opponent discards 2 cards. [Trigger] Your opponent discards 1 card.' },
-  { id:'E004', name:'Barriers', type:'EVENT', power:0, color:'Blue', cost:2, counter:0, ability:'Return up to 1 of your opponent\'s Characters to their hand. [Trigger] Return up to 1 Character with cost 3 or less to its owner\'s hand.' },
-  { id:'E005', name:'Room', type:'EVENT', power:0, color:'Purple', cost:3, counter:0, ability:'Swap 1 of your Characters with 1 of your opponent\'s Characters. [Trigger] You may play 1 cost-3-or-less Character from your hand.' },
+
+  // ══════════════════════════════
+  // DOFLAMINGO DECK (Purple)
+  // ══════════════════════════════
+  { id:'OP14-060', name:'Donquixote Doflamingo', type:'LEADER', color:'Purple', attribute:'Special',
+    power:5000, life:5, cost:0, counter:0, image:IMG('OP14','OP14-060','png'),
+    ability:"[On Your Opponent's Attack] [Once Per Turn] DON!! -1: Select your Leader or 1 of your {Donquixote Pirates} type Characters. Change the attack target to the selected card." },
+
+  { id:'OP10-065', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:1000, cost:1, counter:1000, image:IMG('OP10','OP10-065','jpg'),
+    ability:'[Activate: Main] You may rest 1 of your DON!! and this Character: Look at the top 5 cards of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand. Place the rest at the bottom of your deck in any order.' },
+
+  { id:'OP14-067', name:'Dellinger', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:2000, cost:1, counter:1000, image:IMG('OP14','OP14-067','png'),
+    ability:'[On K.O.] Add up to 1 DON!! card from your DON!! deck and rest it; look at 5 cards from the top of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand.' },
+
+  { id:'ST18-001', name:'Usohachi', type:'CHARACTER', color:'Yellow', attribute:'Ranged',
+    power:3000, cost:3, counter:2000, image:IMG('ST18','ST18-001','png'),
+    ability:"[On Play] If you have 8 or more DON!! cards, rest up to 1 of your opponent's Characters with a cost of 5 or less." },
+
+  { id:'OP10-076', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:1000, cost:3, counter:2000, image:IMG('OP10','OP10-076','jpg'),
+    ability:"[On Play] You may discard 1 card from your hand: If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! from your DON!! deck and set it as active." },
+
+  { id:'OP14-072', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-072','png'),
+    ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] DON!! -1: Add up to 1 card from the top of your deck to the top of your Life cards.' },
+
+  { id:'OP14-063', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-063','png'),
+    ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] If your opponent has 6 or more DON!! cards on their field, play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand." },
+
+  { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:7000, cost:5, counter:0, image:IMG('OP14','OP14-061','png'),
+    ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead. [When Attacking] DON!! -1: Give up to 1 of your opponent's Characters -2000 power during this turn." },
+
+  { id:'OP10-072', name:'Donquixote Rosinante', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:6000, cost:5, counter:1000, image:IMG('OP10','OP10-072','jpg'),
+    ability:'[On Play] You may trash 1 event card from your hand: Draw 2 cards. [End of Your Turn] If you have 7 or more DON!! cards, set up to 2 of them as active.' },
+
+  { id:'OP14-074', name:'Monet', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:6000, cost:5, counter:1000, image:IMG('OP14','OP14-074','png'),
+    ability:"[On Play] If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] Draw 2 cards and trash 1 card from your hand. Then, add up to 2 DON!! cards from your DON!! deck and rest them." },
+
+  { id:'OP14-068', name:'Trebol', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:5000, cost:5, counter:2000, image:IMG('OP14','OP14-068','png'),
+    ability:"[Opponent's Turn] [Once Per Turn] When a DON!! card on your field is returned to your DON!! deck, if your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and rest it." },
+
+  { id:'OP10-071', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:9000, cost:8, counter:0, image:IMG('OP10','OP10-071','jpg'),
+    ability:"[On Play] DON!! -1: Play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand. [Opponent's Turn] [Once Per Turn] You may rest 1 of your DON!!: add up to 1 Active DON!! from your DON!! deck." },
+
+  { id:'OP11-067', name:'Charlotte Katakuri', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:8000, cost:8, counter:0, image:IMG('OP11','OP11-067','jpg'),
+    ability:'[Blocker] [End of Your Turn] Set up to 2 of your {Big Mom Pirates} type Characters with a cost of 3 or more as active. Then, add up to 1 DON!! card from your DON!! deck and rest it.' },
+
+  { id:'OP14-069', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:10000, cost:10, counter:0, image:IMG('OP14','OP14-069','png'),
+    ability:"[On Play] DON!! -3: Choose one: \u2022 If your Leader has the {Donquixote Pirates} type, K.O. up to 1 of your opponent's Characters with a cost of 8 or less. \u2022 Rest up to 3 of your opponent's Characters with a cost of 7 or less." },
+
+  { id:'OP10-078', name:"I can never forgive anyone who laughs at my family...!!", type:'EVENT', color:'Purple',
+    power:0, cost:1, counter:0, image:IMG('OP10','OP10-078','jpg'),
+    ability:"[Main] [Counter] Look at 3 cards from the top of your deck; reveal up to 1 {Donquixote Pirates} type card other than this card and add it to your hand. Place the rest at the bottom of your deck in any order." },
+
+  { id:'OP13-076', name:'Divine Departure', type:'EVENT', color:'Purple',
+    power:0, cost:0, counter:0, image:IMG('OP13','OP13-076','png'),
+    ability:"[Main] You may rest 5 of your DON!! cards: Give up to 1 of your opponent's Characters -8000 power during this turn. [Counter] You may trash 1 card from your hand: Up to 1 of your Leader or Character cards gains +3000 power during this battle." },
+
+  { id:'OP07-076', name:'NoroNoro Beam Sword', type:'EVENT', color:'Purple',
+    power:0, cost:2, counter:0, image:IMG('OP07','OP07-076','png'),
+    ability:"[Counter] DON!! -1: Give up to 1 of your Leader or Character cards +2000 power for this battle. Then, rest up to 1 of your opponent's Characters. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
+
+  { id:'OP14-078', name:'Bullet String', type:'EVENT', color:'Purple',
+    power:0, cost:2, counter:0, image:IMG('OP14','OP14-078','png'),
+    ability:"[Counter] DON!! -1: If your Leader has the {Donquixote Pirates} type, up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+
+  { id:'OP10-079', name:'God Thread', type:'EVENT', color:'Purple',
+    power:0, cost:5, counter:0, image:IMG('OP10','OP10-079','jpg'),
+    ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 5 or less. Then, add up to 1 Active DON!! from your DON!! deck. [Trigger] Add up to 1 Active DON!! from your DON!! deck." },
+
+  // ══════════════════════════════
+  // SHANKS DECK (Red)
+  // ══════════════════════════════
+  { id:'OP09-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash',
+    power:5000, life:5, cost:0, counter:0, image:IMG('OP09','OP09-001','jpg'),
+    ability:"[Once Per Turn] You may activate this effect when your opponent attacks. Give up to 1 of your opponent's leader or characters -1000 power for the turn." },
+
+  { id:'OP09-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special',
+    power:2000, cost:1, counter:1000, image:IMG('OP09','OP09-002','jpg'),
+    ability:"[On Play] Look at the top 5 cards of your deck, reveal up to 1 {Red Hair Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+
+  { id:'OP01-006', name:'Otama', type:'CHARACTER', color:'Red', attribute:'Special',
+    power:0, cost:1, counter:2000, image:IMG('OP01','OP01-006','png'),
+    ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+
+  { id:'OP09-008', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash',
+    power:2000, cost:1, counter:0, image:IMG('OP09','OP09-008','jpg'),
+    ability:"[Activate: Main] You may place this character on the bottom of its owner's deck: Give up to one of your opponent's characters -3000 power for this turn." },
+
+  { id:'OP09-011', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Strike',
+    power:3000, cost:3, counter:2000, image:IMG('OP09','OP09-011','jpg'),
+    ability:"[Activate: Main] You may rest this character: If your leader has the {Red Hair Pirates} type, give up to 1 of your opponent's characters -2000 power during this turn." },
+
+  { id:'OP09-014', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Special',
+    power:3000, cost:3, counter:2000, image:IMG('OP09','OP09-014','jpg'),
+    ability:"[On Play] Up to one of your opponents characters with power 4000 or less cannot activate [Blocker] the rest of this turn." },
+
+  { id:'OP12-008', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
+    power:6000, cost:4, counter:0, image:IMG('OP12','OP12-008','jpg'),
+    ability:"[Blocker] [On Your Opponent's Attack] [Once Per Turn] You may trash 1 card from your hand: Give up to 1 of your opponent's Leader or Characters -2000 power during this turn." },
+
+  { id:'OP09-015', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged',
+    power:5000, cost:4, counter:1000, image:IMG('OP09','OP09-015','jpg'),
+    ability:"[Blocker] [On K.O.] If your Leader has the {Red Hair Pirates} type, K.O. up to 1 of your opponent's Characters with an original power of 6000 or less." },
+
+  { id:'OP10-011', name:'Tony Tony Chopper', type:'CHARACTER', color:'Yellow', attribute:'Strike',
+    power:4000, cost:4, counter:2000, image:IMG('OP10','OP10-011','jpg'),
+    ability:"[Blocker] [Opponent's Turn] This character has +2000 power." },
+
+  { id:'PRB02-003', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged',
+    power:2000, cost:4, counter:1000, image:IMG('PRB02','PRB02-003','jpg'),
+    ability:"[Blocker] [On Play] You may trash 1 Character card with a power of 6000 or more from your hand: Draw 2 cards." },
+
+  { id:'OP03-013', name:'Marco', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:6000, cost:5, counter:1000, image:IMG('OP03','OP03-013','png'),
+    ability:"[Your Turn] [On Play] K.O. up to 1 of your opponent's Characters with 3000 Power or less. [On K.O.] You may trash 1 Event card from your hand. Play this character from the trash as rested." },
+
+  { id:'OP09-013', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged',
+    power:6000, cost:5, counter:1000, image:IMG('OP09','OP09-013','jpg'),
+    ability:"[On Play] Up to one of your leaders gains +1000 power until the end of your opponent's next turn. [DON!! x1] [When Attacking] Up to one of your opponent's characters gets -1000 power for this turn." },
+
+  { id:'ST15-005', name:'Portgas D. Ace', type:'CHARACTER', color:'Red', attribute:'Special',
+    power:6000, cost:5, counter:1000, image:IMG('ST15','ST15-005','png'),
+    ability:"[Once Per Turn] If this character would be removed from play by one of your opponent's effects, instead you may give this character -2000 power for this turn." },
+
+  { id:'ST23-001', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special',
+    power:4000, cost:6, counter:2000, image:IMG('ST23','ST23-001','jpg'),
+    ability:"If you have a Character with 10000 power or more, give this card in your hand -4 cost. [Blocker]" },
+
+  { id:'PRB02-002', name:'Trafalgar Law', type:'CHARACTER', color:'Red', attribute:'Slash',
+    power:7000, cost:6, counter:1000, image:IMG('PRB02','PRB02-002','jpg'),
+    ability:"[Once Per Turn] If this Character would be removed from the field by your opponent's effect, you may give this Character -2000 power during this turn instead. [When Attacking] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+
+  { id:'OP09-009', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged',
+    power:7000, cost:7, counter:1000, image:IMG('OP09','OP09-009','jpg'),
+    ability:"[On Play] K.O. up to 1 of your opponents Characters with a power of 6000 or less." },
+
+  { id:'ST15-002', name:'Edward Newgate', type:'CHARACTER', color:'Red', attribute:'Special',
+    power:8000, cost:7, counter:0, image:IMG('ST15','ST15-002','png'),
+    ability:"[On Play] Give your leader or one of your characters up to one rested DON!!. [Activate: Main] You may rest this character: K.O. up to one of your opponent's characters with 5000 or less power." },
+
+  { id:'OP08-118', name:'Silvers Rayleigh', type:'CHARACTER', color:'Yellow', attribute:'Slash',
+    power:8000, cost:8, counter:0, image:IMG('OP08','OP08-118','png'),
+    ability:"[On Play] Choose up to two of your opponents characters: Until the end of your opponents next turn, give one -3000 power and the other -2000 power. After this, K.O. up to one of your opponents characters with a power of 3000 or lower." },
+
+  { id:'ST23-002', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
+    power:10000, cost:9, counter:0, image:IMG('ST23','ST23-002','jpg'),
+    ability:"If your opponent has a Character with 8000 base power or more, give this card in your hand -3 cost. [On Play] If your Leader has the {Red-Haired Pirates} type, your Leader gains +2000 power until the end of your opponent's next End Phase." },
+
+  { id:'OP06-007', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
+    power:12000, cost:10, counter:0, image:IMG('OP06','OP06-007','png'),
+    ability:"[On Play] K.O. up to 1 of your opponent's characters with 10000 power or less." },
+
+  { id:'OP09-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
+    power:12000, cost:10, counter:0, image:IMG('OP09','OP09-004','jpg'),
+    ability:"All of your opponents characters have -1000 power. [Rush]" },
+
+  { id:'OP09-021', name:'Red Force', type:'STAGE', color:'Red', attribute:'',
+    power:0, cost:2, counter:0, image:IMG('OP09','OP09-021','jpg'),
+    ability:"[Activate: Main] You may rest this stage: If your leader has the {Red Hair Pirates} type, give up to one of your opponent's characters -1000 power for this turn." },
+
+  { id:'OP04-016', name:'Bad Manners Kick Course', type:'EVENT', color:'Red',
+    power:0, cost:1, counter:0, image:IMG('OP04','OP04-016','png'),
+    ability:"[Counter] You may trash 1 card from your hand: Give up to 1 of your leaders or characters +3000 Power this battle. [Trigger] Give up to one of your opponent's leaders or characters -3000 power for this turn." },
+
+  { id:'OP10-018', name:'Kamakura Jussoushi', type:'EVENT', color:'Red',
+    power:0, cost:2, counter:0, image:IMG('OP10','OP10-018','jpg'),
+    ability:"[Counter] Choose up to 1 of your leader or character, it gains +3000 during this battle. Afterwards, one of your opponent's leader or character gets -2000 during this turn. [Trigger] Choose up to 1 of your leader or character, it gets +1000 during this turn." },
+
+  { id:'OP10-019', name:'Divine Departure', type:'EVENT', color:'Red',
+    power:0, cost:1, counter:0, image:IMG('OP10','OP10-019','jpg'),
+    ability:"[Main] You may rest 5 DON!!: K.O. up to 1 of your opponent's characters with 8000 Power or less. [Counter] Up to 1 of your Leaders gains +3000 Power during this battle." },
+
+  { id:'OP01-026', name:'Gum-Gum Red Hawk', type:'EVENT', color:'Red',
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-026','png'),
+    ability:"[Counter] Your Leader or up to 1 of your Characters gains +4000 power during this battle. Then, K.O. up to 1 of your opponent's Characters with 4000 power or less. [Trigger] Give up to 1 of your opponent's Leader or Characters -10000 power during this turn." },
+
+  { id:'OP09-020', name:"Come on!! We'll fight you!!", type:'EVENT', color:'Red',
+    power:0, cost:1, counter:0, image:IMG('OP09','OP09-020','jpg'),
+    ability:"[Activate: Main] Look at the top 5 cards of your deck, reveal and add one {Red Hair Pirates} type card to your hand. Place the rest at the bottom of the deck in any order. [Trigger] Draw one card." },
+
+  { id:'ST21-017', name:'Gum-Gum Mole Gun', type:'EVENT', color:'Red',
+    power:0, cost:4, counter:0, image:IMG('ST21','ST21-017','jpg'),
+    ability:"[Main] Give up to one of your opponents characters -5000 power during this turn. Then, if you have a character with 6000 power or more, K.O. up to one of your opponents characters with a power of 2000 or less. [Trigger] Activate this card's [Main] effect." },
+
+  // ══════════════════════════════
+  // BLACKBEARD DECK (Black/Multi)
+  // ══════════════════════════════
+  { id:'OP09-081', name:'Marshall D. Teach', type:'LEADER', color:'Black', attribute:'Special',
+    power:5000, life:5, cost:0, counter:0, image:IMG('OP09','OP09-081','jpg'),
+    ability:"Your [On Play] abilities don't activate. [Activate: Main] You may trash one card from your hand: Until the end of your opponent's next turn, your opponent's [On Play] abilities don't activate." },
+
+  { id:'OP05-086', name:'Nefertari Vivi', type:'CHARACTER', color:'Black', attribute:'Wisdom',
+    power:1000, cost:1, counter:1000, image:IMG('OP05','OP05-086','png'),
+    ability:"If your trash has 10 cards or more, this character gains [Blocker]." },
+
+  { id:'OP09-095', name:'Laffitte', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:1000, cost:1, counter:1000, image:IMG('OP09','OP09-095','jpg'),
+    ability:"[Activate: Main] You may rest this character and one of your DON!!: Look at the top 5 cards of your deck, reveal up to one {Blackbeard Pirates} type card and put it into your hand. Place the rest at the bottom of your deck in any order." },
+
+  { id:'OP11-083', name:'Caribou', type:'CHARACTER', color:'Black', attribute:'Special',
+    power:2000, cost:1, counter:2000, image:IMG('OP11','OP11-083','jpg'),
+    ability:"[Blocker] [On Play] Trash 2 cards from your hand." },
+
+  { id:'OP09-089', name:'Stronger', type:'CHARACTER', color:'Blue', attribute:'Wisdom',
+    power:0, cost:1, counter:2000, image:IMG('OP09','OP09-089','jpg'),
+    ability:"[Activate: Main] You may trash one card from your hand and this character: If your leader has the {Blackbeard Pirates} type, draw one card. Then give up to one of your opponents characters -2 cost for the turn." },
+
+  { id:'OP09-088', name:'Shiryuu', type:'CHARACTER', color:'Black', attribute:'Slash',
+    power:4000, cost:3, counter:2000, image:IMG('OP09','OP09-088','jpg'),
+    ability:"[DON!! x1] [When Attacking] You may trash 2 cards from your hand: Draw 2 cards." },
+
+  { id:'OP09-086', name:'Jesus Burgess', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:5000, cost:4, counter:1000, image:IMG('OP09','OP09-086','jpg'),
+    ability:"This character cannot be K.O'd by your opponents effects. If your leader has the {Blackbeard Pirates} type, this character gets +1000 power for every 4 cards in your trash." },
+
+  { id:'PRB02-015', name:'Shiryu', type:'CHARACTER', color:'Black', attribute:'Slash',
+    power:5000, cost:4, counter:1000, image:IMG('PRB02','PRB02-015','jpg'),
+    ability:"If your Leader has the {Blackbeard Pirates} type, this Character gains [Blocker]. [On K.O.] If your Leader has the {Blackbeard Pirates} type, K.O. up to 1 of your opponent's Characters with a base cost of 4 or less." },
+
+  { id:'OP10-082', name:'Kuzan', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:5000, cost:5, counter:0, image:IMG('OP10','OP10-082','jpg'),
+    ability:"This Character cannot be removed from the field by your opponent's effects. [Activate: Main] You may trash this Character: Draw 1 card. Then, play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less other than [Kuzan] from your trash." },
+
+  { id:'OP09-084', name:'Catarina Devon', type:'CHARACTER', color:'Purple', attribute:'Special',
+    power:6000, cost:5, counter:1000, image:IMG('OP09','OP09-084','jpg'),
+    ability:"[Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type, until the end of your opponent's next turn this character gains [Double Attack] and [Banish] or [Blocker]." },
+
+  { id:'ST27-003', name:'Kuzan', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:6000, cost:6, counter:1000, image:IMG('ST27','ST27-003','jpg'),
+    ability:"[Blocker] [On K.O.] Play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less from your trash rested." },
+
+  { id:'OP09-093', name:'Marshall D. Teach', type:'CHARACTER', color:'Black', attribute:'Special',
+    power:12000, cost:10, counter:0, image:IMG('OP09','OP09-093','jpg'),
+    ability:"[Blocker] [Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type and this character was played this turn, up to one of your opponent's leader effects are negated for the rest of the turn. Then, up to one of your opponent's characters effects are negated until the end of your opponent's next turn, that character also cannot attack." },
+
+  { id:'OP09-096', name:"This is MY AGE!!!!", type:'EVENT', color:'Yellow',
+    power:0, cost:1, counter:0, image:IMG('OP09','OP09-096','jpg'),
+    ability:"[Main] Look at the top 3 cards of your deck and reveal up to one {Blackbeard Pirates} type card other than [This is MY AGE!!!!] and put it into your hand. Then put the rest of the cards into your trash. [Trigger] Activate this card's [Main] effect." },
+
+  { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black',
+    power:0, cost:2, counter:0, image:IMG('OP09','OP09-097','jpg'),
+    ability:"[Counter] Nullify the effects of up to 1 of your opponent's leader or character and give them -4000 power during this turn. [Trigger] Nullify the effects of up to 1 of your opponent's leader or character during this turn." },
+
+  { id:'OP09-098', name:'Black Hole', type:'EVENT', color:'Black',
+    power:0, cost:4, counter:0, image:IMG('OP09','OP09-098','jpg'),
+    ability:"[Main] If your Leader has the {Blackbeard Pirates} type, negate the effect of up to 1 of your opponent's Characters during this turn. Then, if that Character has a cost of 4 or less, K.O. it. [Trigger] Negate the effect of up to 1 of your opponent's Leader or Character cards during this turn." },
+
+  { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:'',
+    power:0, cost:1, counter:0, image:IMG('OP09','OP09-099','jpg'),
+    ability:"[Activate: Main] You may trash 1 card from your hand and rest this Stage: Look at 3 cards from the top of your deck; reveal up to 1 {Blackbeard Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 ];
+
+// ─── PRESET DECKS ───
+const PRESET_DECKS = {
+  'Doflamingo': {
+    leaderId: 'OP14-060',
+    cards: [
+      {id:'OP10-065',count:4},{id:'OP14-067',count:4},{id:'ST18-001',count:3},
+      {id:'OP10-076',count:2},{id:'OP14-072',count:4},{id:'OP14-063',count:2},
+      {id:'OP14-061',count:4},{id:'OP14-074',count:4},{id:'OP10-072',count:4},
+      {id:'OP14-068',count:2},{id:'OP10-071',count:4},{id:'OP11-067',count:1},
+      {id:'OP14-069',count:4},{id:'OP13-076',count:4},{id:'OP10-078',count:1},
+      {id:'OP07-076',count:4},{id:'OP14-078',count:2},{id:'OP10-079',count:1},
+    ]
+  },
+  'Shanks': {
+    leaderId: 'OP09-001',
+    cards: [
+      {id:'OP09-002',count:4},{id:'OP01-006',count:4},{id:'OP09-008',count:2},
+      {id:'OP09-011',count:4},{id:'OP09-014',count:2},{id:'OP12-008',count:4},
+      {id:'OP09-015',count:3},{id:'OP10-011',count:1},{id:'PRB02-003',count:1},
+      {id:'OP03-013',count:2},{id:'OP09-013',count:2},{id:'ST15-005',count:1},
+      {id:'ST23-001',count:3},{id:'PRB02-002',count:1},{id:'OP09-009',count:4},
+      {id:'ST15-002',count:1},{id:'OP08-118',count:4},{id:'ST23-002',count:1},
+      {id:'OP06-007',count:3},{id:'OP09-004',count:2},{id:'OP09-021',count:1},
+      {id:'OP04-016',count:1},{id:'OP10-019',count:2},{id:'OP09-020',count:1},
+      {id:'OP01-026',count:1},{id:'OP10-018',count:1},{id:'ST21-017',count:1},
+    ]
+  },
+  'Blackbeard': {
+    leaderId: 'OP09-081',
+    cards: [
+      {id:'OP05-086',count:4},{id:'OP09-095',count:4},{id:'OP11-083',count:4},
+      {id:'OP09-089',count:3},{id:'OP09-088',count:4},{id:'OP09-086',count:4},
+      {id:'PRB02-015',count:1},{id:'OP10-082',count:4},{id:'OP09-084',count:1},
+      {id:'ST27-003',count:4},{id:'OP09-093',count:4},{id:'OP09-096',count:4},
+      {id:'OP09-097',count:1},{id:'OP09-098',count:4},{id:'OP09-099',count:4},
+    ]
+  }
+};
 
 function getCard(id) { return CARD_DB.find(c => c.id === id); }
 
-function buildStarterDeck(leaderId) {
-  const leader = CARD_DB.find(c => c.id === leaderId);
-  if (!leader) return { leader: CARD_DB[0], deck: [] };
-  const chars = CARD_DB.filter(c => c.type === 'CHARACTER').slice(0, 8);
-  const events = CARD_DB.filter(c => c.type === 'EVENT').slice(0, 3);
-  const deck = [];
-  chars.forEach(c => { for(let i=0;i<4;i++) deck.push({...c, uid:uuidv4(), rested:false, attachedDon:0}); });
-  events.forEach(c => { for(let i=0;i<2;i++) deck.push({...c, uid:uuidv4(), rested:false, attachedDon:0}); });
-  return { leader: {...leader, uid:uuidv4(), rested:false, attachedDon:0}, deck: shuffle(deck) };
-}
-
 function buildCustomDeck(leaderId, cardList) {
-  // cardList: [{id, count}]
   const leader = CARD_DB.find(c => c.id === leaderId);
-  if (!leader) return buildStarterDeck('L001');
+  if (!leader) return buildCustomDeck('OP14-060', PRESET_DECKS['Doflamingo'].cards);
   const deck = [];
   cardList.forEach(({id, count}) => {
     const card = CARD_DB.find(c => c.id === id);
@@ -75,6 +338,11 @@ function buildCustomDeck(leaderId, cardList) {
     }
   });
   return { leader: {...leader, uid:uuidv4(), rested:false, attachedDon:0}, deck: shuffle(deck) };
+}
+
+function buildDeckByName(name) {
+  const preset = PRESET_DECKS[name] || PRESET_DECKS['Doflamingo'];
+  return buildCustomDeck(preset.leaderId, preset.cards);
 }
 
 function shuffle(arr) {
@@ -87,7 +355,9 @@ function shuffle(arr) {
 }
 
 function createPlayerState(leaderId, deckList) {
-  const { leader, deck } = deckList ? buildCustomDeck(leaderId, deckList) : buildStarterDeck(leaderId);
+  const { leader, deck } = deckList
+    ? buildCustomDeck(leaderId, deckList)
+    : buildDeckByName('Doflamingo');
   const hand = deck.splice(0, 5);
   const life = deck.splice(0, leader.life);
   return {
@@ -100,8 +370,8 @@ function createPlayerState(leaderId, deckList) {
 
 function createGame(p1id, p2id, p1deck, p2deck) {
   const players = {
-    [p1id]: createPlayerState(p1deck?.leaderId || 'L001', p1deck?.cards),
-    [p2id]: createPlayerState(p2deck?.leaderId || 'L002', p2deck?.cards),
+    [p1id]: createPlayerState(p1deck?.leaderId || 'OP14-060', p1deck?.cards || PRESET_DECKS['Doflamingo'].cards),
+    [p2id]: createPlayerState(p2deck?.leaderId || 'OP09-001', p2deck?.cards || PRESET_DECKS['Shanks'].cards),
   };
   return {
     id: uuidv4(),
@@ -112,7 +382,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     log: ['Game started! Both players: keep your hand or mulligan.'],
     winner: null,
     mulliganDone: { [p1id]: false, [p2id]: false },
-    counterWindow: null, // { attackerUid, defenderUid, attackPower, defenderIsLeader, attackerId, defenderId }
+    counterWindow: null,
     counterDone: { [p1id]: false, [p2id]: false },
   };
 }
@@ -143,7 +413,6 @@ function nextPhase(game) {
     game.phase = order[i+1];
     if (game.phase === 'DRAW') doRefresh(game);
     if (game.phase === 'DON') doDraw(game);
-    if (game.phase === 'DON') {} // handled by NEXT_PHASE action
     if (game.phase === 'END') doEnd(game);
   }
 }
@@ -166,10 +435,8 @@ function doDraw(game) {
 }
 
 function doEnd(game) {
-  // Discard to hand limit 8
   const p = game.players[game.activePlayer];
   while (p.hand.length > 8) { p.trash.push(p.hand.pop()); }
-  // Next player
   const ids = Object.keys(game.players);
   game.activePlayer = ids.find(id => id !== game.activePlayer);
   game.turn++;
@@ -192,13 +459,7 @@ function addDon(game) {
 }
 
 function checkWin(game) {
-  Object.entries(game.players).forEach(([pid, p]) => {
-    const oppId = Object.keys(game.players).find(id => id !== pid);
-    const opp = game.players[oppId];
-    if (opp.life.length === 0 && !game.winner) {
-      // Need one more hit on leader
-    }
-  });
+  // Win condition checked in resolveCounter
 }
 
 function resolveCounter(roomId) {
@@ -210,22 +471,22 @@ function resolveCounter(roomId) {
   const attacker = game.players[cw.attackerId];
   const defender = game.players[cw.defenderId];
 
-  let finalAttack = cw.attackPower;
-  let finalDefend = cw.defendPower;
+  const finalAttack = cw.attackPower;
+  const finalDefend = cw.defendPower;
 
   if (cw.defenderIsLeader) {
     if (finalAttack > finalDefend) {
       if (defender.life.length > 0) {
         const lifeCard = defender.life.pop();
         defender.hand.push(lifeCard);
-        log(game, `💥 Life card flipped! ${lifeCard.name} added to hand. ${defender.life.length} life remaining.`);
+        log(game, `\uD83D\uDCA5 Life card flipped! ${lifeCard.name} added to hand. ${defender.life.length} life remaining.`);
         if (defender.life.length === 0) {
           game.winner = cw.attackerId;
-          log(game, `🏆 ${cw.attackerId.slice(0,6)} WINS! Opponent has no life cards!`);
+          log(game, `\uD83C\uDFC6 ${cw.attackerId.slice(0,6)} WINS! Opponent has no life cards!`);
         }
       }
     } else {
-      log(game, `🛡️ Attack blocked by leader's power!`);
+      log(game, `\uD83D\uDEE1\uFE0F Attack blocked by leader's power!`);
     }
   } else {
     const target = defender.field.find(c => c.uid === cw.defenderUid);
@@ -233,9 +494,9 @@ function resolveCounter(roomId) {
       if (finalAttack >= finalDefend) {
         defender.field = defender.field.filter(c => c.uid !== cw.defenderUid);
         defender.trash.push(target);
-        log(game, `💀 ${target.name} is K.O.'d!`);
+        log(game, `\uD83D\uDC80 ${target.name} is K.O.'d!`);
       } else {
-        log(game, `🛡️ ${target.name} survives the attack!`);
+        log(game, `\uD83D\uDEE1\uFE0F ${target.name} survives the attack!`);
       }
     }
   }
@@ -302,6 +563,10 @@ function handleAction(roomId, playerId, action) {
         p.field.push(card);
         log(game, `${playerId.slice(0,6)} plays ${card.name} (${card.power} power).`);
         applyOnPlay(game, playerId, card, opp);
+      } else if (card.type === 'STAGE') {
+        card.rested = false;
+        p.field.push(card);
+        log(game, `${playerId.slice(0,6)} plays stage ${card.name}.`);
       } else if (card.type === 'EVENT') {
         p.trash.push(card);
         log(game, `${playerId.slice(0,6)} plays event ${card.name}.`);
@@ -330,6 +595,7 @@ function handleAction(roomId, playerId, action) {
       if (action.attackerUid === p.leader.uid) attacker = p.leader;
       else attacker = p.field.find(c => c.uid === action.attackerUid);
       if (!attacker || attacker.rested) { send(playerId, {type:'ERROR', msg:'That card is rested or invalid'}); return; }
+      if (attacker.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Stages cannot attack'}); return; }
 
       const attackPower = (attacker.power||5000) + (attacker.attachedDon||0)*1000;
       attacker.rested = true;
@@ -348,16 +614,15 @@ function handleAction(roomId, playerId, action) {
         defendPower = (defender.power||0) + (defender.attachedDon||0)*1000;
       }
 
-      log(game, `⚔️ ${attacker.name} (${attackPower}) attacks ${defender.name} (${defendPower})!`);
+      log(game, `\u2694\uFE0F ${attacker.name} (${attackPower}) attacks ${defender.name} (${defendPower})!`);
 
-      // Open counter window
       game.counterWindow = {
         attackerUid: attacker.uid, defenderUid: defender.uid,
         attackPower, defendPower, defenderIsLeader,
         attackerId: playerId, defenderId: oppId,
       };
       game.counterDone = { [playerId]: true, [oppId]: false };
-      log(game, `🃏 ${oppId.slice(0,6)} may play counter cards!`);
+      log(game, `\uD83C\uDCF4 ${oppId.slice(0,6)} may play counter cards!`);
       break;
     }
 
@@ -370,7 +635,7 @@ function handleAction(roomId, playerId, action) {
       p.hand.splice(idx, 1);
       p.trash.push(card);
       game.counterWindow.defendPower += card.counter;
-      log(game, `🛡️ ${playerId.slice(0,6)} counters with ${card.name} (+${card.counter})! Defend power: ${game.counterWindow.defendPower}`);
+      log(game, `\uD83D\uDEE1\uFE0F ${playerId.slice(0,6)} counters with ${card.name} (+${card.counter})! Defend: ${game.counterWindow.defendPower}`);
       break;
     }
 
@@ -397,15 +662,21 @@ function handleAction(roomId, playerId, action) {
 }
 
 function applyOnPlay(game, playerId, card, opp) {
-  if (card.ability.includes('Draw 1 card') && card.ability.includes('On Play')) {
+  const ab = card.ability;
+  if (ab.includes('[On Play]') && ab.includes('Draw 1 card')) {
     const p = game.players[playerId];
     if (p.deck.length > 0) { p.hand.push(p.deck.shift()); log(game, `${card.name}: drew a card.`); }
   }
-  if (card.ability.includes('Rest up to') && card.ability.includes('On Play')) {
-    const targets = opp.field.slice(0, card.ability.includes('2') ? 2 : 1);
-    targets.forEach(t => { t.rested = true; log(game, `${card.name}: ${t.name} is rested!`); });
+  if (ab.includes('[On Play]') && ab.includes('Draw 2 cards')) {
+    const p = game.players[playerId];
+    for (let i = 0; i < 2 && p.deck.length > 0; i++) p.hand.push(p.deck.shift());
+    log(game, `${card.name}: drew 2 cards.`);
   }
-  if (card.ability.includes('K.O.') && card.ability.includes('On Play') && card.ability.includes('3000')) {
+  if (ab.includes('[On Play]') && ab.includes('rest up to 1') && ab.includes('opponent')) {
+    const target = opp.field[0];
+    if (target) { target.rested = true; log(game, `${card.name}: ${target.name} is rested!`); }
+  }
+  if (ab.includes('[On Play]') && ab.includes('K.O.') && ab.includes('3000')) {
     const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= 3000);
     if (target) {
       opp.field = opp.field.filter(c => c.uid !== target.uid);
@@ -413,25 +684,54 @@ function applyOnPlay(game, playerId, card, opp) {
       log(game, `${card.name}: K.O.'d ${target.name}!`);
     }
   }
-  if (card.ability.includes('discard 1') && card.ability.includes('On Play')) {
+  if (ab.includes('[On Play]') && ab.includes('K.O.') && (ab.includes('6000') || ab.includes('5000')) && !ab.includes('3000')) {
+    const threshold = ab.includes('6000') ? 6000 : 5000;
+    const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= threshold);
+    if (target) {
+      opp.field = opp.field.filter(c => c.uid !== target.uid);
+      opp.trash.push(target);
+      log(game, `${card.name}: K.O.'d ${target.name}!`);
+    }
+  }
+  if (ab.includes('[On Play]') && (ab.includes('discard') || ab.includes('opponent discards'))) {
     if (opp.hand.length > 0) { opp.trash.push(opp.hand.shift()); log(game, `${card.name}: opponent discards!`); }
   }
 }
 
 function applyEventEffect(game, playerId, card, opp) {
   const p = game.players[playerId];
-  if (card.id === 'E002') {
-    const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= 3000);
-    if (target) { opp.field = opp.field.filter(c=>c.uid!==target.uid); opp.trash.push(target); log(game, `K.O.'d ${target.name}!`); }
+  const ab = card.ability;
+  // Main K.O. by power
+  if (ab.includes('[Main]') && ab.includes('K.O.') && !ab.startsWith('[Counter]')) {
+    const m = ab.match(/(\d+000) [Pp]ower or less/);
+    const threshold = m ? parseInt(m[1]) : 5000;
+    const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= threshold);
+    if (target) {
+      opp.field = opp.field.filter(c => c.uid !== target.uid);
+      opp.trash.push(target);
+      log(game, `${card.name}: K.O.'d ${target.name}!`);
+    }
   }
-  if (card.id === 'E003') {
-    const n = Math.min(2, opp.hand.length);
-    opp.trash.push(...opp.hand.splice(0, n));
-    log(game, `Opponent discards ${n} card(s)!`);
+  // Main K.O. by cost
+  if (ab.includes('[Main]') && ab.includes('K.O.') && ab.includes('cost of') && !ab.startsWith('[Counter]')) {
+    const m = ab.match(/cost of (\d+) or less/);
+    const threshold = m ? parseInt(m[1]) : 4;
+    const target = opp.field.find(c => (c.cost||0) <= threshold);
+    if (target) {
+      opp.field = opp.field.filter(c => c.uid !== target.uid);
+      opp.trash.push(target);
+      log(game, `${card.name}: K.O.'d ${target.name}!`);
+    }
   }
-  if (card.id === 'E004') {
-    const target = opp.field[0];
-    if (target) { opp.field.shift(); opp.hand.push(target); log(game, `${target.name} returned to hand!`); }
+  // Main draw
+  if (ab.includes('[Main]') && ab.includes('Draw') && !ab.includes('opponent')) {
+    const n = ab.includes('Draw 2') ? 2 : 1;
+    for (let i = 0; i < n && p.deck.length > 0; i++) p.hand.push(p.deck.shift());
+    log(game, `${card.name}: drew ${n} card(s).`);
+  }
+  // Main: look at top N, add card to hand
+  if (ab.includes('[Main]') && ab.includes('Look at') && !ab.includes('[Counter]')) {
+    if (p.deck.length > 0) { p.hand.push(p.deck.shift()); log(game, `${card.name}: searched top of deck.`); }
   }
 }
 
