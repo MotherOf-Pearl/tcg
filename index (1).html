@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Boohawk TCG</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0d0d0f;
+  --bg2: #13131a;
+  --bg3: #1a1a26;
+  --border: rgba(255,255,255,0.07);
+  --gold: #e8b84b;
+  --gold2: #c49a2a;
+  --red: #d63031;
+  --blue: #0984e3;
+  --green: #00b894;
+  --purple: #6c5ce7;
+  --text: #e8e6e0;
+  --muted: #6b6b7e;
+  --card-w: 88px;
+  --card-h: 123px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Barlow',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse at 15% 85%,rgba(232,184,75,0.04) 0%,transparent 60%),radial-gradient(ellipse at 85% 15%,rgba(214,48,49,0.04) 0%,transparent 60%);pointer-events:none;}
+
+/* ── SCREENS ── */
+.screen{display:none;min-height:100vh;}
+.screen.active{display:flex;flex-direction:column;}
+
+/* ── MAIN MENU ── */
+#menu{align-items:center;justify-content:center;gap:0;}
+.menu-bg{position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 39px,rgba(255,255,255,0.015) 39px,rgba(255,255,255,0.015) 40px),repeating-linear-gradient(90deg,transparent,transparent 39px,rgba(255,255,255,0.015) 39px,rgba(255,255,255,0.015) 40px);pointer-events:none;}
+.menu-inner{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:48px;padding:40px 20px;}
+.logo-wrap{text-align:center;}
+.logo-skull{font-size:56px;display:block;margin-bottom:12px;filter:drop-shadow(0 0 20px rgba(232,184,75,0.4));}
+.logo-title{font-family:'Cinzel',serif;font-size:clamp(2rem,6vw,4rem);font-weight:900;color:var(--gold);letter-spacing:4px;text-shadow:0 0 40px rgba(232,184,75,0.3);line-height:1;}
+.logo-sub{font-family:'Barlow Condensed',sans-serif;letter-spacing:8px;color:var(--muted);font-size:0.85rem;margin-top:8px;text-transform:uppercase;}
+.menu-btns{display:flex;flex-direction:column;gap:12px;width:280px;}
+.btn{padding:14px 28px;border:none;border-radius:6px;font-family:'Barlow Condensed',sans-serif;font-size:1.1rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:all 0.15s;width:100%;}
+.btn-primary{background:var(--gold);color:#1a0e00;box-shadow:0 4px 24px rgba(232,184,75,0.25);}
+.btn-primary:hover{background:#f0c860;box-shadow:0 6px 32px rgba(232,184,75,0.4);transform:translateY(-1px);}
+.btn-outline{background:transparent;border:1px solid rgba(232,184,75,0.3);color:var(--gold);}
+.btn-outline:hover{background:rgba(232,184,75,0.08);border-color:var(--gold);}
+.btn-ghost{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-ghost:hover{border-color:rgba(255,255,255,0.15);color:var(--text);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-sm{padding:8px 16px;font-size:0.85rem;letter-spacing:1px;width:auto;}
+.btn-xs{padding:5px 10px;font-size:0.75rem;letter-spacing:1px;width:auto;}
+
+/* ── PANEL ── */
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:28px;}
+.panel h2{font-family:'Cinzel',serif;font-size:1.2rem;color:var(--gold);margin-bottom:20px;}
+.input{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px;padding:10px 14px;color:var(--text);font-family:'Barlow',sans-serif;font-size:0.95rem;transition:border-color 0.2s;}
+.input:focus{outline:none;border-color:rgba(232,184,75,0.4);}
+.input::placeholder{color:var(--muted);}
+.code-input{text-align:center;letter-spacing:8px;font-size:1.3rem;font-family:'Barlow Condensed',sans-serif;text-transform:uppercase;}
+.divider{text-align:center;color:var(--muted);font-size:0.75rem;letter-spacing:3px;margin:12px 0;}
+.room-code{background:rgba(232,184,75,0.08);border:1px dashed rgba(232,184,75,0.3);border-radius:8px;padding:16px;text-align:center;margin-bottom:16px;}
+.room-code .code{font-family:'Cinzel',serif;font-size:2.2rem;color:var(--gold);letter-spacing:10px;}
+.room-code p{font-size:0.75rem;color:var(--muted);margin-top:4px;}
+.dots{display:flex;gap:6px;justify-content:center;margin:12px 0;}
+.dots span{width:8px;height:8px;border-radius:50%;background:var(--gold);animation:dotBounce 1.2s infinite;}
+.dots span:nth-child(2){animation-delay:.2s;}.dots span:nth-child(3){animation-delay:.4s;}
+@keyframes dotBounce{0%,80%,100%{transform:scale(.5);opacity:.3;}40%{transform:scale(1);opacity:1;}}
+
+/* ── DECK EDITOR ── */
+#deckEditor{padding:0;}
+.editor-layout{display:grid;grid-template-columns:1fr 320px;height:100vh;overflow:hidden;}
+.card-browser{display:flex;flex-direction:column;overflow:hidden;border-right:1px solid var(--border);}
+.browser-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center;flex-wrap:wrap;background:var(--bg2);}
+.browser-header h2{font-family:'Cinzel',serif;color:var(--gold);font-size:1rem;white-space:nowrap;}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;}
+.filter-btn{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:0.75rem;cursor:pointer;transition:all 0.15s;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
+.filter-btn.active{background:var(--gold);color:#1a0e00;border-color:var(--gold);}
+.card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(90px,1fr));gap:8px;padding:16px;overflow-y:auto;flex:1;}
+.deck-panel{display:flex;flex-direction:column;overflow:hidden;background:var(--bg2);}
+.deck-header{padding:16px 20px;border-bottom:1px solid var(--border);}
+.deck-header h2{font-family:'Cinzel',serif;color:var(--gold);font-size:1rem;margin-bottom:8px;}
+.deck-stats{font-size:0.8rem;color:var(--muted);}
+.deck-stats span{color:var(--text);}
+.leader-select{padding:12px;border-bottom:1px solid var(--border);}
+.leader-select p{font-size:0.75rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;}
+.leader-options{display:flex;gap:6px;flex-wrap:wrap;}
+.leader-opt{padding:4px 10px;border-radius:4px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:0.75rem;cursor:pointer;transition:all 0.15s;}
+.leader-opt.selected{border-color:var(--gold);color:var(--gold);background:rgba(232,184,75,0.08);}
+.deck-list{flex:1;overflow-y:auto;padding:12px;}
+.deck-entry{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:4px;margin-bottom:3px;background:rgba(255,255,255,0.02);}
+.deck-entry:hover{background:rgba(255,255,255,0.04);}
+.deck-entry-name{font-size:0.8rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.deck-entry-count{font-family:'Barlow Condensed',sans-serif;font-weight:700;color:var(--gold);font-size:0.9rem;min-width:20px;text-align:center;}
+.deck-entry-cost{font-size:0.7rem;color:var(--muted);min-width:24px;}
+.deck-actions{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;}
+
+/* ── BROWSER CARD ── */
+.bcard{width:var(--card-w);height:var(--card-h);border-radius:6px;border:1px solid var(--border);background:var(--bg3);cursor:pointer;position:relative;overflow:hidden;transition:all 0.15s;flex-shrink:0;}
+.bcard:hover{border-color:var(--gold);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,0.4);}
+.bcard img{width:100%;height:55%;object-fit:cover;display:block;}
+.bcard-ph{width:100%;height:55%;display:flex;align-items:center;justify-content:center;font-size:1.8rem;background:linear-gradient(135deg,var(--bg3),var(--bg2));}
+.bcard-info{padding:4px 5px;}
+.bcard-name{font-size:0.55rem;font-weight:600;line-height:1.2;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.bcard-power{font-size:0.6rem;color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.bcard-badge{position:absolute;top:2px;right:2px;font-size:0.45rem;font-weight:700;padding:1px 4px;border-radius:2px;letter-spacing:.5px;text-transform:uppercase;}
+.badge-LEADER{background:var(--gold);color:#1a0e00;}
+.badge-CHARACTER{background:#2d6bcf;color:#fff;}
+.badge-EVENT{background:#6c5ce7;color:#fff;}
+.bcard-cost{position:absolute;top:2px;left:2px;background:rgba(0,0,0,0.7);color:var(--gold);font-size:0.55rem;font-weight:700;padding:1px 4px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;}
+.bcard-count{position:absolute;bottom:2px;right:2px;background:var(--gold);color:#1a0e00;font-size:0.6rem;font-weight:700;padding:1px 5px;border-radius:3px;font-family:'Barlow Condensed',sans-serif;}
+.color-Red{border-color:rgba(214,48,49,0.3);}
+.color-Blue{border-color:rgba(9,132,227,0.3);}
+.color-Green{border-color:rgba(0,184,148,0.3);}
+.color-Purple{border-color:rgba(108,92,231,0.3);}
+
+/* ── MULLIGAN ── */
+#mulligan{align-items:center;justify-content:center;padding:40px 20px;}
+.mulligan-inner{max-width:700px;width:100%;text-align:center;}
+.mulligan-inner h2{font-family:'Cinzel',serif;font-size:1.8rem;color:var(--gold);margin-bottom:8px;}
+.mulligan-inner p{color:var(--muted);margin-bottom:32px;}
+.mulligan-hand{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-bottom:32px;}
+.mulligan-btns{display:flex;gap:12px;justify-content:center;}
+.waiting-msg{color:var(--muted);font-size:0.9rem;margin-top:16px;}
+
+/* ── GAME BOARD ── */
+#game{display:grid;grid-template-rows:auto 1fr auto auto;height:100vh;overflow:hidden;padding:0;}
+.topbar{background:var(--bg2);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:16px;flex-shrink:0;}
+.phase-pill{background:var(--gold);color:#1a0e00;padding:4px 14px;border-radius:20px;font-family:'Barlow Condensed',sans-serif;font-size:0.85rem;font-weight:700;letter-spacing:2px;text-transform:uppercase;}
+.turn-text{font-size:0.8rem;color:var(--muted);}
+.active-text{font-size:0.8rem;color:var(--green);}
+.topbar-btns{margin-left:auto;display:flex;gap:8px;}
+
+.board{display:grid;grid-template-rows:1fr 48px 1fr;overflow:hidden;}
+
+/* Player zones */
+.zone{display:grid;grid-template-columns:100px 1fr 130px;gap:8px;padding:8px 12px;position:relative;}
+.zone.opp{background:rgba(214,48,49,0.03);border-bottom:1px solid var(--border);}
+.zone.self{background:rgba(0,184,148,0.03);border-top:1px solid var(--border);}
+.zone-col{display:flex;flex-direction:column;gap:6px;align-items:center;}
+.zone-label{font-size:0.6rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;text-align:center;}
+
+/* Field */
+.field{display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:calc(var(--card-h) + 8px);padding:4px;border:1px dashed rgba(255,255,255,0.05);border-radius:6px;background:rgba(0,0,0,0.1);flex:1;}
+.field-empty{color:rgba(255,255,255,0.1);font-size:0.7rem;font-style:italic;margin:auto;}
+
+/* Hand */
+.hand{display:flex;gap:4px;overflow-x:auto;min-height:calc(var(--card-h) + 8px);padding:4px 0;scrollbar-width:thin;scrollbar-color:var(--gold2) transparent;}
+
+/* Mid strip */
+.midstrip{background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);padding:4px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.life-row{display:flex;gap:3px;align-items:center;}
+.life-pip{width:12px;height:18px;border-radius:2px;background:var(--gold);border:1px solid var(--gold2);}
+.life-pip.lost{background:rgba(232,184,75,0.1);border-color:rgba(232,184,75,0.15);}
+.don-row{display:flex;gap:2px;align-items:center;flex-wrap:wrap;}
+.don-pip{width:16px;height:16px;border-radius:50%;border:1px solid var(--red);font-size:0.45rem;display:flex;align-items:center;justify-content:center;color:var(--red);}
+.don-pip.active{background:var(--red);color:#fff;}
+.mid-label{font-size:0.6rem;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+.mid-phase{font-family:'Cinzel',serif;color:var(--gold);font-size:0.85rem;}
+
+/* Game card */
+.gcard{width:var(--card-w);height:var(--card-h);border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:var(--bg3);cursor:pointer;position:relative;overflow:hidden;transition:transform 0.2s,border-color 0.2s,box-shadow 0.2s;flex-shrink:0;}
+.gcard:hover{transform:translateY(-4px) scale(1.05);border-color:var(--gold);box-shadow:0 8px 24px rgba(0,0,0,0.5);z-index:10;}
+.gcard.rested{transform:rotate(90deg);margin:16px 4px;}
+.gcard.rested:hover{transform:rotate(90deg) translateY(-4px) scale(1.05);}
+.gcard.selected{border-color:var(--green) !important;box-shadow:0 0 16px rgba(0,184,148,0.5) !important;}
+.gcard.targetable{border-color:var(--red) !important;animation:tpulse 0.7s infinite;}
+@keyframes tpulse{0%,100%{box-shadow:0 0 6px rgba(214,48,49,0.4);}50%{box-shadow:0 0 18px rgba(214,48,49,0.8);}}
+.gcard img{width:100%;height:55%;object-fit:cover;display:block;}
+.gcard-ph{width:100%;height:55%;display:flex;align-items:center;justify-content:center;font-size:1.6rem;background:linear-gradient(135deg,var(--bg3),var(--bg2));}
+.gcard-info{padding:3px 4px;}
+.gcard-name{font-size:0.52rem;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gcard-power{font-size:0.58rem;color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.gcard-badge{position:absolute;top:2px;right:2px;font-size:0.42rem;font-weight:700;padding:1px 3px;border-radius:2px;text-transform:uppercase;}
+.gcard-don{position:absolute;bottom:2px;left:2px;background:rgba(214,48,49,0.85);color:#fff;font-size:0.5rem;font-weight:700;padding:1px 4px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;}
+.gcard-cost{position:absolute;top:2px;left:2px;background:rgba(0,0,0,0.75);color:var(--gold);font-size:0.5rem;padding:1px 4px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
+
+/* Pile */
+.pile{width:var(--card-w);height:var(--card-h);border-radius:6px;border:1px solid var(--border);background:var(--bg3);display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;font-size:1.4rem;transition:border-color 0.15s;}
+.pile:hover{border-color:rgba(255,255,255,0.2);}
+.pile-count{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font-size:0.7rem;font-weight:700;color:var(--gold);font-family:'Barlow Condensed',sans-serif;}
+
+/* Log */
+.logbar{background:var(--bg2);border-top:1px solid var(--border);padding:6px 14px;max-height:72px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--muted) transparent;flex-shrink:0;}
+.logbar p{font-size:0.72rem;color:var(--muted);line-height:1.7;}
+.logbar p:last-child{color:var(--text);}
+
+/* Actions */
+.actionbar{background:var(--bg2);border-top:1px solid var(--border);padding:8px 14px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex-shrink:0;}
+.action-hint{font-size:0.75rem;color:var(--muted);flex:1;}
+
+/* Tooltip */
+.tooltip{position:fixed;background:var(--bg2);border:1px solid var(--gold);border-radius:10px;padding:14px;width:210px;z-index:1000;pointer-events:none;display:none;box-shadow:0 12px 40px rgba(0,0,0,0.7);}
+.tooltip.show{display:block;}
+.tooltip-name{font-family:'Cinzel',serif;font-size:1rem;color:var(--gold);margin-bottom:2px;}
+.tooltip-type{font-size:0.7rem;color:var(--muted);margin-bottom:8px;letter-spacing:1px;}
+.tooltip-stats{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-bottom:8px;}
+.tooltip-stat{font-size:0.72rem;}.tooltip-stat b{color:var(--gold);}
+.tooltip-ability{font-size:0.7rem;color:var(--text);line-height:1.5;border-top:1px solid var(--border);padding-top:8px;}
+
+/* Modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:none;align-items:center;justify-content:center;z-index:500;}
+.modal-bg.show{display:flex;}
+.modal{background:var(--bg2);border:1px solid var(--gold);border-radius:14px;padding:32px;max-width:380px;width:90vw;text-align:center;box-shadow:0 0 60px rgba(232,184,75,0.15);}
+.modal h2{font-family:'Cinzel',serif;font-size:1.8rem;color:var(--gold);margin-bottom:10px;}
+.modal p{color:var(--muted);margin-bottom:24px;line-height:1.6;}
+
+/* Counter window */
+.counter-banner{background:rgba(214,48,49,0.15);border:1px solid rgba(214,48,49,0.4);border-radius:6px;padding:10px 14px;margin-bottom:8px;font-size:0.8rem;}
+.counter-banner b{color:var(--red);}
+
+@media(max-width:600px){
+  :root{--card-w:68px;--card-h:95px;}
+  .zone{grid-template-columns:76px 1fr 100px;}
+  .editor-layout{grid-template-columns:1fr;}
+  .deck-panel{display:none;}
+}
+</style>
+</head>
+<body>
+
+<!-- MAIN MENU -->
+<div id="menu" class="screen active">
+  <div class="menu-bg"></div>
+  <div class="menu-inner">
+    <div class="logo-wrap">
+      <span class="logo-skull">☠️</span>
+      <div class="logo-title">BOOHAWK TCG</div>
+      <div class="logo-sub">One Piece Card Game Simulator</div>
+    </div>
+    <div class="menu-btns">
+      <button class="btn btn-primary" onclick="showCreate()">⚓ Create Room</button>
+      <button class="btn btn-outline" onclick="showJoin()">🏴‍☠️ Join Room</button>
+      <button class="btn btn-ghost" onclick="showDeckEditor()">🃏 Deck Editor</button>
+    </div>
+    <div id="createPanel" style="display:none;width:280px;">
+      <div class="panel">
+        <h2>Create Room</h2>
+        <input class="input" id="createName" placeholder="Your nickname" style="margin-bottom:10px;">
+        <button class="btn btn-primary" onclick="createRoom()">Create Game</button>
+      </div>
+    </div>
+    <div id="joinPanel" style="display:none;width:280px;">
+      <div class="panel">
+        <h2>Join Room</h2>
+        <input class="input" id="joinName" placeholder="Your nickname" style="margin-bottom:10px;">
+        <input class="input code-input" id="joinCode" placeholder="ROOM CODE" maxlength="6" style="margin-bottom:10px;">
+        <button class="btn btn-outline" onclick="joinRoom()">Join Game</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- WAITING -->
+<div id="waiting" class="screen" style="align-items:center;justify-content:center;">
+  <div class="panel" style="width:320px;text-align:center;">
+    <h2>Room Created!</h2>
+    <div class="room-code">
+      <div class="code" id="waitCode">------</div>
+      <p>Share this code with your opponent</p>
+    </div>
+    <div class="dots"><span></span><span></span><span></span></div>
+    <p style="color:var(--muted);font-size:0.85rem;">Waiting for opponent...</p>
+    <br>
+    <button class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText(document.getElementById('waitCode').textContent)">📋 Copy Code</button>
+  </div>
+</div>
+
+<!-- DECK EDITOR -->
+<div id="deckEditor" class="screen">
+  <div class="editor-layout">
+    <!-- Browser -->
+    <div class="card-browser">
+      <div class="browser-header">
+        <h2>🃏 Card Library</h2>
+        <div class="filter-bar">
+          <button class="filter-btn active" onclick="filterCards('ALL',this)">All</button>
+          <button class="filter-btn" onclick="filterCards('LEADER',this)">Leaders</button>
+          <button class="filter-btn" onclick="filterCards('CHARACTER',this)">Characters</button>
+          <button class="filter-btn" onclick="filterCards('EVENT',this)">Events</button>
+          <button class="filter-btn" onclick="filterCards('Red',this)" style="color:#e17055;">Red</button>
+          <button class="filter-btn" onclick="filterCards('Blue',this)" style="color:#74b9ff;">Blue</button>
+          <button class="filter-btn" onclick="filterCards('Green',this)" style="color:#55efc4;">Green</button>
+          <button class="filter-btn" onclick="filterCards('Purple',this)" style="color:#a29bfe;">Purple</button>
+        </div>
+      </div>
+      <div class="card-grid" id="cardGrid"></div>
+    </div>
+    <!-- Deck -->
+    <div class="deck-panel">
+      <div class="deck-header">
+        <h2>My Deck</h2>
+        <div class="deck-stats">Cards: <span id="deckCount">0</span>/50 &nbsp;|&nbsp; Cost avg: <span id="deckAvg">—</span></div>
+      </div>
+      <div class="leader-select">
+        <p>Leader</p>
+        <div class="leader-options" id="leaderOptions"></div>
+      </div>
+      <div class="deck-list" id="deckList"></div>
+      <div class="deck-actions">
+        <button class="btn btn-primary btn-sm" onclick="saveDeck()">💾 Save Deck</button>
+        <button class="btn btn-ghost btn-sm" onclick="clearDeck()">🗑 Clear</button>
+        <button class="btn btn-ghost btn-sm" onclick="showScreen('menu')">← Back</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MULLIGAN -->
+<div id="mulligan" class="screen">
+  <div class="mulligan-inner">
+    <h2>Opening Hand</h2>
+    <p>Choose to keep your hand or mulligan (redraw 5 new cards)</p>
+    <div class="mulligan-hand" id="mulliganHand"></div>
+    <div class="mulligan-btns" id="mulliganBtns">
+      <button class="btn btn-primary" style="width:160px;" onclick="doMulligan(false)">✅ Keep Hand</button>
+      <button class="btn btn-ghost" style="width:160px;" onclick="doMulligan(true)">🔄 Mulligan</button>
+    </div>
+    <p class="waiting-msg" id="mulliganWait" style="display:none;">Waiting for opponent...</p>
+  </div>
+</div>
+
+<!-- GAME -->
+<div id="game" class="screen">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="phase-pill" id="phasePill">REFRESH</div>
+    <span class="turn-text" id="turnText">Turn 1</span>
+    <span class="active-text" id="activeText"></span>
+    <div class="topbar-btns">
+      <button class="btn btn-primary btn-sm" onclick="act({type:'NEXT_PHASE'})">Next ▶</button>
+      <button class="btn btn-danger btn-sm" onclick="act({type:'END_TURN'})">End Turn</button>
+    </div>
+  </div>
+
+  <!-- Board -->
+  <div class="board">
+    <!-- Opponent zone -->
+    <div class="zone opp">
+      <div class="zone-col">
+        <div class="zone-label">Leader</div>
+        <div id="oppLeader"></div>
+        <div class="zone-label" style="margin-top:4px;">Life <span id="oppLifeCount" style="color:var(--gold)"></span></div>
+        <div class="life-row" id="oppLife"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">
+        <div class="zone-label">Hand (<span id="oppHandCount">0</span>) &nbsp;|&nbsp; Field</div>
+        <div class="hand" id="oppHand"></div>
+        <div class="field" id="oppField"><span class="field-empty">No characters in play</span></div>
+      </div>
+      <div class="zone-col">
+        <div class="zone-label">Deck</div>
+        <div class="pile" id="oppDeck"><span>🂠</span><div class="pile-count" id="oppDeckN">0</div></div>
+        <div class="zone-label" style="margin-top:10px;">Trash</div>
+        <div class="pile" onclick="viewTrash('opp')"><span>🗑</span><div class="pile-count" id="oppTrashN">0</div></div>
+        <div class="zone-label" style="margin-top:6px;">DON!!</div>
+        <div class="don-row" id="oppDon"></div>
+      </div>
+    </div>
+
+    <!-- Mid strip -->
+    <div class="midstrip">
+      <div>
+        <div class="mid-label">Your Life</div>
+        <div class="life-row" id="selfLife"></div>
+      </div>
+      <div class="mid-phase" id="midPhase">—</div>
+      <div style="text-align:right;">
+        <div class="mid-label">Your DON!!</div>
+        <div class="don-row" id="selfDon" style="justify-content:flex-end;"></div>
+      </div>
+    </div>
+
+    <!-- Self zone -->
+    <div class="zone self">
+      <div class="zone-col">
+        <div class="zone-label">Leader</div>
+        <div id="selfLeader"></div>
+        <div class="zone-label" style="margin-top:4px;">DON Deck</div>
+        <div class="pile" style="font-size:0.7rem;color:var(--red);font-weight:700;">DON<div class="pile-count" id="selfDonDeck">10</div></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;">
+        <div class="field" id="selfField"><span class="field-empty">No characters in play</span></div>
+        <div class="zone-label">Your Hand</div>
+        <div class="hand" id="selfHand"></div>
+      </div>
+      <div class="zone-col">
+        <div class="zone-label">Deck</div>
+        <div class="pile"><span>🂠</span><div class="pile-count" id="selfDeckN">0</div></div>
+        <div class="zone-label" style="margin-top:10px;">Trash</div>
+        <div class="pile" onclick="viewTrash('self')"><span>🗑</span><div class="pile-count" id="selfTrashN">0</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="logbar" id="logbar"></div>
+
+  <!-- Actions -->
+  <div class="actionbar">
+    <span class="action-hint" id="actionHint">Waiting...</span>
+    <button class="btn btn-outline btn-sm" id="btnAttachDon" onclick="attachDon()" style="display:none;">Attach DON!!</button>
+    <button class="btn btn-outline btn-sm" id="btnCounter" onclick="passCounter()" style="display:none;">Pass Counter</button>
+    <button class="btn btn-ghost btn-sm" onclick="cancelSel()">✕ Cancel</button>
+  </div>
+</div>
+
+<!-- WIN MODAL -->
+<div class="modal-bg" id="winModal">
+  <div class="modal">
+    <h2 id="winTitle">Victory!</h2>
+    <p id="winMsg"></p>
+    <button class="btn btn-primary" onclick="location.reload()">Play Again</button>
+  </div>
+</div>
+
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-name" id="ttName"></div>
+  <div class="tooltip-type" id="ttType"></div>
+  <div class="tooltip-stats" id="ttStats"></div>
+  <div class="tooltip-ability" id="ttAbility"></div>
+</div>
+
+<script>
+// ─── CONFIG ───
+const WS_URL = 'wss://game.boohawtcg.com';
+
+// ─── STATE ───
+let ws = null, myId = null, roomId = null, game = null;
+let cardDb = [];
+let myDeck = { leaderId: 'L001', cards: [] }; // {id, count}[]
+let selectedDeck = JSON.parse(localStorage.getItem('boohawk_deck') || 'null');
+let sel = null; // {uid, source}
+let attackMode = false;
+let counterMode = false;
+
+const EMOJI = { LEADER:'👑', CHARACTER:'⚔️', EVENT:'✨', DON:'🔴' };
+const COLOR_MAP = { Red:'#e17055', Blue:'#74b9ff', Green:'#55efc4', Purple:'#a29bfe', Black:'#b2bec3', Yellow:'#ffeaa7' };
+
+// ─── UTILS ───
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function hint(msg, err) {
+  const el = document.getElementById('actionHint');
+  if (el) { el.textContent = msg; el.style.color = err ? 'var(--red)' : 'var(--muted)'; }
+}
+function showCreate() {
+  document.getElementById('createPanel').style.display = 'block';
+  document.getElementById('joinPanel').style.display = 'none';
+}
+function showJoin() {
+  document.getElementById('joinPanel').style.display = 'block';
+  document.getElementById('createPanel').style.display = 'none';
+}
+
+// ─── WEBSOCKET ───
+function connect(cb) {
+  ws = new WebSocket(WS_URL);
+  ws.onopen = cb;
+  ws.onmessage = e => handleMsg(JSON.parse(e.data));
+  ws.onerror = () => alert('Cannot connect to server at ' + WS_URL);
+  ws.onclose = () => hint('Disconnected from server', true);
+}
+function send2(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
+function act(action) { send2({ type: 'ACTION', action }); }
+
+function handleMsg(msg) {
+  switch(msg.type) {
+    case 'CONNECTED':
+      myId = msg.clientId;
+      cardDb = msg.cardDb || [];
+      break;
+    case 'ROOM_CREATED':
+      roomId = msg.roomId; myId = msg.playerId;
+      document.getElementById('waitCode').textContent = roomId;
+      showScreen('waiting');
+      break;
+    case 'ROOM_JOINED':
+      roomId = msg.roomId; myId = msg.playerId;
+      break;
+    case 'GAME_STARTED':
+      showScreen('mulligan');
+      break;
+    case 'GAME_STATE':
+      game = msg.game;
+      if (game.phase === 'MULLIGAN') renderMulligan();
+      else { showScreen('game'); renderGame(); }
+      break;
+    case 'ERROR':
+      hint(msg.msg, true);
+      break;
+    case 'PLAYER_LEFT':
+      hint('Opponent disconnected!', true);
+      break;
+    case 'CHAT':
+      addLog(`💬 ${msg.from}: ${msg.text}`);
+      break;
+  }
+}
+
+// ─── LOBBY ───
+function createRoom() {
+  const deck = selectedDeck || myDeck;
+  connect(() => send2({ type: 'CREATE_ROOM', deck, nickname: document.getElementById('createName').value || 'Pirate' }));
+}
+function joinRoom() {
+  const code = document.getElementById('joinCode').value.trim().toUpperCase();
+  if (!code) { alert('Enter a room code'); return; }
+  const deck = selectedDeck || myDeck;
+  connect(() => send2({ type: 'JOIN_ROOM', roomId: code, deck, nickname: document.getElementById('joinName').value || 'Pirate' }));
+}
+
+// ─── MULLIGAN ───
+function renderMulligan() {
+  if (!game) return;
+  const p = game.players[myId];
+  const container = document.getElementById('mulliganHand');
+  container.innerHTML = '';
+  p.hand.forEach(card => container.appendChild(makeBrowserCard(card, null, true)));
+  const done = game.mulliganDone[myId];
+  document.getElementById('mulliganBtns').style.display = done ? 'none' : 'flex';
+  document.getElementById('mulliganWait').style.display = done ? 'block' : 'none';
+}
+function doMulligan(mulligan) {
+  act({ type: 'MULLIGAN', doMulligan: mulligan });
+  document.getElementById('mulliganBtns').style.display = 'none';
+  document.getElementById('mulliganWait').style.display = 'block';
+}
+
+// ─── GAME RENDER ───
+function renderGame() {
+  if (!game || !myId) return;
+  const me = game.players[myId];
+  const oppId = Object.keys(game.players).find(id => id !== myId);
+  const opp = game.players[oppId];
+  const isActive = game.activePlayer === myId;
+
+  // Top bar
+  document.getElementById('phasePill').textContent = game.phase;
+  document.getElementById('turnText').textContent = `Turn ${game.turn}`;
+  document.getElementById('activeText').textContent = isActive ? '⚡ Your Turn' : "⏳ Opponent's Turn";
+  document.getElementById('midPhase').textContent = `${game.phase} PHASE`;
+
+  // Leaders
+  renderLeader('selfLeader', me.leader, true);
+  renderLeader('oppLeader', opp.leader, false);
+
+  // Fields
+  renderField('selfField', me.field, true);
+  renderField('oppField', opp.field, false);
+
+  // Hands
+  renderHand('selfHand', me.hand, true);
+  renderOppHand('oppHand', opp.hand.length);
+
+  // Piles
+  document.getElementById('selfDeckN').textContent = me.deck.length;
+  document.getElementById('selfTrashN').textContent = me.trash.length;
+  document.getElementById('selfDonDeck').textContent = me.donDeck;
+  document.getElementById('oppDeckN').textContent = opp.deck.length;
+  document.getElementById('oppTrashN').textContent = opp.trash.length;
+  document.getElementById('oppHandCount').textContent = opp.hand.length;
+
+  // DON
+  renderDon('selfDon', me.donActive, me.donRested, me.donActive + me.donRested);
+  renderDon('oppDon', opp.donActive, opp.donRested, opp.donActive + opp.donRested);
+
+  // Life
+  renderLife('selfLife', 'selfLifeCount', me.leader.life, me.life.length);
+  renderLife('oppLife', 'oppLifeCount', opp.leader.life, opp.life.length);
+
+  // Log
+  renderLog();
+
+  // Counter window
+  const hasCW = !!game.counterWindow;
+  document.getElementById('btnCounter').style.display = hasCW ? 'inline-block' : 'none';
+  if (hasCW && game.counterWindow.defenderId === myId) {
+    hint(`Opponent attacks for ${game.counterWindow.attackPower}! Play counter cards or pass.`);
+    counterMode = true;
+  }
+
+  // Buttons
+  document.getElementById('btnAttachDon').style.display = sel && !hasCW ? 'inline-block' : 'none';
+
+  // Win
+  if (game.winner) {
+    document.getElementById('winTitle').textContent = game.winner === myId ? '⚓ Victory!' : '💀 Defeated!';
+    document.getElementById('winMsg').textContent = game.winner === myId ? 'You conquered the seas!' : 'Set sail again!';
+    document.getElementById('winModal').classList.add('show');
+  }
+
+  // Hints
+  if (!hasCW) {
+    counterMode = false;
+    if (!isActive) hint("Opponent's turn...");
+    else if (game.phase === 'DON') hint('Click "Next ▶" to add DON!! to your pool.');
+    else if (game.phase === 'MAIN') hint('Select a card from hand to play, or your leader/character to attack.');
+    else hint(`Click "Next ▶" to proceed through ${game.phase} phase.`);
+  }
+}
+
+function renderLeader(slotId, leader, isSelf) {
+  const el = document.getElementById(slotId);
+  el.innerHTML = '';
+  el.appendChild(makeGameCard(leader, isSelf ? () => selectCard(leader.uid, 'leader') : () => {
+    if (attackMode) resolveAttack(leader.uid);
+  }, !isSelf));
+}
+
+function renderField(fieldId, field, isSelf) {
+  const el = document.getElementById(fieldId);
+  if (!field.length) { el.innerHTML = '<span class="field-empty">No characters in play</span>'; return; }
+  el.innerHTML = '';
+  field.forEach(card => {
+    el.appendChild(makeGameCard(card,
+      isSelf ? () => selectCard(card.uid, 'field') : () => { if (attackMode) resolveAttack(card.uid); },
+      !isSelf));
+  });
+}
+
+function renderHand(handId, hand, isSelf) {
+  const el = document.getElementById(handId);
+  el.innerHTML = '';
+  hand.forEach(card => {
+    const handler = () => {
+      if (attackMode) { cancelSel(); return; }
+      if (counterMode && game.counterWindow?.defenderId === myId) {
+        act({ type: 'COUNTER', cardUid: card.uid });
+      } else {
+        const cur = document.querySelector(`[data-uid="${card.uid}"]`);
+        if (cur?.classList.contains('selected')) playCard(card.uid);
+        else selectCard(card.uid, 'hand');
+      }
+    };
+    el.appendChild(makeGameCard(card, handler, false));
+  });
+}
+
+function renderOppHand(handId, count) {
+  const el = document.getElementById(handId);
+  el.innerHTML = '';
+  for (let i = 0; i < count; i++) {
+    const c = document.createElement('div');
+    c.className = 'gcard';
+    c.innerHTML = '<div class="gcard-ph">🂠</div>';
+    el.appendChild(c);
+  }
+}
+
+function renderDon(id, active, rested, total) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.innerHTML = `<span style="font-size:0.65rem;color:var(--muted);margin-right:2px;">${active}/${total}</span>`;
+  for (let i = 0; i < Math.min(total, 10); i++) {
+    const pip = document.createElement('div');
+    pip.className = 'don-pip' + (i < active ? ' active' : '');
+    pip.textContent = '★';
+    el.appendChild(pip);
+  }
+}
+
+function renderLife(id, countId, max, remaining) {
+  const el = document.getElementById(id);
+  const cn = document.getElementById(countId);
+  if (!el) return;
+  el.innerHTML = '';
+  if (cn) cn.textContent = remaining;
+  for (let i = 0; i < max; i++) {
+    const pip = document.createElement('div');
+    pip.className = 'life-pip' + (i >= remaining ? ' lost' : '');
+    el.appendChild(pip);
+  }
+}
+
+function renderLog() {
+  const el = document.getElementById('logbar');
+  if (!game) return;
+  el.innerHTML = '';
+  game.log.slice(-8).forEach(l => {
+    const p = document.createElement('p');
+    p.textContent = l;
+    el.appendChild(p);
+  });
+  el.scrollTop = el.scrollHeight;
+}
+function addLog(txt) {
+  const el = document.getElementById('logbar');
+  if (!el) return;
+  const p = document.createElement('p');
+  p.textContent = txt;
+  el.appendChild(p);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ─── CARD ELEMENTS ───
+function makeGameCard(card, onClick, isOpp) {
+  const el = document.createElement('div');
+  el.className = 'gcard' + (card.rested ? ' rested' : '');
+  el.dataset.uid = card.uid;
+
+  const emoji = EMOJI[card.type] || '🂠';
+  el.innerHTML = `
+    <div class="gcard-ph">${emoji}</div>
+    <div class="gcard-info">
+      <div class="gcard-name">${card.name}</div>
+      <div class="gcard-power">${card.power ? card.power.toLocaleString() : ''}</div>
+    </div>
+    <div class="gcard-badge badge-${card.type}">${card.type === 'CHARACTER' ? 'CHR' : card.type.slice(0,3)}</div>
+    ${card.cost ? `<div class="gcard-cost">${card.cost}</div>` : ''}
+    ${card.attachedDon ? `<div class="gcard-don">+${card.attachedDon}k</div>` : ''}
+  `;
+  if (onClick) el.addEventListener('click', e => { e.stopPropagation(); onClick(); });
+  el.addEventListener('mouseenter', e => showTooltip(card, e));
+  el.addEventListener('mouseleave', hideTooltip);
+  return el;
+}
+
+function makeBrowserCard(card, onClick, large) {
+  const el = document.createElement('div');
+  el.className = 'bcard' + (card.color ? ' color-'+card.color : '');
+  const emoji = EMOJI[card.type] || '🂠';
+  const inDeck = myDeck.cards.find(c => c.id === card.id);
+  el.innerHTML = `
+    <div class="bcard-ph">${emoji}</div>
+    <div class="bcard-info">
+      <div class="bcard-name">${card.name}</div>
+      <div class="bcard-power">${card.power ? card.power.toLocaleString() : (card.type==='EVENT'?'Event':'')}</div>
+    </div>
+    <div class="bcard-badge badge-${card.type}">${card.type === 'CHARACTER' ? 'CHR' : card.type.slice(0,3)}</div>
+    ${card.cost ? `<div class="bcard-cost">${card.cost}</div>` : ''}
+    ${inDeck ? `<div class="bcard-count">×${inDeck.count}</div>` : ''}
+  `;
+  el.addEventListener('click', () => { if (onClick) onClick(); else addToDeck(card.id); });
+  el.addEventListener('mouseenter', e => showTooltip(card, e));
+  el.addEventListener('mouseleave', hideTooltip);
+  return el;
+}
+
+// ─── SELECTION & ACTIONS ───
+function selectCard(uid, source) {
+  if (!isMyTurn()) return;
+  if (attackMode && source !== 'hand') { resolveAttack(uid); return; }
+  if (sel?.uid === uid) { cancelSel(); return; }
+  sel = { uid, source };
+  attackMode = false;
+  document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
+  document.querySelector(`[data-uid="${uid}"]`)?.classList.add('selected');
+  const me = game.players[myId];
+  const card = findCard(uid, me);
+  if (source === 'hand' && card) {
+    hint(`${card.name} selected — click again to play (costs ${card.cost} DON!!)`);
+  } else if (source === 'field' || source === 'leader') {
+    attackMode = true;
+    hint(`${card?.name || 'Leader'} ready to attack — click an opponent's card!`);
+    highlightTargets();
+  }
+  document.getElementById('btnAttachDon').style.display = 'inline-block';
+}
+
+function highlightTargets() {
+  const opp = oppPlayer();
+  document.querySelector(`[data-uid="${opp.leader.uid}"]`)?.classList.add('targetable');
+  opp.field.forEach(c => document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('targetable'));
+}
+
+function resolveAttack(defUid) {
+  if (!sel) return;
+  act({ type: 'ATTACK', attackerUid: sel.uid, defenderUid: defUid });
+  cancelSel();
+}
+
+function playCard(uid) {
+  act({ type: 'PLAY_CARD', cardUid: uid });
+  cancelSel();
+}
+
+function attachDon() {
+  if (!sel) return;
+  act({ type: 'ATTACH_DON', targetUid: sel.uid });
+}
+
+function passCounter() {
+  act({ type: 'PASS_COUNTER' });
+  counterMode = false;
+  document.getElementById('btnCounter').style.display = 'none';
+}
+
+function cancelSel() {
+  sel = null; attackMode = false; counterMode = false;
+  document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
+  document.getElementById('btnAttachDon').style.display = 'none';
+}
+
+function isMyTurn() { return game?.activePlayer === myId; }
+function myPlayer() { return game?.players[myId]; }
+function oppPlayer() { const id = Object.keys(game.players).find(i => i !== myId); return game.players[id]; }
+function findCard(uid, player) {
+  if (!player) return null;
+  if (player.leader?.uid === uid) return player.leader;
+  return [...(player.hand||[]), ...(player.field||[])].find(c => c.uid === uid);
+}
+
+function viewTrash(who) {
+  const p = who === 'self' ? myPlayer() : oppPlayer();
+  if (!p) return;
+  alert(`${who === 'self' ? 'Your' : "Opponent's"} Trash (${p.trash.length} cards):\n` +
+    p.trash.slice(-10).map(c => `${c.name} [${c.type}]`).join('\n'));
+}
+
+// ─── TOOLTIP ───
+function showTooltip(card, e) {
+  const t = document.getElementById('tooltip');
+  document.getElementById('ttName').textContent = card.name;
+  document.getElementById('ttType').textContent = `${card.type} · ${card.color || ''} · ${card.attribute || ''}`;
+  document.getElementById('ttAbility').textContent = card.ability || '';
+  document.getElementById('ttStats').innerHTML = `
+    ${card.power ? `<div class="tooltip-stat">Power: <b>${card.power.toLocaleString()}</b></div>` : ''}
+    ${card.cost !== undefined ? `<div class="tooltip-stat">Cost: <b>${card.cost} DON!!</b></div>` : ''}
+    ${card.counter ? `<div class="tooltip-stat">Counter: <b>+${card.counter}</b></div>` : ''}
+    ${card.life ? `<div class="tooltip-stat">Life: <b>${card.life}</b></div>` : ''}
+  `;
+  const r = e.currentTarget.getBoundingClientRect();
+  t.style.left = Math.min(r.right + 8, window.innerWidth - 220) + 'px';
+  t.style.top = Math.max(r.top - 20, 8) + 'px';
+  t.classList.add('show');
+}
+function hideTooltip() { document.getElementById('tooltip').classList.remove('show'); }
+
+// ─── DECK EDITOR ───
+let filterMode = 'ALL';
+
+function showDeckEditor() {
+  showScreen('deckEditor');
+  if (selectedDeck) myDeck = JSON.parse(JSON.stringify(selectedDeck));
+  renderCardGrid();
+  renderLeaderOptions();
+  renderDeckList();
+}
+
+function filterCards(mode, btn) {
+  filterMode = mode;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderCardGrid();
+}
+
+function renderCardGrid() {
+  const grid = document.getElementById('cardGrid');
+  grid.innerHTML = '';
+  const cards = (cardDb.length ? cardDb : getLocalCardDb()).filter(c => {
+    if (filterMode === 'ALL') return c.type !== 'LEADER';
+    if (['LEADER','CHARACTER','EVENT'].includes(filterMode)) return c.type === filterMode;
+    return c.color === filterMode;
+  });
+  cards.forEach(card => grid.appendChild(makeBrowserCard(card)));
+}
+
+function renderLeaderOptions() {
+  const el = document.getElementById('leaderOptions');
+  el.innerHTML = '';
+  const leaders = (cardDb.length ? cardDb : getLocalCardDb()).filter(c => c.type === 'LEADER');
+  leaders.forEach(l => {
+    const btn = document.createElement('button');
+    btn.className = 'leader-opt' + (myDeck.leaderId === l.id ? ' selected' : '');
+    btn.textContent = l.name;
+    btn.style.borderColor = COLOR_MAP[l.color] || 'var(--border)';
+    btn.onclick = () => {
+      myDeck.leaderId = l.id;
+      document.querySelectorAll('.leader-opt').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+    };
+    el.appendChild(btn);
+  });
+}
+
+function renderDeckList() {
+  const el = document.getElementById('deckList');
+  el.innerHTML = '';
+  let total = 0;
+  let totalCost = 0;
+  myDeck.cards.forEach(entry => {
+    const card = (cardDb.length ? cardDb : getLocalCardDb()).find(c => c.id === entry.id);
+    if (!card) return;
+    total += entry.count;
+    totalCost += (card.cost || 0) * entry.count;
+    const row = document.createElement('div');
+    row.className = 'deck-entry';
+    row.innerHTML = `
+      <span class="deck-entry-cost">${card.cost ?? '—'}</span>
+      <span class="deck-entry-name">${card.name}</span>
+      <span class="deck-entry-count">×${entry.count}</span>
+      <button class="btn btn-xs btn-ghost" style="margin-left:6px;" onclick="removeFromDeck('${card.id}')">−</button>
+    `;
+    el.appendChild(row);
+  });
+  document.getElementById('deckCount').textContent = total;
+  document.getElementById('deckAvg').textContent = total ? (totalCost/total).toFixed(1) : '—';
+}
+
+function addToDeck(cardId) {
+  const card = (cardDb.length ? cardDb : getLocalCardDb()).find(c => c.id === cardId);
+  if (!card || card.type === 'LEADER') return;
+  const entry = myDeck.cards.find(c => c.id === cardId);
+  if (entry) {
+    if (entry.count >= 4) { hint('Max 4 copies per card!', true); return; }
+    entry.count++;
+  } else {
+    myDeck.cards.push({ id: cardId, count: 1 });
+  }
+  renderCardGrid();
+  renderDeckList();
+}
+
+function removeFromDeck(cardId) {
+  const entry = myDeck.cards.find(c => c.id === cardId);
+  if (!entry) return;
+  entry.count--;
+  if (entry.count <= 0) myDeck.cards = myDeck.cards.filter(c => c.id !== cardId);
+  renderCardGrid();
+  renderDeckList();
+}
+
+function saveDeck() {
+  selectedDeck = JSON.parse(JSON.stringify(myDeck));
+  localStorage.setItem('boohawk_deck', JSON.stringify(selectedDeck));
+  alert('✅ Deck saved! It will be used in your next game.');
+}
+
+function clearDeck() {
+  if (confirm('Clear your deck?')) {
+    myDeck.cards = [];
+    renderCardGrid();
+    renderDeckList();
+  }
+}
+
+function getLocalCardDb() {
+  // Fallback minimal card db if not connected
+  return [
+    {id:'C001',name:'Nami',type:'CHARACTER',power:1000,color:'Red',cost:1,counter:2000,ability:'Draw 1 card.'},
+    {id:'C002',name:'Usopp',type:'CHARACTER',power:2000,color:'Red',cost:2,counter:1000,ability:'Blocker'},
+    {id:'C003',name:'Sanji',type:'CHARACTER',power:4000,color:'Red',cost:3,counter:1000,ability:'Rush'},
+    {id:'E001',name:'Gum-Gum Pistol',type:'EVENT',power:0,color:'Red',cost:2,counter:0,ability:'+4000 power during battle.'},
+    {id:'L001',name:'Monkey D. Luffy',type:'LEADER',power:5000,color:'Red',life:5,cost:0,ability:'Give a Character +1000 power.'},
+    {id:'L002',name:'Roronoa Zoro',type:'LEADER',power:5000,color:'Green',life:5,cost:0,ability:'Blocker'},
+  ];
+}
+
+// ─── CLICK OUTSIDE ───
+document.addEventListener('click', e => {
+  if (!e.target.closest('.gcard') && !e.target.closest('.actionbar')) cancelSel();
+  hideTooltip();
+});
+</script>
+</body>
+</html>
