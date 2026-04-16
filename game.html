@@ -1137,10 +1137,10 @@ function startSolo() {
 }
 
 function switchSides() {
-  if (!isSolo || !soloIds[0] || !soloIds[1]) return;
-  myId = myId === soloIds[0] ? soloIds[1] : soloIds[0];
-  if (game && game.phase !== 'MULLIGAN') renderGame();
-  else if (game) renderMulligan();
+  if (!isSolo || !game) return;
+  myId = game.activePlayer;
+  if (game.phase !== 'MULLIGAN') renderGame();
+  else renderMulligan();
 }
 
 const EMOJI = { LEADER:'👑', CHARACTER:'⚔️', EVENT:'✨', STAGE:'⛵', DON:'🔴' };
@@ -1399,7 +1399,6 @@ function renderLeader(slotId, leader, isSelf) {
       ? () => selectCard(leader.uid, 'leader')
       : () => {
           if (attackMode) resolveAttack(leader.uid);
-          else if (isSolo) switchSides();
         },
     !isSelf));
 }
@@ -1414,7 +1413,6 @@ function renderField(fieldId, field, isSelf) {
         ? () => selectCard(card.uid, 'field')
         : () => {
             if (attackMode) resolveAttack(card.uid);
-            else if (isSolo) switchSides();
           },
       !isSelf));
   });
@@ -1453,11 +1451,7 @@ function renderSoloOppHand(handId, hand) {
   const el = document.getElementById(handId);
   el.innerHTML = '';
   hand.forEach(card => {
-    const handler = () => {
-      // Clicking opponent hand in solo mode switches to their side
-      switchSides();
-    };
-    el.appendChild(makeGameCard(card, handler, false));
+    el.appendChild(makeGameCard(card, null, false));
   });
 }
 
