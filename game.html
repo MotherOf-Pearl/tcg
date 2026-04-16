@@ -435,57 +435,107 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gb-opp-hand .gcard img,.gb-self-hand .gcard img{height:62%;}
 .gb-opp-hand .card-back,.gb-self-hand .card-back{width:82px;height:115px;}
 
-/* ═══ CENTER 1/3 — BOARD ═══ */
-.gb-board{display:flex;flex-direction:column;overflow:hidden;padding:14px 0;}
-.gb-zone{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;min-height:0;}
-/* Opponent — red, flipped */
+/* ═══ CENTER — BOARD ═══ */
+.gb-board{
+  display:flex;flex-direction:column;overflow:hidden;
+  margin:10px 6px;border-radius:8px;
+  /* Opaque Carolingian board surface */
+  background:
+    /* Subtle cross-hatch weave texture */
+    repeating-linear-gradient(45deg,rgba(90,55,20,.04) 0px,rgba(90,55,20,.04) 1px,transparent 1px,transparent 8px),
+    repeating-linear-gradient(-45deg,rgba(90,55,20,.04) 0px,rgba(90,55,20,.04) 1px,transparent 1px,transparent 8px),
+    /* Warm parchment/leather base */
+    linear-gradient(180deg,#5c3a1a 0%,#4a2e14 30%,#3e2610 70%,#4a2e14 100%);
+  border:3px solid #8b6914;
+  box-shadow:
+    inset 0 0 30px rgba(0,0,0,.35),
+    0 4px 20px rgba(0,0,0,.5);
+}
+/* Gold corner ornament feel via pseudo */
+.gb-board::before{
+  content:'';position:absolute;inset:4px;border-radius:5px;
+  border:1px solid rgba(180,140,50,.18);pointer-events:none;z-index:1;
+}
+
+/* Player zones */
+.gb-zone{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;min-height:0;padding:4px;}
 .gb-zone-opp{
   transform:rotate(180deg);
-  background:rgba(140,25,25,.28);
+  border-bottom:2px solid rgba(180,140,50,.25);
 }
-/* Player — green */
 .gb-zone-self{
-  background:rgba(45,90,30,.28);
-  border-top:2px solid rgba(212,160,32,.15);
+  border-top:1px solid rgba(180,140,50,.12);
 }
 
-/* CHARACTER AREA — top of each zone */
-.gb-char-bar{
-  flex:1;display:flex;align-items:center;gap:5px;padding:5px 8px;
-  position:relative;overflow-x:auto;min-height:calc(var(--card-h) + 12px);
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+/* ── CARD MAT ZONES ── */
+/* Each area is a felt/mat inlay on the board */
+.gb-mat{
+  border-radius:5px;position:relative;
+  border:1px solid rgba(180,140,50,.20);
+  box-shadow:inset 0 1px 6px rgba(0,0,0,.25);
 }
-.gb-zone-opp .gb-char-bar{background:rgba(170,35,35,.35);}
-.gb-zone-self .gb-char-bar{background:rgba(40,85,25,.30);}
+
+/* Character Area mat */
+.gb-char-bar{
+  flex:1;display:flex;align-items:center;gap:5px;padding:6px 10px;
+  overflow-x:auto;min-height:calc(var(--card-h) + 14px);
+  scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
+  /* Deep green felt for player */
+  background:
+    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
+    linear-gradient(180deg,#2a4a1a 0%,#1e3812 100%);
+}
+.gb-zone-opp .gb-char-bar{
+  /* Deep red felt for opponent */
+  background:
+    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
+    linear-gradient(180deg,#5a1a1a 0%,#421212 100%);
+}
 .gb-area-label{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  font-family:'Barlow Condensed',sans-serif;font-weight:700;
-  font-size:1.4rem;letter-spacing:6px;text-transform:uppercase;
-  color:rgba(255,255,255,.18);pointer-events:none;white-space:nowrap;
+  font-family:'Cinzel',serif;font-weight:700;
+  font-size:1.3rem;letter-spacing:6px;text-transform:uppercase;
+  color:rgba(255,255,255,.12);pointer-events:none;white-space:nowrap;
 }
 
-/* MIDDLE ROW — life | leader | stage | deck / trash */
+/* Middle Row — leader area mat */
 .gb-mid-row{
-  display:flex;gap:5px;align-items:center;padding:4px 8px;flex-shrink:0;
+  display:flex;gap:5px;align-items:center;padding:5px 8px;flex-shrink:0;
+}
+.gb-leader-mat{
+  display:flex;gap:5px;align-items:center;flex:1;
+  padding:5px 8px;border-radius:5px;
+  background:
+    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.02) 0%,transparent 70%),
+    linear-gradient(180deg,#3a2a18 0%,#2e2010 100%);
+  border:1px solid rgba(180,140,50,.15);
+  box-shadow:inset 0 1px 6px rgba(0,0,0,.2);
 }
 
-/* COST AREA — bottom of each zone, DON cards here */
+/* Cost Area mat */
 .gb-cost-bar{
-  display:flex;align-items:center;gap:5px;padding:4px 8px;
-  position:relative;min-height:calc(var(--card-h) + 10px);
+  display:flex;align-items:center;gap:5px;padding:5px 10px;
+  position:relative;min-height:calc(var(--card-h) + 12px);
   overflow-x:auto;flex-shrink:0;
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+  scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
+  /* Golden/olive felt */
+  background:
+    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
+    linear-gradient(180deg,#3a3a14 0%,#2e2e0e 100%);
 }
-.gb-zone-opp .gb-cost-bar{background:rgba(170,35,35,.35);}
-.gb-zone-self .gb-cost-bar{background:rgba(100,115,25,.30);}
+.gb-zone-opp .gb-cost-bar{
+  background:
+    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
+    linear-gradient(180deg,#4a1a1a 0%,#381010 100%);
+}
 .gb-cost-label{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  font-family:'Barlow Condensed',sans-serif;font-weight:700;
-  font-size:1.4rem;letter-spacing:6px;text-transform:uppercase;
-  color:rgba(255,255,255,.18);pointer-events:none;white-space:nowrap;
+  font-family:'Cinzel',serif;font-weight:700;
+  font-size:1.3rem;letter-spacing:6px;text-transform:uppercase;
+  color:rgba(255,255,255,.12);pointer-events:none;white-space:nowrap;
 }
 
-/* DON cards in cost area */
+/* DON cards */
 .don-area{display:flex;gap:3px;align-items:center;z-index:1;}
 .don-card{
   width:42px;height:60px;border-radius:3px;flex-shrink:0;
@@ -496,38 +546,45 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .don-card.active{background:var(--card-back);border:1.5px solid var(--card-bb);color:var(--card-bb);}
 .don-card.rested{background:var(--card-back);border:1.5px solid var(--card-bb);color:var(--card-bb);opacity:.5;transform:rotate(90deg);margin:8px 2px;}
 
-/* Shared slot / pile styles */
+/* Card slots — inlaid mat cutouts */
 .gb-slot{
   width:var(--card-w);height:var(--card-h);border-radius:4px;
-  border:1.5px solid rgba(255,255,255,.10);background:rgba(0,0,0,.06);
+  border:1px solid rgba(180,140,50,.15);
+  background:rgba(0,0,0,.15);
+  box-shadow:inset 0 1px 4px rgba(0,0,0,.2);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  font-family:'Barlow Condensed',sans-serif;font-size:.5rem;
-  color:rgba(255,255,255,.25);letter-spacing:1px;text-transform:uppercase;text-align:center;
+  font-family:'Cinzel',serif;font-size:.45rem;
+  color:rgba(180,140,50,.25);letter-spacing:1px;text-transform:uppercase;text-align:center;
 }
+/* Deck pile */
 .gb-deck-pile{
   width:var(--card-w);height:var(--card-h);border-radius:4px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
   font-family:'Cinzel',serif;font-size:.3rem;color:var(--card-bb);
   letter-spacing:1px;text-align:center;line-height:1.3;position:relative;
+  box-shadow:2px 2px 6px rgba(0,0,0,.3);
 }
 .gb-deck-count{display:block;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:700;color:var(--gold);margin-top:2px;}
+/* Trash slot */
 .gb-trash-slot{
   width:var(--card-w);height:var(--card-h);border-radius:4px;
-  border:1.5px solid rgba(255,255,255,.10);background:rgba(0,0,0,.12);
+  border:1px solid rgba(180,140,50,.15);background:rgba(0,0,0,.15);
+  box-shadow:inset 0 1px 4px rgba(0,0,0,.2);
   display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
-  cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:.5rem;
-  color:rgba(255,255,255,.3);letter-spacing:1px;text-transform:uppercase;
+  cursor:pointer;font-family:'Cinzel',serif;font-size:.45rem;
+  color:rgba(180,140,50,.25);letter-spacing:1px;text-transform:uppercase;
 }
 .gb-trash-slot:hover{border-color:var(--gold);color:var(--gold);}
-.gb-life{display:flex;flex-direction:column;gap:-6px;align-items:center;flex-shrink:0;}
 /* Life pips — overlapping card backs */
+.gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
 .life-stack{display:flex;flex-direction:column;align-items:center;}
 .life-pip{
   width:36px;height:50px;border-radius:3px;margin-bottom:-34px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
   font-size:.82rem;color:var(--card-bb);flex-shrink:0;
+  box-shadow:1px 1px 4px rgba(0,0,0,.25);
 }
 .life-pip:last-child{margin-bottom:0;}
 .life-pip.lost{background:rgba(9,21,40,.15);border-color:rgba(176,144,16,.16);color:rgba(176,144,16,.16);}
@@ -837,21 +894,20 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
     <!-- OPPONENT ZONE (red, rotated 180°) -->
     <div class="gb-zone gb-zone-opp">
-      <!-- Character Area (top of zone = bottom visually due to flip) -->
-      <div class="gb-char-bar" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
-      <!-- Middle: life | leader | stage | deck, trash below deck -->
+      <div class="gb-char-bar gb-mat" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
       <div class="gb-mid-row">
-        <div class="gb-life" id="oppLife"></div>
-        <span id="oppLifeCount" style="display:none;"></span>
-        <div id="oppLeader" style="flex-shrink:0;"></div>
-        <div class="gb-slot">STAGE</div>
+        <div class="gb-leader-mat gb-mat">
+          <div class="gb-life" id="oppLife"></div>
+          <span id="oppLifeCount" style="display:none;"></span>
+          <div id="oppLeader" style="flex-shrink:0;"></div>
+          <div class="gb-slot">STAGE</div>
+        </div>
         <div style="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;">
           <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
           <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
         </div>
       </div>
-      <!-- Cost Area (bottom of zone = top visually due to flip) -->
-      <div class="gb-cost-bar">
+      <div class="gb-cost-bar gb-mat">
         <span class="gb-cost-label">COST AREA</span>
         <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
         <div class="don-area" id="oppDon"></div>
@@ -860,20 +916,19 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
     <!-- PLAYER ZONE (green) -->
     <div class="gb-zone gb-zone-self">
-      <!-- Character Area (top) -->
-      <div class="gb-char-bar" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
-      <!-- Middle: life | leader | stage | deck, trash below deck -->
+      <div class="gb-char-bar gb-mat" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
       <div class="gb-mid-row">
-        <div class="gb-life" id="selfLifeStack"></div>
-        <div id="selfLeader" style="flex-shrink:0;"></div>
-        <div class="gb-slot">STAGE</div>
+        <div class="gb-leader-mat gb-mat">
+          <div class="gb-life" id="selfLifeStack"></div>
+          <div id="selfLeader" style="flex-shrink:0;"></div>
+          <div class="gb-slot">STAGE</div>
+        </div>
         <div style="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;">
           <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
           <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
         </div>
       </div>
-      <!-- Cost Area (bottom) -->
-      <div class="gb-cost-bar">
+      <div class="gb-cost-bar gb-mat">
         <span class="gb-cost-label">COST AREA</span>
         <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
         <div class="don-area" id="selfDon"></div>
