@@ -4,9 +4,17 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+const PAGES = {
+  '/': 'index.html',
+  '/index.html': 'index.html',
+  '/game.html': 'game.html',
+  '/deck-editor.html': 'deck-editor.html',
+};
+
 const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url === '/index.html') {
-    const file = path.join(__dirname, 'index.html');
+  const page = PAGES[req.url];
+  if (page) {
+    const file = path.join(__dirname, page);
     res.writeHead(200, { 'Content-Type': 'text/html' });
     fs.createReadStream(file).pipe(res);
   } else {
