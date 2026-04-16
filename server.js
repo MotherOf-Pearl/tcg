@@ -710,6 +710,7 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'DRAW_CARD': {
+      console.log('DRAW_CARD:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, drewCard: game.drewCard });
       if (!isActive || game.phase !== 'DRAW' || game.drewCard) return;
       if (p.deck.length > 0) {
         p.hand.push(p.deck.shift());
@@ -720,6 +721,7 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'DRAW_DON': {
+      console.log('DRAW_DON:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, drewDon: game.drewDon });
       if (!isActive || game.phase !== 'DRAW' || game.drewDon) return;
       const amount = game.turn <= 2 ? 1 : 2;
       const added = Math.min(amount, p.donDeck);
@@ -842,6 +844,7 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'END_TURN': {
+      console.log('END_TURN:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn });
       if (!isActive) return;
       doEnd(game);
       break;
