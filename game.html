@@ -503,16 +503,15 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   color:rgba(255,255,255,.15);pointer-events:none;white-space:nowrap;
 }
 
-/* Row 2: Leader row — middle, life on left then leader | stage | deck right-aligned */
-.gb-leader-row{
-  flex:1;display:flex;align-items:center;gap:6px;min-height:0;
+/* Row 2: Middle row — slots placed directly on board */
+.gb-mid-row{
+  flex:1;display:flex;align-items:center;gap:8px;padding:4px 8px;min-height:0;
 }
-.gb-leader-mat{
-  display:flex;gap:6px;align-items:center;
-  padding:6px 10px;margin-left:auto;
-  background:
-    radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.02) 0%,transparent 70%),
-    linear-gradient(180deg,#3a2a18 0%,#2e2010 100%);
+.gb-mid-row .gb-watermark{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  font-family:'Cinzel',serif;font-size:.5rem;letter-spacing:2px;
+  color:rgba(180,140,50,.10);text-align:center;line-height:1.4;
+  pointer-events:none;white-space:nowrap;
 }
 .gb-life-col{
   display:flex;flex-direction:column;align-items:center;flex-shrink:0;
@@ -904,19 +903,18 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       <div class="gb-zone-grid">
         <!-- Row 1: Character Area — top, right-aligned -->
         <div class="gb-char-bar gb-mat" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
-        <!-- Row 2: Life | Leader | Stage | Deck+Trash -->
-        <div class="gb-leader-row">
+        <!-- Row 2: Life | watermark | Leader | Stage | Deck / Trash -->
+        <div class="gb-mid-row">
           <div class="gb-life-col">
             <div class="gb-life" id="oppLife"></div>
             <span id="oppLifeCount" style="display:none;"></span>
           </div>
-          <div class="gb-leader-mat gb-mat">
-            <div id="oppLeader" style="flex-shrink:0;"></div>
-            <div class="gb-slot">STAGE</div>
-            <div class="gb-deck-col">
-              <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
-              <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
-            </div>
+          <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
+          <div id="oppLeader" style="flex-shrink:0;"></div>
+          <div class="gb-slot">STAGE</div>
+          <div class="gb-deck-col">
+            <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
+            <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
           </div>
         </div>
         <!-- Row 3: Cost Area — bottom -->
@@ -933,18 +931,17 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       <div class="gb-zone-grid">
         <!-- Row 1: Character Area — top, right-aligned -->
         <div class="gb-char-bar gb-mat" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
-        <!-- Row 2: Life | Leader | Stage | Deck+Trash -->
-        <div class="gb-leader-row">
+        <!-- Row 2: Life | watermark | Leader | Stage | Deck / Trash -->
+        <div class="gb-mid-row">
           <div class="gb-life-col">
             <div class="gb-life" id="selfLifeStack"></div>
           </div>
-          <div class="gb-leader-mat gb-mat">
-            <div id="selfLeader" style="flex-shrink:0;"></div>
-            <div class="gb-slot">STAGE</div>
-            <div class="gb-deck-col">
-              <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
-              <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
-            </div>
+          <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
+          <div id="selfLeader" style="flex-shrink:0;"></div>
+          <div class="gb-slot">STAGE</div>
+          <div class="gb-deck-col">
+            <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
+            <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
           </div>
         </div>
         <!-- Row 3: Cost Area — bottom -->
