@@ -479,13 +479,13 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   box-shadow:inset 0 1px 6px rgba(0,0,0,.25),0 2px 4px rgba(0,0,0,.15);
 }
 
-/* Row 1: Character Area — top, horizontal, right-aligned, compact height */
+/* Row 1: Character Area — top, nearly full width */
 .gb-char-bar{
   display:flex;align-items:center;gap:4px;
   padding:5px 8px;overflow-x:auto;flex-shrink:0;
   min-height:calc(var(--card-h) + 12px);
   max-height:calc(var(--card-h) + 14px);
-  align-self:flex-end;min-width:40%;
+  width:92%;align-self:center;
   scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
@@ -499,7 +499,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gb-area-label{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   font-family:'Cinzel',serif;font-weight:700;
-  font-size:.7rem;letter-spacing:4px;text-transform:uppercase;
+  font-size:1.1rem;letter-spacing:6px;text-transform:uppercase;
   color:rgba(255,255,255,.15);pointer-events:none;white-space:nowrap;
 }
 
@@ -520,10 +520,13 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;
 }
 
-/* Row 3: Cost Area — bottom, compact */
+/* Row 3: Cost Area + Trash — bottom row, cost centered, trash far right */
+.gb-bottom-row{
+  display:flex;align-items:center;gap:6px;padding:0 8px;flex-shrink:0;
+}
 .gb-cost-bar{
-  display:flex;align-items:center;gap:4px;padding:5px 8px;flex-shrink:0;
-  overflow-x:auto;align-self:flex-start;
+  display:flex;align-items:center;gap:4px;padding:5px 8px;flex:1;
+  overflow-x:auto;position:relative;
   scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
@@ -535,10 +538,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     linear-gradient(180deg,#4a1a1a 0%,#381010 100%);
 }
 .gb-cost-label{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   font-family:'Cinzel',serif;font-weight:700;
-  font-size:.6rem;letter-spacing:3px;text-transform:uppercase;
-  color:rgba(255,255,255,.15);pointer-events:none;white-space:nowrap;
-  margin-right:4px;
+  font-size:1.1rem;letter-spacing:6px;text-transform:uppercase;
+  color:rgba(255,255,255,.12);pointer-events:none;white-space:nowrap;
 }
 
 /* DON cards */
@@ -912,16 +915,16 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
           <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
           <div id="oppLeader" style="flex-shrink:0;"></div>
           <div class="gb-slot">STAGE</div>
-          <div class="gb-deck-col">
-            <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
-            <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
-          </div>
+          <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
         </div>
-        <!-- Row 3: Cost Area — bottom -->
-        <div class="gb-cost-bar gb-mat">
-          <span class="gb-cost-label">COST AREA</span>
-          <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
-          <div class="don-area" id="oppDon"></div>
+        <!-- Row 3: Cost Area (center) + Trash (far right) -->
+        <div class="gb-bottom-row">
+          <div class="gb-cost-bar gb-mat">
+            <span class="gb-cost-label">COST AREA</span>
+            <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
+            <div class="don-area" id="oppDon"></div>
+          </div>
+          <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
         </div>
       </div>
     </div>
@@ -939,16 +942,16 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
           <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
           <div id="selfLeader" style="flex-shrink:0;"></div>
           <div class="gb-slot">STAGE</div>
-          <div class="gb-deck-col">
-            <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
-            <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
-          </div>
+          <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
         </div>
-        <!-- Row 3: Cost Area — bottom -->
-        <div class="gb-cost-bar gb-mat">
-          <span class="gb-cost-label">COST AREA</span>
-          <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
-          <div class="don-area" id="selfDon"></div>
+        <!-- Row 3: Cost Area (center) + Trash (far right) -->
+        <div class="gb-bottom-row">
+          <div class="gb-cost-bar gb-mat">
+            <span class="gb-cost-label">COST AREA</span>
+            <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
+            <div class="don-area" id="selfDon"></div>
+          </div>
+          <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
         </div>
       </div>
     </div>
