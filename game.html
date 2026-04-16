@@ -590,11 +590,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
 .life-stack{display:flex;flex-direction:column;align-items:center;}
 .life-pip{
-  width:var(--card-w);height:var(--card-h);border-radius:4px;margin-bottom:calc(-1 * var(--card-h) + 16px);
+  width:70px;height:98px;border-radius:4px;margin-bottom:-82px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
-  font-size:1rem;color:var(--card-bb);flex-shrink:0;
-  box-shadow:1px 2px 5px rgba(0,0,0,.3);
+  font-family:'Cinzel',serif;font-size:.28rem;color:var(--card-bb);
+  letter-spacing:1px;text-align:center;line-height:1.3;
+  flex-shrink:0;box-shadow:1px 2px 5px rgba(0,0,0,.3);
 }
 .life-pip:last-child{margin-bottom:0;}
 .life-pip.lost{display:none;}
@@ -1481,10 +1482,10 @@ function renderLife(id, countId, max, remaining) {
   if (!el) return;
   el.innerHTML = '';
   if (cn) cn.textContent = remaining;
-  for (let i = 0; i < max; i++) {
+  for (let i = 0; i < remaining; i++) {
     const pip = document.createElement('div');
-    pip.className = 'life-pip' + (i >= remaining ? ' lost' : '');
-    pip.textContent = '✦';
+    pip.className = 'life-pip';
+    pip.innerHTML = 'ONE PIECE<br>CARD GAME';
     el.appendChild(pip);
   }
 }
