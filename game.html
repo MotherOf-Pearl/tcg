@@ -457,68 +457,81 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   border:1px solid rgba(180,140,50,.18);pointer-events:none;z-index:1;
 }
 
-/* Player zones */
-.gb-zone{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;min-height:0;padding:4px;}
+/* Player zones — free-form layout, mats placed on board */
+.gb-zone{flex:1;position:relative;overflow:hidden;min-height:0;padding:8px;}
 .gb-zone-opp{
   transform:rotate(180deg);
-  border-bottom:2px solid rgba(180,140,50,.25);
+  border-bottom:2px solid rgba(180,140,50,.20);
 }
 .gb-zone-self{
-  border-top:1px solid rgba(180,140,50,.12);
+  border-top:1px solid rgba(180,140,50,.10);
+}
+/* Zone uses CSS grid for modular mat placement */
+.gb-zone-grid{
+  display:grid;width:100%;height:100%;
+  grid-template-columns:auto 1fr auto;
+  grid-template-rows:1fr auto;
+  gap:6px;
 }
 
-/* ── CARD MAT ZONES ── */
-/* Each area is a felt/mat inlay on the board */
+/* ── CARD MAT MODULES ── */
 .gb-mat{
   border-radius:5px;position:relative;
-  border:1px solid rgba(180,140,50,.20);
-  box-shadow:inset 0 1px 6px rgba(0,0,0,.25);
+  border:1px solid rgba(180,140,50,.22);
+  box-shadow:inset 0 1px 6px rgba(0,0,0,.25),0 2px 4px rgba(0,0,0,.15);
 }
 
-/* Character Area mat */
+/* Character Area — right side, compact */
 .gb-char-bar{
-  flex:1;display:flex;align-items:center;gap:5px;padding:6px 10px;
-  overflow-x:auto;min-height:calc(var(--card-h) + 14px);
+  grid-column:3;grid-row:1/3;
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:6px;overflow-y:auto;width:fit-content;min-width:calc(var(--card-w) + 16px);
   scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
-  /* Deep green felt for player */
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
     linear-gradient(180deg,#2a4a1a 0%,#1e3812 100%);
 }
 .gb-zone-opp .gb-char-bar{
-  /* Deep red felt for opponent */
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
     linear-gradient(180deg,#5a1a1a 0%,#421212 100%);
 }
 .gb-area-label{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   font-family:'Cinzel',serif;font-weight:700;
-  font-size:1.3rem;letter-spacing:6px;text-transform:uppercase;
-  color:rgba(255,255,255,.12);pointer-events:none;white-space:nowrap;
+  font-size:.55rem;letter-spacing:3px;text-transform:uppercase;
+  color:rgba(255,255,255,.20);white-space:nowrap;
+  writing-mode:vertical-lr;text-orientation:mixed;
+  position:absolute;right:2px;top:50%;transform:translateY(-50%);
+  pointer-events:none;
 }
 
-/* Middle Row — leader area mat */
-.gb-mid-row{
-  display:flex;gap:5px;align-items:center;padding:5px 8px;flex-shrink:0;
-}
+/* Leader mat — center area */
 .gb-leader-mat{
-  display:flex;gap:5px;align-items:center;flex:1;
-  padding:5px 8px;border-radius:5px;
+  grid-column:2;grid-row:1;
+  display:flex;gap:6px;align-items:center;justify-content:center;
+  padding:6px 10px;
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.02) 0%,transparent 70%),
     linear-gradient(180deg,#3a2a18 0%,#2e2010 100%);
-  border:1px solid rgba(180,140,50,.15);
-  box-shadow:inset 0 1px 6px rgba(0,0,0,.2);
 }
 
-/* Cost Area mat */
+/* Life stack — left side */
+.gb-life-col{
+  grid-column:1;grid-row:1/3;
+  display:flex;flex-direction:column;align-items:center;gap:0;
+}
+
+/* Deck + Trash column — far right of leader row, outside char area */
+.gb-deck-col{
+  display:flex;flex-direction:column;gap:4px;align-items:center;flex-shrink:0;
+}
+
+/* Cost Area mat — bottom left/center */
 .gb-cost-bar{
-  display:flex;align-items:center;gap:5px;padding:5px 10px;
-  position:relative;min-height:calc(var(--card-h) + 12px);
-  overflow-x:auto;flex-shrink:0;
+  grid-column:1/3;grid-row:2;
+  display:flex;align-items:center;gap:4px;padding:5px 8px;
+  position:relative;overflow-x:auto;
   scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
-  /* Golden/olive felt */
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
     linear-gradient(180deg,#3a3a14 0%,#2e2e0e 100%);
@@ -529,10 +542,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     linear-gradient(180deg,#4a1a1a 0%,#381010 100%);
 }
 .gb-cost-label{
-  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   font-family:'Cinzel',serif;font-weight:700;
-  font-size:1.3rem;letter-spacing:6px;text-transform:uppercase;
-  color:rgba(255,255,255,.12);pointer-events:none;white-space:nowrap;
+  font-size:.6rem;letter-spacing:3px;text-transform:uppercase;
+  color:rgba(255,255,255,.15);pointer-events:none;white-space:nowrap;
+  margin-right:6px;
 }
 
 /* DON cards */
@@ -894,44 +907,56 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
     <!-- OPPONENT ZONE (red, rotated 180°) -->
     <div class="gb-zone gb-zone-opp">
-      <div class="gb-char-bar gb-mat" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
-      <div class="gb-mid-row">
-        <div class="gb-leader-mat gb-mat">
+      <div class="gb-zone-grid">
+        <!-- Life stack — left -->
+        <div class="gb-life-col">
           <div class="gb-life" id="oppLife"></div>
           <span id="oppLifeCount" style="display:none;"></span>
+        </div>
+        <!-- Leader + stage + deck/trash — center -->
+        <div class="gb-leader-mat gb-mat">
           <div id="oppLeader" style="flex-shrink:0;"></div>
           <div class="gb-slot">STAGE</div>
+          <div class="gb-deck-col">
+            <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
+            <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
+          </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;">
-          <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
-          <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
+        <!-- Character area — right -->
+        <div class="gb-char-bar gb-mat" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
+        <!-- Cost area — bottom left -->
+        <div class="gb-cost-bar gb-mat">
+          <span class="gb-cost-label">COST AREA</span>
+          <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
+          <div class="don-area" id="oppDon"></div>
         </div>
-      </div>
-      <div class="gb-cost-bar gb-mat">
-        <span class="gb-cost-label">COST AREA</span>
-        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
-        <div class="don-area" id="oppDon"></div>
       </div>
     </div>
 
     <!-- PLAYER ZONE (green) -->
     <div class="gb-zone gb-zone-self">
-      <div class="gb-char-bar gb-mat" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
-      <div class="gb-mid-row">
-        <div class="gb-leader-mat gb-mat">
+      <div class="gb-zone-grid">
+        <!-- Life stack — left -->
+        <div class="gb-life-col">
           <div class="gb-life" id="selfLifeStack"></div>
+        </div>
+        <!-- Leader + stage + deck/trash — center -->
+        <div class="gb-leader-mat gb-mat">
           <div id="selfLeader" style="flex-shrink:0;"></div>
           <div class="gb-slot">STAGE</div>
+          <div class="gb-deck-col">
+            <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
+            <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
+          </div>
         </div>
-        <div style="display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;">
-          <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
-          <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
+        <!-- Character area — right -->
+        <div class="gb-char-bar gb-mat" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
+        <!-- Cost area — bottom left -->
+        <div class="gb-cost-bar gb-mat">
+          <span class="gb-cost-label">COST AREA</span>
+          <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
+          <div class="don-area" id="selfDon"></div>
         </div>
-      </div>
-      <div class="gb-cost-bar gb-mat">
-        <span class="gb-cost-label">COST AREA</span>
-        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
-        <div class="don-area" id="selfDon"></div>
       </div>
     </div>
 
