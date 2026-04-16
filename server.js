@@ -549,8 +549,6 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     mulliganDone: { [p1id]: false, [p2id]: false },
     counterWindow: null,
     counterDone: { [p1id]: false, [p2id]: false },
-    drewCard: false,
-    drewDon: false,
   };
 }
 
@@ -610,9 +608,6 @@ function doEnd(game) {
   game.phase = 'DRAW';
   log(game, `--- Turn ${game.turn} begins ---`);
   doRefresh(game);
-  // Player must manually draw card then DON
-  game.drewCard = false;
-  game.drewDon = false;
 }
 
 function addDon(game) {
@@ -699,36 +694,33 @@ function handleAction(roomId, playerId, action) {
         log(game, `${playerId.slice(0,6)} keeps their hand.`);
       }
       if (Object.values(game.mulliganDone).every(v => v)) {
-        game.phase = 'DRAW';
         doRefresh(game);
         // Turn 1 first player skips card draw, goes straight to DON
-        game.drewCard = true; // skip draw on turn 1
-        game.drewDon = false;
+        game.phase = 'DON';
         log(game, 'Both players ready! Turn 1 begins. Draw DON to start.');
       }
       break;
     }
 
     case 'DRAW_CARD': {
-      console.log('DRAW_CARD:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, drewCard: game.drewCard });
-      if (!isActive || game.phase !== 'DRAW' || game.drewCard) return;
+      console.log('DRAW_CARD:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase });
+      if (!isActive || game.phase !== 'DRAW') return;
       if (p.deck.length > 0) {
         p.hand.push(p.deck.shift());
         log(game, `${playerId.slice(0,6)} draws a card.`);
       }
-      game.drewCard = true;
+      game.phase = 'DON';
       break;
     }
 
     case 'DRAW_DON': {
-      console.log('DRAW_DON:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, drewDon: game.drewDon });
-      if (!isActive || game.phase !== 'DRAW' || game.drewDon) return;
+      console.log('DRAW_DON:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase });
+      if (!isActive || game.phase !== 'DON') return;
       const amount = game.turn <= 2 ? 1 : 2;
       const added = Math.min(amount, p.donDeck);
       p.donDeck -= added;
       p.donActive += added;
       log(game, `${playerId.slice(0,6)} adds ${added} DON!!`);
-      game.drewDon = true;
       game.phase = 'MAIN';
       break;
     }

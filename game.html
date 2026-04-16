@@ -1317,15 +1317,23 @@ function renderGame() {
   const opp = game.players[oppId];
   const isActive = game.activePlayer === myId;
 
-  // Show draw buttons during DRAW phase, play buttons during MAIN
+  // Show buttons based on phase: DRAW → DON → MAIN
   if (game.phase === 'DRAW' && isActive) {
     document.getElementById('drawBtns').style.display = 'flex';
-    document.getElementById('btnDrawCard').style.display = game.drewCard ? 'none' : 'block';
-    document.getElementById('btnDrawDon').style.display = game.drewCard ? 'block' : 'none';
+    document.getElementById('btnDrawCard').style.display = 'block';
+    document.getElementById('btnDrawDon').style.display = 'none';
     document.getElementById('playBtns').style.display = 'none';
+  } else if (game.phase === 'DON' && isActive) {
+    document.getElementById('drawBtns').style.display = 'flex';
+    document.getElementById('btnDrawCard').style.display = 'none';
+    document.getElementById('btnDrawDon').style.display = 'block';
+    document.getElementById('playBtns').style.display = 'none';
+  } else if (game.phase === 'MAIN' && isActive) {
+    document.getElementById('drawBtns').style.display = 'none';
+    document.getElementById('playBtns').style.display = 'flex';
   } else {
     document.getElementById('drawBtns').style.display = 'none';
-    document.getElementById('playBtns').style.display = (game.phase === 'MAIN' && isActive) ? 'flex' : 'none';
+    document.getElementById('playBtns').style.display = 'none';
   }
 
   document.getElementById('phasePill').textContent = game.phase;
@@ -1384,8 +1392,8 @@ function renderGame() {
   if (!hasCW) {
     counterMode = false;
     if (!isActive) hint("Opponent's turn…");
-    else if (game.phase === 'DRAW' && !game.drewCard) hint('Draw a card from your deck.');
-    else if (game.phase === 'DRAW' && !game.drewDon) hint('Draw DON to add to your cost area.');
+    else if (game.phase === 'DRAW') hint('Draw a card from your deck.');
+    else if (game.phase === 'DON') hint('Draw DON to add to your cost area.');
     else if (game.phase === 'MAIN') hint('Play cards, attach DON, or attack. End Turn when done.');
     else hint('Waiting…');
   }
