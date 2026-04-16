@@ -1240,6 +1240,7 @@ function joinRoom() {
 // ─── MULLIGAN ───
 function renderMulligan() {
   if (!game) return;
+  // In solo mode, auto-switch to the side that hasn't mulliganed yet
   if (isSolo && game.mulliganDone[myId]) {
     const otherId = myId === soloIds[0] ? soloIds[1] : soloIds[0];
     if (otherId && !game.mulliganDone[otherId]) myId = otherId;
@@ -1253,14 +1254,22 @@ function renderMulligan() {
   handEl.innerHTML = '';
   p.hand.forEach(card => handEl.appendChild(makeGameCard(card, null, false)));
 
-  renderOppHand('oppHand', opp.hand.length);
-  if (p.leader) renderLeader('selfLeader', p.leader, false);
+  if (isSolo) renderSoloOppHand('oppHand', opp.hand);
+  else renderOppHand('oppHand', opp.hand.length);
+
+  if (p.leader) renderLeader('selfLeader', p.leader, true);
   if (opp.leader) renderLeader('oppLeader', opp.leader, false);
 
   // Render life cards during mulligan
   renderLife('selfLifeStack', null, p.leader.life, p.life.length);
   renderLife('oppLife', 'oppLifeCount', opp.leader.life, opp.life.length);
 
+  // Render deck/don counts
+  document.getElementById('selfDeckN').textContent = p.deck.length;
+  document.getElementById('oppDeckN').textContent = opp.deck.length;
+  document.getElementById('selfDonDeck').textContent = p.donDeck;
+
+  // Show/hide mulligan buttons based on current state
   const done = game.mulliganDone[myId];
   document.getElementById('mulliganBtns').style.display = done ? 'none' : 'flex';
   document.getElementById('mulliganWait').style.display = done ? 'block' : 'none';
@@ -1270,8 +1279,11 @@ function renderMulligan() {
 }
 function doMulligan(mulligan) {
   act({ type: 'MULLIGAN', doMulligan: mulligan });
-  document.getElementById('mulliganBtns').style.display = 'none';
-  document.getElementById('mulliganWait').style.display = 'block';
+  // In solo mode, let renderMulligan handle button visibility on next state update
+  if (!isSolo) {
+    document.getElementById('mulliganBtns').style.display = 'none';
+    document.getElementById('mulliganWait').style.display = 'block';
+  }
 }
 
 // ─── GAME RENDER ───
