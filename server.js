@@ -12,7 +12,9 @@ const PAGES = {
 };
 
 const server = http.createServer((req, res) => {
-  const page = PAGES[req.url];
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  const pathname = parsedUrl.pathname;
+  const page = PAGES[pathname];
   if (page) {
     const file = path.join(__dirname, page);
     res.writeHead(200, { 'Content-Type': 'text/html' });
