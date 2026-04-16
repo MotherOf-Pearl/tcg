@@ -545,6 +545,8 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     mulliganDone: { [p1id]: false, [p2id]: false },
     counterWindow: null,
     counterDone: { [p1id]: false, [p2id]: false },
+    drewCard: false,
+    drewDon: false,
   };
 }
 
@@ -601,12 +603,12 @@ function doEnd(game) {
   const ids = Object.keys(game.players);
   game.activePlayer = ids.find(id => id !== game.activePlayer);
   game.turn++;
-  game.phase = 'REFRESH';
+  game.phase = 'DRAW';
   log(game, `--- Turn ${game.turn} begins ---`);
   doRefresh(game);
-  game.phase = 'DRAW';
-  doDraw(game);
-  game.phase = 'DON';
+  // Player must manually draw card then DON
+  game.drewCard = false;
+  game.drewDon = false;
 }
 
 function addDon(game) {
@@ -693,11 +695,35 @@ function handleAction(roomId, playerId, action) {
         log(game, `${playerId.slice(0,6)} keeps their hand.`);
       }
       if (Object.values(game.mulliganDone).every(v => v)) {
-        game.phase = 'REFRESH';
+        game.phase = 'DRAW';
         doRefresh(game);
-        game.phase = 'DON';
-        log(game, 'Both players ready! Turn 1 begins. Add DON!! to start.');
+        // Turn 1 first player skips card draw, goes straight to DON
+        game.drewCard = true; // skip draw on turn 1
+        game.drewDon = false;
+        log(game, 'Both players ready! Turn 1 begins. Draw DON to start.');
       }
+      break;
+    }
+
+    case 'DRAW_CARD': {
+      if (!isActive || game.phase !== 'DRAW' || game.drewCard) return;
+      if (p.deck.length > 0) {
+        p.hand.push(p.deck.shift());
+        log(game, `${playerId.slice(0,6)} draws a card.`);
+      }
+      game.drewCard = true;
+      break;
+    }
+
+    case 'DRAW_DON': {
+      if (!isActive || game.phase !== 'DRAW' || game.drewDon) return;
+      const amount = game.turn <= 2 ? 1 : 2;
+      const added = Math.min(amount, p.donDeck);
+      p.donDeck -= added;
+      p.donActive += added;
+      log(game, `${playerId.slice(0,6)} adds ${added} DON!!`);
+      game.drewDon = true;
+      game.phase = 'MAIN';
       break;
     }
 

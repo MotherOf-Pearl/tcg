@@ -959,6 +959,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(false)">Keep</button>
       </div>
       <p id="mulliganWait" style="display:none;color:#8a7860;font-size:0.8rem;text-align:center;">Waiting for opponent…</p>
+      <!-- Draw phase buttons -->
+      <div id="drawBtns" style="display:none;flex-direction:column;gap:4px;">
+        <button class="gb-pbtn gb-pbtn-lg" id="btnDrawCard" onclick="act({type:'DRAW_CARD'})">Draw Card</button>
+        <button class="gb-pbtn gb-pbtn-lg" id="btnDrawDon" onclick="act({type:'DRAW_DON'})">Draw DON</button>
+      </div>
+      <!-- Main phase buttons -->
       <div id="playBtns" style="display:none;flex-direction:column;gap:4px;">
         <button class="gb-pbtn gb-pbtn-lg" onclick="act({type:'END_TURN'})">End Turn</button>
         <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
@@ -1306,12 +1312,22 @@ function renderGame() {
 
   document.getElementById('mulliganBtns').style.display = 'none';
   document.getElementById('mulliganWait').style.display = 'none';
-  document.getElementById('playBtns').style.display = 'flex';
 
   const me = game.players[myId];
   const oppId = Object.keys(game.players).find(id => id !== myId);
   const opp = game.players[oppId];
   const isActive = game.activePlayer === myId;
+
+  // Show draw buttons during DRAW phase, play buttons during MAIN
+  if (game.phase === 'DRAW' && isActive) {
+    document.getElementById('drawBtns').style.display = 'flex';
+    document.getElementById('btnDrawCard').style.display = game.drewCard ? 'none' : 'block';
+    document.getElementById('btnDrawDon').style.display = game.drewCard ? 'block' : 'none';
+    document.getElementById('playBtns').style.display = 'none';
+  } else {
+    document.getElementById('drawBtns').style.display = 'none';
+    document.getElementById('playBtns').style.display = (game.phase === 'MAIN' && isActive) ? 'flex' : 'none';
+  }
 
   document.getElementById('phasePill').textContent = game.phase;
   document.getElementById('turnText').textContent = `Turn ${game.turn}`;
@@ -1369,9 +1385,10 @@ function renderGame() {
   if (!hasCW) {
     counterMode = false;
     if (!isActive) hint("Opponent's turn…");
-    else if (game.phase === 'DON')  hint('Click "Next ▶" to add DON!! to your pool.');
-    else if (game.phase === 'MAIN') hint('Select a card from hand to play, or your leader/character to attack.');
-    else hint(`Click "Next ▶" to proceed through ${game.phase} phase.`);
+    else if (game.phase === 'DRAW' && !game.drewCard) hint('Draw a card from your deck.');
+    else if (game.phase === 'DRAW' && !game.drewDon) hint('Draw DON to add to your cost area.');
+    else if (game.phase === 'MAIN') hint('Play cards, attach DON, or attack. End Turn when done.');
+    else hint('Waiting…');
   }
 }
 
