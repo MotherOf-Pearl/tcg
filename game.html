@@ -514,7 +514,8 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   pointer-events:none;white-space:nowrap;
 }
 .gb-life-col{
-  display:flex;flex-direction:column;align-items:center;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  flex-shrink:0;padding:0 4px;
 }
 .gb-deck-col{
   display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;
@@ -585,18 +586,18 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   color:rgba(180,140,50,.25);letter-spacing:1px;text-transform:uppercase;
 }
 .gb-trash-slot:hover{border-color:var(--gold);color:var(--gold);}
-/* Life pips — overlapping card backs */
+/* Life cards — face-down card backs, overlapping vertically */
 .gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
 .life-stack{display:flex;flex-direction:column;align-items:center;}
 .life-pip{
-  width:36px;height:50px;border-radius:3px;margin-bottom:-34px;
+  width:var(--card-w);height:var(--card-h);border-radius:4px;margin-bottom:calc(-1 * var(--card-h) + 16px);
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
-  font-size:.82rem;color:var(--card-bb);flex-shrink:0;
-  box-shadow:1px 1px 4px rgba(0,0,0,.25);
+  font-size:1rem;color:var(--card-bb);flex-shrink:0;
+  box-shadow:1px 2px 5px rgba(0,0,0,.3);
 }
 .life-pip:last-child{margin-bottom:0;}
-.life-pip.lost{background:rgba(9,21,40,.15);border-color:rgba(176,144,16,.16);color:rgba(176,144,16,.16);}
+.life-pip.lost{display:none;}
 .life-row{display:flex;gap:2px;align-items:center;}
 .life-row .life-pip{width:12px;height:17px;margin-bottom:0;}
 
