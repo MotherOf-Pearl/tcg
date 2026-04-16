@@ -381,275 +381,204 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* ════════════════════════════════════════════════════
    GAME BOARD
 ════════════════════════════════════════════════════ */
-#game{
-  display:none;
-  height:100vh;overflow:hidden;
-  /* wood texture background */
-  background-color: var(--w-base);
+#game{display:none;height:100vh;overflow:hidden;
+  background-color:var(--w-base);
   background-image:
-    radial-gradient(ellipse 160px 80px at 12% 28%, rgba(60,25,3,0.30) 0%, transparent 100%),
-    radial-gradient(ellipse 120px 60px at 80% 65%, rgba(60,25,3,0.22) 0%, transparent 100%),
-    radial-gradient(ellipse 200px 50px at 55% 10%, rgba(60,25,3,0.18) 0%, transparent 100%),
-    radial-gradient(ellipse 100px 80px at 35% 85%, rgba(60,25,3,0.20) 0%, transparent 100%),
-    repeating-linear-gradient(
-      88.5deg,
-      transparent 0px, transparent 6px,
-      rgba(80,30,2,0.10) 6px, rgba(80,30,2,0.10) 7px,
-      transparent 7px, transparent 13px,
-      rgba(200,120,40,0.07) 13px, rgba(200,120,40,0.07) 14px,
-      transparent 14px, transparent 22px,
-      rgba(60,20,2,0.06) 22px, rgba(60,20,2,0.06) 23px
-    ),
-    repeating-linear-gradient(
-      91deg,
-      rgba(170,85,15,0.14) 0px, rgba(140,65,10,0.10) 18px,
-      rgba(185,100,25,0.14) 36px, rgba(155,75,12,0.10) 54px,
-      rgba(170,85,15,0.14) 72px
-    ),
-    radial-gradient(ellipse at center, rgba(190,105,30,0.15) 0%, rgba(60,20,2,0.50) 100%);
+    radial-gradient(ellipse 160px 80px at 12% 28%,rgba(60,25,3,.30) 0%,transparent 100%),
+    radial-gradient(ellipse 120px 60px at 80% 65%,rgba(60,25,3,.22) 0%,transparent 100%),
+    radial-gradient(ellipse 200px 50px at 55% 10%,rgba(60,25,3,.18) 0%,transparent 100%),
+    radial-gradient(ellipse 100px 80px at 35% 85%,rgba(60,25,3,.20) 0%,transparent 100%),
+    repeating-linear-gradient(88.5deg,transparent 0px,transparent 6px,rgba(80,30,2,.10) 6px,rgba(80,30,2,.10) 7px,transparent 7px,transparent 13px,rgba(200,120,40,.07) 13px,rgba(200,120,40,.07) 14px,transparent 14px,transparent 22px,rgba(60,20,2,.06) 22px,rgba(60,20,2,.06) 23px),
+    repeating-linear-gradient(91deg,rgba(170,85,15,.14) 0px,rgba(140,65,10,.10) 18px,rgba(185,100,25,.14) 36px,rgba(155,75,12,.10) 54px,rgba(170,85,15,.14) 72px),
+    radial-gradient(ellipse at center,rgba(190,105,30,.15) 0%,rgba(60,20,2,.50) 100%);
 }
-#game.active{
-  display:grid;
-  grid-template-columns:300px 1fr 220px;
-  grid-template-rows:1fr;
-}
+#game.active{display:grid;grid-template-columns:300px 1fr 240px;grid-template-rows:1fr;}
 
 /* ── LEFT COLUMN ── */
-.gb-left{
-  display:flex;flex-direction:column;
-  gap:0;overflow:hidden;
-  border-right:1px solid rgba(0,0,0,0.25);
-}
+.gb-left{display:flex;flex-direction:column;overflow:hidden;}
 .gb-opp-hand,.gb-self-hand{
-  display:flex;gap:3px;overflow-x:auto;
-  padding:6px;align-items:center;
-  min-height:calc(var(--card-h) + 14px);
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
-  background:rgba(0,0,0,0.18);
+  display:flex;gap:5px;overflow-x:auto;padding:8px;align-items:flex-end;
+  min-height:120px;scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
+.gb-self-hand{align-items:flex-start;}
+/* make hand cards bigger */
+.gb-opp-hand .gcard,.gb-self-hand .gcard{width:80px;height:112px;}
+.gb-opp-hand .gcard img,.gb-self-hand .gcard img{height:62%;}
+.gb-opp-hand .card-back,.gb-self-hand .card-back{width:80px;height:112px;}
 .gb-log{
-  flex:1;overflow-y:auto;padding:8px 10px;min-height:60px;
-  background:linear-gradient(180deg,#f0e6cc 0%,#e4d6b0 100%);
-  border-top:1px solid rgba(0,0,0,0.2);
-  border-bottom:1px solid rgba(0,0,0,0.2);
+  flex:1;overflow-y:auto;padding:10px 12px;min-height:60px;
+  background:rgba(230,220,195,.88);
+  border-top:1px solid rgba(0,0,0,.15);border-bottom:1px solid rgba(0,0,0,.15);
   scrollbar-width:thin;scrollbar-color:#b8a880 transparent;
 }
-.gb-log p{font-size:0.65rem;color:#3a2a10;line-height:1.55;}
-.gb-log p:last-child{color:#1a0e00;font-weight:600;}
+.gb-log p{font-size:0.72rem;color:#3a2a10;line-height:1.6;margin:0;}
+.gb-log p:last-child{color:#1a0e00;font-weight:700;}
 
 /* ── CENTER BOARD ── */
-.gb-board{
-  display:flex;flex-direction:column;
-  overflow:hidden;
-}
-.gb-zone{
-  flex:1;display:flex;flex-direction:column;
-  padding:4px 8px;gap:3px;
-  position:relative;overflow:hidden;min-height:0;
-}
+.gb-board{display:flex;flex-direction:column;overflow:hidden;}
+
+/* Zone containers */
+.gb-zone{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;min-height:0;padding:0;}
 .gb-zone-opp{
-  background:rgba(120,20,20,0.35);
-  border-bottom:2px solid rgba(180,40,40,0.4);
   transform:rotate(180deg);
+  background:
+    radial-gradient(ellipse at 50% 60%,rgba(200,60,60,.18) 0%,transparent 70%),
+    linear-gradient(180deg,rgba(160,30,30,.30) 0%,rgba(130,20,20,.22) 100%);
 }
 .gb-zone-self{
-  background:rgba(20,90,40,0.28);
-  border-top:2px solid rgba(40,140,60,0.4);
+  background:
+    radial-gradient(ellipse at 50% 40%,rgba(120,150,50,.18) 0%,transparent 70%),
+    linear-gradient(180deg,rgba(60,100,30,.22) 0%,rgba(80,120,40,.28) 100%);
 }
-.gb-row{
-  display:flex;gap:5px;align-items:center;
-  flex-shrink:0;padding:2px 0;
-}
+
+/* Rows inside zones */
+.gb-row{display:flex;gap:5px;align-items:center;flex-shrink:0;padding:3px 8px;}
 .gb-row-flex{flex:1;min-height:0;}
-.gb-area-bar{
-  display:flex;align-items:center;gap:4px;
-  padding:3px 8px;border-radius:4px;
-  min-height:calc(var(--card-h) + 8px);
+
+/* CHARACTER AREA - big bold watermark text */
+.gb-char-bar{
+  flex:1;display:flex;align-items:center;gap:5px;padding:4px 10px;
+  position:relative;overflow-x:auto;min-height:calc(var(--card-h) + 12px);
+  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+}
+.gb-zone-opp .gb-char-bar{
+  background:linear-gradient(135deg,rgba(180,40,40,.55) 0%,rgba(150,25,25,.45) 50%,rgba(180,40,40,.55) 100%);
+}
+.gb-zone-self .gb-char-bar{
+  background:linear-gradient(135deg,rgba(50,90,30,.45) 0%,rgba(40,75,25,.38) 50%,rgba(50,90,30,.45) 100%);
+}
+.gb-area-label{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;
+  font-size:1.6rem;letter-spacing:8px;text-transform:uppercase;
+  color:rgba(255,255,255,.25);pointer-events:none;white-space:nowrap;
+}
+
+/* COST AREA - holds DON card images */
+.gb-cost-bar{
+  flex:1;display:flex;align-items:center;gap:5px;padding:4px 10px;
+  position:relative;min-height:calc(var(--card-h) + 12px);
   overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
-.gb-cost-bar{
-  flex:1;
-  background:rgba(0,0,0,0.18);
-  border:1px dashed rgba(255,255,255,0.12);
-  border-radius:4px;
+.gb-zone-opp .gb-cost-bar{
+  background:linear-gradient(135deg,rgba(180,40,40,.55) 0%,rgba(150,25,25,.45) 50%,rgba(180,40,40,.55) 100%);
 }
-.gb-zone-opp .gb-cost-bar{background:rgba(140,20,20,0.18);border-color:rgba(180,40,40,0.2);}
-.gb-zone-self .gb-cost-bar{background:rgba(60,120,40,0.15);border-color:rgba(80,160,60,0.2);}
-.gb-char-bar{
-  flex:1;
-  background:rgba(0,0,0,0.14);
-  border:1px dashed rgba(255,255,255,0.08);
-  border-radius:4px;
-  flex-wrap:nowrap;
+.gb-zone-self .gb-cost-bar{
+  background:linear-gradient(135deg,rgba(130,140,30,.50) 0%,rgba(110,120,25,.40) 50%,rgba(130,140,30,.50) 100%);
 }
-.gb-zone-opp .gb-char-bar{background:rgba(140,20,20,0.12);}
-.gb-zone-self .gb-char-bar{background:rgba(20,90,40,0.12);}
-.gb-area-label{
-  color:rgba(255,255,255,0.18);font-size:0.6rem;font-style:italic;
-  margin:auto;font-family:'Barlow Condensed',sans-serif;
-  letter-spacing:2px;text-transform:uppercase;
-  white-space:nowrap;
+.gb-cost-label{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-family:'Barlow Condensed',sans-serif;font-weight:700;
+  font-size:1.6rem;letter-spacing:8px;text-transform:uppercase;
+  color:rgba(255,255,255,.25);pointer-events:none;white-space:nowrap;
 }
+/* DON area now holds card-back styled DON cards */
+.don-area{display:flex;gap:3px;align-items:center;z-index:1;}
+.don-card{
+  width:42px;height:60px;border-radius:3px;flex-shrink:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Cinzel',serif;font-size:0.22rem;letter-spacing:.5px;
+  text-align:center;line-height:1.3;cursor:default;
+}
+.don-card.active{background:var(--card-back);border:1.5px solid var(--card-bb);color:var(--card-bb);}
+.don-card.rested{background:var(--card-back);border:1.5px solid var(--card-bb);color:var(--card-bb);opacity:.5;transform:rotate(90deg);margin:8px 2px;}
+
+/* Card slots */
 .gb-slot{
-  width:var(--card-w);height:var(--card-h);
-  border:1px dashed rgba(255,255,255,0.12);
-  border-radius:4px;background:rgba(0,0,0,0.10);
-  display:flex;align-items:center;justify-content:center;
-  font-size:0.5rem;color:rgba(255,255,255,0.2);
-  font-family:'Barlow Condensed',sans-serif;
-  letter-spacing:1px;text-transform:uppercase;
-  flex-shrink:0;
+  width:var(--card-w);height:var(--card-h);border-radius:4px;
+  border:1.5px solid rgba(255,255,255,.12);background:rgba(0,0,0,.08);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  font-family:'Barlow Condensed',sans-serif;font-size:.55rem;
+  color:rgba(255,255,255,.3);letter-spacing:1px;text-transform:uppercase;text-align:center;
 }
+/* Deck pile (card back) */
 .gb-deck-pile{
-  width:var(--card-w);height:var(--card-h);
-  border-radius:4px;
-  background:var(--card-back);
-  border:1.5px solid var(--card-bb);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-family:'Cinzel',serif;font-size:0.38rem;
-  color:var(--card-bb);letter-spacing:1px;
-  flex-shrink:0;position:relative;text-align:center;line-height:1.3;
+  width:var(--card-w);height:var(--card-h);border-radius:4px;
+  background:var(--card-back);border:1.5px solid var(--card-bb);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
+  font-family:'Cinzel',serif;font-size:.32rem;color:var(--card-bb);
+  letter-spacing:1px;text-align:center;line-height:1.3;position:relative;
 }
-.gb-deck-count{
-  display:block;font-family:'Barlow Condensed',sans-serif;
-  font-size:0.85rem;font-weight:700;color:var(--gold);
-  margin-top:2px;letter-spacing:0;
-}
+.gb-deck-count{display:block;font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:700;color:var(--gold);margin-top:2px;letter-spacing:0;}
+/* Trash slot */
 .gb-trash-slot{
-  width:var(--card-w);height:var(--card-h);
-  border-radius:4px;border:1px solid rgba(255,255,255,0.12);
-  background:rgba(0,0,0,0.25);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  font-size:0.5rem;color:rgba(255,255,255,0.35);
-  font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;
-  text-transform:uppercase;cursor:pointer;flex-shrink:0;
+  width:var(--card-w);height:var(--card-h);border-radius:4px;
+  border:1.5px solid rgba(255,255,255,.12);background:rgba(0,0,0,.18);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
+  cursor:pointer;font-family:'Barlow Condensed',sans-serif;font-size:.55rem;
+  color:rgba(255,255,255,.35);letter-spacing:1px;text-transform:uppercase;
 }
 .gb-trash-slot:hover{border-color:var(--gold);color:var(--gold);}
+/* Watermark logo */
 .gb-watermark{
   flex:1;display:flex;align-items:center;justify-content:center;
-  font-family:'Cinzel',serif;font-size:0.44rem;
-  letter-spacing:5px;color:rgba(255,255,255,0.04);
-  text-align:center;line-height:1.5;white-space:nowrap;
-  pointer-events:none;min-width:40px;
+  font-family:'Cinzel',serif;font-size:.55rem;letter-spacing:3px;
+  color:rgba(0,0,0,.08);text-align:center;line-height:1.5;white-space:nowrap;
+  pointer-events:none;min-width:50px;
 }
-.gb-life{
-  display:flex;flex-direction:column;gap:2px;align-items:center;
-  flex-shrink:0;
-}
-
-/* ── RIGHT COLUMN ── */
-.gb-right-col{
-  display:flex;flex-direction:column;
-  padding:12px 10px;gap:10px;
-  border-left:1px solid rgba(0,0,0,0.25);
-  background:rgba(0,0,0,0.12);
-}
-.gb-right-top{display:flex;flex-direction:column;gap:6px;}
-.gb-info{
-  display:flex;flex-direction:column;align-items:center;gap:4px;
-  padding:10px 0;
-}
-.gb-info-phase{
-  background:var(--gold);color:#190800;
-  padding:4px 14px;border-radius:4px;
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:0.8rem;font-weight:700;
-  letter-spacing:3px;text-transform:uppercase;
-}
-.gb-info-turn{font-size:0.72rem;color:var(--muted);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
-.gb-info-active{font-size:0.72rem;color:#4ade80;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
-.gb-right-bottom{
-  margin-top:auto;
-  display:flex;flex-direction:column;gap:6px;
-}
-.gb-pbtn{
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:0.82rem;font-weight:700;
-  letter-spacing:2px;text-transform:uppercase;
-  color:var(--btn-text);
-  background:linear-gradient(180deg, #eddfc0 0%, #d4c090 50%, #c8b080 100%);
-  border:1px solid var(--btn-border);
-  border-radius:6px;
-  cursor:pointer;
-  box-shadow:0 3px 8px var(--btn-shadow), inset 0 1px 0 rgba(255,255,255,0.45);
-  transition:all 0.12s;
-  padding:7px 14px;
-  text-align:center;
-}
-.gb-pbtn:hover{
-  background:linear-gradient(180deg, #f5ebcc 0%, #e0cc9c 50%, #d4bc8c 100%);
-  box-shadow:0 4px 12px var(--btn-shadow), inset 0 1px 0 rgba(255,255,255,0.55);
-  transform:translateY(-1px);
-}
-.gb-pbtn:active{
-  background:linear-gradient(180deg, #c8b080 0%, #d4c090 100%);
-  box-shadow:0 2px 5px var(--btn-shadow), inset 0 2px 3px rgba(0,0,0,0.15);
-  transform:translateY(1px);
-}
-.gb-pbtn-lg{
-  padding:14px 20px;
-  font-size:1.1rem;
-  letter-spacing:3px;
-}
-.gb-hint{
-  font-size:0.66rem;color:var(--muted);
-  font-family:'Barlow Condensed',sans-serif;
-  text-align:center;margin-top:4px;
-}
-.gb-version{
-  font-size:0.55rem;color:var(--muted);
-  text-align:center;margin-top:8px;
-  font-family:'Barlow Condensed',sans-serif;
-  letter-spacing:1px;
-}
-
-/* ── LIFE / DON (shared) ── */
+/* Life - stacked card backs next to deck */
+.gb-life{display:flex;flex-direction:column;gap:2px;align-items:center;flex-shrink:0;}
 .life-stack{display:flex;flex-direction:column;gap:2px;align-items:center;}
 .life-pip{
   width:36px;height:50px;border-radius:3px;
-  background:var(--card-back);
-  border:1.5px solid var(--card-bb);
+  background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
-  font-size:0.82rem;color:var(--card-bb);
-  flex-shrink:0;transition:opacity 0.18s;
+  font-size:.82rem;color:var(--card-bb);flex-shrink:0;transition:opacity .18s;
 }
-.life-pip.lost{background:rgba(9,21,40,0.15);border-color:rgba(176,144,16,0.16);color:rgba(176,144,16,0.16);}
+.life-pip.lost{background:rgba(9,21,40,.15);border-color:rgba(176,144,16,.16);color:rgba(176,144,16,.16);}
 .life-row{display:flex;gap:2px;align-items:center;}
-.life-row .life-pip{width:12px;height:17px;font-size:0.38rem;}
-.don-area{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;max-width:120px;}
-.don-pip{
-  width:12px;height:12px;border-radius:50%;
-  border:1px solid rgba(155,25,25,0.55);
-  font-size:0.3rem;display:flex;align-items:center;justify-content:center;
-  color:rgba(155,25,25,0.55);
+.life-row .life-pip{width:12px;height:17px;font-size:.38rem;}
+
+/* ── RIGHT COLUMN ── */
+.gb-right-col{display:flex;flex-direction:column;padding:12px;gap:8px;position:relative;}
+.gb-right-top{display:flex;flex-direction:column;gap:6px;}
+.gb-info{display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px 0;}
+.gb-info-phase{
+  background:var(--gold);color:#190800;padding:4px 14px;border-radius:4px;
+  font-family:'Barlow Condensed',sans-serif;font-size:.82rem;font-weight:700;
+  letter-spacing:3px;text-transform:uppercase;
 }
-.don-pip.active{background:var(--red);border-color:var(--red);color:#fff;}
-.don-row{display:flex;flex-wrap:wrap;gap:2px;align-items:center;}
-.don-row .don-pip{width:10px;height:10px;font-size:0.28rem;}
+.gb-info-turn{font-size:1.1rem;color:var(--text);font-family:'Cinzel',serif;letter-spacing:2px;}
+.gb-info-active{font-size:.72rem;color:#4ade80;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
+.gb-right-bottom{margin-top:auto;display:flex;flex-direction:column;gap:6px;}
+/* Parchment buttons */
+.gb-pbtn{
+  font-family:'Barlow Condensed',sans-serif;font-size:.85rem;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;color:var(--btn-text);
+  background:linear-gradient(180deg,#eddfc0 0%,#d4c090 50%,#c8b080 100%);
+  border:1px solid var(--btn-border);border-radius:4px;cursor:pointer;
+  box-shadow:0 3px 8px var(--btn-shadow),inset 0 1px 0 rgba(255,255,255,.45);
+  transition:all .12s;padding:8px 14px;text-align:center;
+}
+.gb-pbtn:hover{background:linear-gradient(180deg,#f5ebcc 0%,#e0cc9c 50%,#d4bc8c 100%);transform:translateY(-1px);}
+.gb-pbtn:active{background:linear-gradient(180deg,#c8b080 0%,#d4c090 100%);transform:translateY(1px);}
+/* Large primary action button (End Turn / Mulligan / Keep) */
+.gb-pbtn-lg{padding:18px 24px;font-size:1.6rem;letter-spacing:4px;width:100%;}
+.gb-pbtn-sm{padding:6px 12px;font-size:.75rem;letter-spacing:1px;}
+.gb-hint{font-size:.68rem;color:var(--muted);font-family:'Barlow Condensed',sans-serif;text-align:center;margin-top:4px;}
+.gb-version{position:absolute;bottom:6px;right:10px;font-size:.55rem;color:var(--muted);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
 
 /* ── GAME CARDS ── */
 .gcard{
-  width:var(--card-w);height:var(--card-h);
-  border-radius:4px;border:1px solid rgba(212,160,32,0.16);
-  background:var(--card-back);
+  width:var(--card-w);height:var(--card-h);border-radius:4px;
+  border:1px solid rgba(212,160,32,.16);background:var(--card-back);
   cursor:pointer;position:relative;overflow:hidden;
-  transition:transform 0.18s,border-color 0.18s,box-shadow 0.18s;flex-shrink:0;
+  transition:transform .18s,border-color .18s,box-shadow .18s;flex-shrink:0;
 }
-.gcard:hover{transform:translateY(-4px) scale(1.06);border-color:var(--gold);box-shadow:0 8px 18px rgba(0,0,0,0.65);z-index:10;}
+.gcard:hover{transform:translateY(-4px) scale(1.06);border-color:var(--gold);box-shadow:0 8px 18px rgba(0,0,0,.65);z-index:10;}
 .gcard.rested{transform:rotate(90deg);margin:14px 4px;}
 .gcard.rested:hover{transform:rotate(90deg) translateY(-4px) scale(1.05);}
-.gcard.selected{border-color:#4ade80 !important;box-shadow:0 0 12px rgba(74,222,128,0.5) !important;}
-.gcard.targetable{border-color:var(--red) !important;animation:tpulse 0.7s infinite;}
-@keyframes tpulse{0%,100%{box-shadow:0 0 5px rgba(190,30,30,0.4);}50%{box-shadow:0 0 16px rgba(190,30,30,0.88);}}
+.gcard.selected{border-color:#4ade80 !important;box-shadow:0 0 12px rgba(74,222,128,.5) !important;}
+.gcard.targetable{border-color:var(--red) !important;animation:tpulse .7s infinite;}
+@keyframes tpulse{0%,100%{box-shadow:0 0 5px rgba(190,30,30,.4);}50%{box-shadow:0 0 16px rgba(190,30,30,.88);}}
 .gcard img{width:100%;height:58%;object-fit:cover;display:block;}
-.gcard-ph{width:100%;height:58%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;background:rgba(9,21,40,0.5);}
+.gcard-ph{width:100%;height:58%;display:flex;align-items:center;justify-content:center;font-size:1.25rem;background:rgba(9,21,40,.5);}
 .gcard-info{padding:2px 3px;}
-.gcard-name{font-size:0.44rem;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.gcard-power{font-size:0.5rem;color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;}
-.gcard-badge{position:absolute;top:2px;right:2px;font-size:0.37rem;font-weight:700;padding:1px 2px;border-radius:2px;text-transform:uppercase;}
-.gcard-don{position:absolute;bottom:2px;left:2px;background:rgba(155,25,25,0.9);color:#fff;font-size:0.4rem;font-weight:700;padding:1px 3px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;}
-.gcard-cost{position:absolute;top:2px;left:2px;background:rgba(0,0,0,0.82);color:var(--gold);font-size:0.4rem;padding:1px 3px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
-/* Opponent hand -- navy card back */
+.gcard-name{font-size:.44rem;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.gcard-power{font-size:.5rem;color:var(--gold);font-weight:700;font-family:'Barlow Condensed',sans-serif;}
+.gcard-badge{position:absolute;top:2px;right:2px;font-size:.37rem;font-weight:700;padding:1px 2px;border-radius:2px;text-transform:uppercase;}
+.gcard-don{position:absolute;bottom:2px;left:2px;background:rgba(155,25,25,.9);color:#fff;font-size:.4rem;font-weight:700;padding:1px 3px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;}
+.gcard-cost{position:absolute;top:2px;left:2px;background:rgba(0,0,0,.82);color:var(--gold);font-size:.4rem;padding:1px 3px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
 .card-back{
   width:var(--card-w);height:var(--card-h);border-radius:4px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
@@ -900,11 +829,14 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   <div class="gb-board">
     <!-- Opponent Zone (red, rotated 180deg) -->
     <div class="gb-zone gb-zone-opp">
-      <div class="gb-row">
+      <!-- Cost Area (appears at top because of 180deg rotation) -->
+      <div class="gb-cost-bar">
+        <span class="gb-cost-label">COST AREA</span>
         <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
-        <div class="gb-area-bar gb-cost-bar"><span>COST AREA</span><div class="don-area" id="oppDon"></div></div>
+        <div class="don-area" id="oppDon"></div>
         <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
       </div>
+      <!-- Middle row: DON deck, Stage, Leader, Logo, Life, Deck -->
       <div class="gb-row gb-row-flex">
         <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
         <div class="gb-slot">STAGE</div>
@@ -912,25 +844,31 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
         <div class="gb-life" id="oppLife"></div>
         <span id="oppLifeCount" style="display:none;"></span>
+        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
       </div>
-      <div class="gb-area-bar gb-char-bar" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
+      <!-- Character Area -->
+      <div class="gb-char-bar" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
     </div>
 
     <!-- Player Zone (green) -->
     <div class="gb-zone gb-zone-self">
-      <div class="gb-area-bar gb-char-bar" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
+      <!-- Character Area -->
+      <div class="gb-char-bar" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
+      <!-- Middle row: Logo, Leader, empty slots, Stage, Deck -->
       <div class="gb-row gb-row-flex">
+        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
         <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
         <div id="selfLeader" style="flex-shrink:0;"></div>
-        <div class="gb-slot"></div>
         <div class="gb-slot"></div>
         <div class="gb-slot">STAGE</div>
         <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
         <div class="gb-life" id="selfLifeStack"></div>
       </div>
-      <div class="gb-row">
+      <!-- Cost Area -->
+      <div class="gb-cost-bar">
+        <span class="gb-cost-label">COST AREA</span>
         <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
-        <div class="gb-area-bar gb-cost-bar"><span>COST AREA</span><div class="don-area" id="selfDon"></div></div>
+        <div class="don-area" id="selfDon"></div>
         <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
       </div>
     </div>
@@ -943,7 +881,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       <button class="gb-pbtn" onclick="location.reload()">Cancel Match</button>
     </div>
     <div class="gb-info">
-      <div class="gb-info-phase" id="phasePill">REFRESH</div>
+      <div class="gb-info-phase" id="phasePill">DON</div>
       <div class="gb-info-turn" id="turnText">Turn 1</div>
       <div class="gb-info-active" id="activeText"></div>
       <div id="midPhase" style="display:none;"></div>
@@ -951,18 +889,20 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <div id="selfLife" style="display:none;"></div>
     <div id="selfLifeCount" style="display:none;"></div>
     <div class="gb-right-bottom">
-      <div id="mulliganBtns" style="display:flex;flex-direction:column;gap:6px;">
+      <!-- Mulligan buttons -->
+      <div id="mulliganBtns" style="display:flex;flex-direction:column;gap:8px;">
         <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(true)">Mulligan</button>
         <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(false)">Keep</button>
       </div>
       <p id="mulliganWait" style="display:none;color:#8a7860;font-size:0.8rem;text-align:center;">Waiting for opponent…</p>
+      <!-- Play buttons -->
       <div id="playBtns" style="display:none;flex-direction:column;gap:5px;">
-        <button class="gb-pbtn" style="width:100%;" onclick="act({type:'NEXT_PHASE'})">Next Phase</button>
-        <button class="gb-pbtn" style="width:100%;" onclick="act({type:'END_TURN'})">End Turn</button>
-        <button class="gb-pbtn" style="width:100%;display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
-        <button class="gb-pbtn" style="width:100%;display:none;" id="btnCounter" onclick="passCounter()">Pass Counter</button>
-        <button class="gb-pbtn" style="width:100%;display:none;" id="btnSwitchSides" onclick="switchSides()">Switch Sides</button>
-        <button class="gb-pbtn" style="width:100%;" onclick="cancelSel()">Cancel</button>
+        <button class="gb-pbtn gb-pbtn-sm" style="width:100%;" onclick="act({type:'NEXT_PHASE'})">Next Phase</button>
+        <button class="gb-pbtn gb-pbtn-lg" onclick="act({type:'END_TURN'})">End Turn</button>
+        <button class="gb-pbtn gb-pbtn-sm" style="width:100%;display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
+        <button class="gb-pbtn gb-pbtn-sm" style="width:100%;display:none;" id="btnCounter" onclick="passCounter()">Pass Counter</button>
+        <button class="gb-pbtn gb-pbtn-sm" style="width:100%;display:none;" id="btnSwitchSides" onclick="switchSides()">Switch Sides</button>
+        <button class="gb-pbtn gb-pbtn-sm" style="width:100%;" onclick="cancelSel()">Cancel</button>
       </div>
       <span id="actionHint" class="gb-hint">Waiting…</span>
     </div>
@@ -1424,12 +1364,27 @@ function renderSoloOppHand(handId, hand) {
 function renderDon(id, active, rested, total) {
   const el = document.getElementById(id);
   if (!el) return;
-  el.innerHTML = `<span style="font-size:0.55rem;color:var(--muted);margin-right:2px;">${active}/${total}</span>`;
-  for (let i = 0; i < Math.min(total, 10); i++) {
-    const pip = document.createElement('div');
-    pip.className = 'don-pip' + (i < active ? ' active' : '');
-    pip.textContent = '★';
-    el.appendChild(pip);
+  el.innerHTML = '';
+  // Render active DON as card-back styled cards
+  for (let i = 0; i < active; i++) {
+    const card = document.createElement('div');
+    card.className = 'don-card active';
+    card.innerHTML = 'DON!!';
+    el.appendChild(card);
+  }
+  // Render rested DON as rotated cards
+  for (let i = 0; i < rested; i++) {
+    const card = document.createElement('div');
+    card.className = 'don-card rested';
+    card.innerHTML = 'DON!!';
+    el.appendChild(card);
+  }
+  // Show count label
+  if (total > 0) {
+    const lbl = document.createElement('span');
+    lbl.style.cssText = 'font-size:0.6rem;color:var(--gold);font-family:Barlow Condensed,sans-serif;font-weight:700;margin-left:4px;white-space:nowrap;';
+    lbl.textContent = `${active}/${total}`;
+    el.appendChild(lbl);
   }
 }
 
