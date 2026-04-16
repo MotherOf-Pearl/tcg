@@ -651,7 +651,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <!-- Secondary row -->
     <div class="menu-row">
       <button class="mbtn mbtn-sec" onclick="showDeckEditor()">Deck Editor</button>
-      <button class="mbtn mbtn-sec" disabled>Solo v Self</button>
+      <button class="mbtn mbtn-sec" onclick="window.location.href='game.html?solo=true'">Solo v Self</button>
       <button class="mbtn mbtn-sec" disabled>Settings</button>
     </div>
 
@@ -732,6 +732,32 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 </div>
 
 <!-- ════════════════════════════════════════════════════
+     SOLO SETUP
+════════════════════════════════════════════════════ -->
+<div id="soloSetup" class="screen wood-bg" style="align-items:center;justify-content:center;">
+  <div class="menu-center" style="gap:12px;">
+    <h2 style="font-family:'Cinzel',serif;color:var(--gold);font-size:1.3rem;margin-bottom:8px;">Solo vs Self</h2>
+
+    <div class="mp-form-label">Player 1 Deck (Bottom)</div>
+    <div class="deck-row" style="margin-bottom:10px;">
+      <button class="mbtn" id="s1Deck_Doflamingo" onclick="pickSoloDeck(0,'Doflamingo')">Doflamingo</button>
+      <button class="mbtn" id="s1Deck_Shanks"     onclick="pickSoloDeck(0,'Shanks')">Shanks</button>
+      <button class="mbtn" id="s1Deck_Blackbeard" onclick="pickSoloDeck(0,'Blackbeard')">Blackbeard</button>
+    </div>
+
+    <div class="mp-form-label">Player 2 Deck (Top)</div>
+    <div class="deck-row" style="margin-bottom:14px;">
+      <button class="mbtn" id="s2Deck_Doflamingo" onclick="pickSoloDeck(1,'Doflamingo')">Doflamingo</button>
+      <button class="mbtn" id="s2Deck_Shanks"     onclick="pickSoloDeck(1,'Shanks')">Shanks</button>
+      <button class="mbtn" id="s2Deck_Blackbeard" onclick="pickSoloDeck(1,'Blackbeard')">Blackbeard</button>
+    </div>
+
+    <button class="mbtn mbtn-primary" onclick="startSolo()">Start Game</button>
+    <button class="mp-back-btn" onclick="window.location.href='index.html'" style="margin-top:6px;">← Back to Menu</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════
      GAME BOARD
 ════════════════════════════════════════════════════ -->
 <div id="game" class="screen">
@@ -744,6 +770,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <div class="topbar-btns">
       <button class="btn btn-primary btn-sm" onclick="act({type:'NEXT_PHASE'})">Next ▶</button>
       <button class="btn btn-danger btn-sm" onclick="act({type:'END_TURN'})">End Turn</button>
+      <button class="btn btn-outline btn-sm" id="btnSwitchSides" onclick="switchSides()" style="display:none;">Switch Sides</button>
     </div>
   </div>
 
@@ -955,6 +982,68 @@ let selectedDeck = JSON.parse(localStorage.getItem('boohawk_deck') || 'null');
 if (!selectedDeck) pickDeck('Doflamingo');
 let sel = null, attackMode = false, counterMode = false;
 
+// ─── SOLO MODE ───
+const isSolo = new URLSearchParams(window.location.search).get('solo') === 'true';
+let soloWs = [null, null];
+let soloIds = [null, null];
+let soloDecks = [PRESET_DECKS['Doflamingo'], PRESET_DECKS['Shanks']];
+
+function pickSoloDeck(side, name) {
+  soloDecks[side] = PRESET_DECKS[name];
+  ['Doflamingo','Shanks','Blackbeard'].forEach(n => {
+    const btn = document.getElementById(`s${side+1}Deck_${n}`);
+    if (btn) {
+      const active = n === name;
+      btn.style.background = active ? 'linear-gradient(180deg,#c8a040 0%,#a07828 100%)' : '';
+      btn.style.border = active ? '2px solid rgba(0,0,0,0.5)' : '';
+    }
+  });
+}
+
+function startSolo() {
+  const deck1 = soloDecks[0];
+  const deck2 = soloDecks[1];
+
+  soloWs[0] = new WebSocket(WS_URL);
+  soloWs[0].onmessage = e => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'CONNECTED') {
+      soloIds[0] = msg.clientId;
+      cardDb = msg.cardDb || [];
+    } else if (msg.type === 'ROOM_CREATED') {
+      roomId = msg.roomId;
+      soloIds[0] = msg.playerId;
+      myId = soloIds[0];
+      // Connect second player automatically
+      soloWs[1] = new WebSocket(WS_URL);
+      soloWs[1].onmessage = e2 => {
+        const msg2 = JSON.parse(e2.data);
+        if (msg2.type === 'CONNECTED') soloIds[1] = msg2.clientId;
+        else if (msg2.type === 'ROOM_JOINED') soloIds[1] = msg2.playerId;
+        // Ignore other messages — handled via soloWs[0]
+      };
+      soloWs[1].onopen = () => {
+        soloWs[1].send(JSON.stringify({ type: 'JOIN_ROOM', roomId, deck: deck2 }));
+      };
+      soloWs[1].onerror = () => alert('Solo P2 connection failed');
+    } else {
+      handleMsg(msg);
+    }
+  };
+  soloWs[0].onopen = () => {
+    soloWs[0].send(JSON.stringify({ type: 'CREATE_ROOM', deck: deck1 }));
+  };
+  soloWs[0].onerror = () => alert('Cannot connect to server at ' + WS_URL);
+  soloWs[0].onclose = () => hint('Disconnected from server', true);
+}
+
+function switchSides() {
+  if (!isSolo || !soloIds[0] || !soloIds[1]) return;
+  myId = myId === soloIds[0] ? soloIds[1] : soloIds[0];
+  if (game && game.phase !== 'MULLIGAN') renderGame();
+  else if (game) renderMulligan();
+}
+
 const EMOJI = { LEADER:'👑', CHARACTER:'⚔️', EVENT:'✨', STAGE:'⛵', DON:'🔴' };
 const COLOR_MAP = { Red:'#e06050', Blue:'#70a0e0', Green:'#50c880', Purple:'#9880d8', Black:'#b0b0c0', Yellow:'#f0d060' };
 
@@ -996,7 +1085,15 @@ function connect(cb) {
   ws.onclose = () => hint('Disconnected from server', true);
 }
 function send2(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
-function act(action) { send2({ type: 'ACTION', action }); }
+function act(action) {
+  if (isSolo) {
+    const idx = myId === soloIds[0] ? 0 : 1;
+    const sws = soloWs[idx];
+    if (sws?.readyState === 1) sws.send(JSON.stringify({ type: 'ACTION', action }));
+  } else {
+    send2({ type: 'ACTION', action });
+  }
+}
 
 function handleMsg(msg) {
   switch(msg.type) {
@@ -1047,6 +1144,11 @@ function joinRoom() {
 // ─── MULLIGAN ───
 function renderMulligan() {
   if (!game) return;
+  // In solo mode, auto-switch to the side that hasn't mulliganed yet
+  if (isSolo && game.mulliganDone[myId]) {
+    const otherId = myId === soloIds[0] ? soloIds[1] : soloIds[0];
+    if (otherId && !game.mulliganDone[otherId]) myId = otherId;
+  }
   const p = game.players[myId];
   const container = document.getElementById('mulliganHand');
   container.innerHTML = '';
@@ -1064,6 +1166,17 @@ function doMulligan(mulligan) {
 // ─── GAME RENDER ───
 function renderGame() {
   if (!game || !myId) return;
+
+  // In solo mode, auto-switch to the active player (or defender during counter)
+  if (isSolo) {
+    if (game.counterWindow && !game.counterDone[game.counterWindow.defenderId]) {
+      myId = game.counterWindow.defenderId;
+    } else if (!game.counterWindow) {
+      myId = game.activePlayer;
+    }
+    document.getElementById('btnSwitchSides').style.display = 'inline-block';
+  }
+
   const me = game.players[myId];
   const oppId = Object.keys(game.players).find(id => id !== myId);
   const opp = game.players[oppId];
@@ -1071,7 +1184,9 @@ function renderGame() {
 
   document.getElementById('phasePill').textContent = game.phase;
   document.getElementById('turnText').textContent = `Turn ${game.turn}`;
-  document.getElementById('activeText').textContent = isActive ? '⚡ Your Turn' : "⏳ Opponent's Turn";
+  document.getElementById('activeText').textContent = isSolo
+    ? (isActive ? '⚡ Playing as Bottom' : '⏳ Playing as Top')
+    : (isActive ? '⚡ Your Turn' : "⏳ Opponent's Turn");
   document.getElementById('midPhase').textContent = `${game.phase} PHASE`;
 
   renderLeader('selfLeader', me.leader, true);
@@ -1079,7 +1194,8 @@ function renderGame() {
   renderField('selfField', me.field, true);
   renderField('oppField', opp.field, false);
   renderHand('selfHand', me.hand, true);
-  renderOppHand('oppHand', opp.hand.length);
+  if (isSolo) renderSoloOppHand('oppHand', opp.hand);
+  else renderOppHand('oppHand', opp.hand.length);
 
   document.getElementById('selfDeckN').textContent  = me.deck.length;
   document.getElementById('selfTrashN').textContent = me.trash.length;
@@ -1099,14 +1215,22 @@ function renderGame() {
   const hasCW = !!game.counterWindow;
   document.getElementById('btnCounter').style.display = hasCW ? 'inline-block' : 'none';
   if (hasCW && game.counterWindow.defenderId === myId) {
-    hint(`Opponent attacks for ${game.counterWindow.attackPower}! Play counter cards or pass.`);
+    hint(isSolo
+      ? `Attack for ${game.counterWindow.attackPower}! Play counter cards from defending hand or pass.`
+      : `Opponent attacks for ${game.counterWindow.attackPower}! Play counter cards or pass.`);
     counterMode = true;
   }
   document.getElementById('btnAttachDon').style.display = sel && !hasCW ? 'inline-block' : 'none';
 
   if (game.winner) {
-    document.getElementById('winTitle').textContent = game.winner === myId ? '⚓ Victory!' : '💀 Defeated!';
-    document.getElementById('winMsg').textContent   = game.winner === myId ? 'You conquered the seas!' : 'Set sail again!';
+    if (isSolo) {
+      const winSide = game.winner === soloIds[0] ? 'Player 1 (Bottom)' : 'Player 2 (Top)';
+      document.getElementById('winTitle').textContent = '⚓ Game Over!';
+      document.getElementById('winMsg').textContent = `${winSide} wins!`;
+    } else {
+      document.getElementById('winTitle').textContent = game.winner === myId ? '⚓ Victory!' : '💀 Defeated!';
+      document.getElementById('winMsg').textContent   = game.winner === myId ? 'You conquered the seas!' : 'Set sail again!';
+    }
     document.getElementById('winModal').classList.add('show');
   }
 
@@ -1125,7 +1249,10 @@ function renderLeader(slotId, leader, isSelf) {
   el.appendChild(makeGameCard(leader,
     isSelf
       ? () => selectCard(leader.uid, 'leader')
-      : () => { if (attackMode) resolveAttack(leader.uid); },
+      : () => {
+          if (attackMode) resolveAttack(leader.uid);
+          else if (isSolo) switchSides();
+        },
     !isSelf));
 }
 
@@ -1137,7 +1264,10 @@ function renderField(fieldId, field, isSelf) {
     el.appendChild(makeGameCard(card,
       isSelf
         ? () => selectCard(card.uid, 'field')
-        : () => { if (attackMode) resolveAttack(card.uid); },
+        : () => {
+            if (attackMode) resolveAttack(card.uid);
+            else if (isSolo) switchSides();
+          },
       !isSelf));
   });
 }
@@ -1169,6 +1299,18 @@ function renderOppHand(handId, count) {
     c.textContent = '✦';
     el.appendChild(c);
   }
+}
+
+function renderSoloOppHand(handId, hand) {
+  const el = document.getElementById(handId);
+  el.innerHTML = '';
+  hand.forEach(card => {
+    const handler = () => {
+      // Clicking opponent hand in solo mode switches to their side
+      switchSides();
+    };
+    el.appendChild(makeGameCard(card, handler, false));
+  });
 }
 
 function renderDon(id, active, rested, total) {
@@ -1436,6 +1578,13 @@ function getLocalCardDb() {
     {id:'L001',name:'Monkey D. Luffy',type:'LEADER',power:5000,color:'Red',life:5,cost:0,ability:'Give a Character +1000 power.'},
     {id:'L002',name:'Roronoa Zoro',type:'LEADER',power:5000,color:'Green',life:5,cost:0,ability:'Blocker'},
   ];
+}
+
+// ─── SOLO AUTO-START ───
+if (isSolo) {
+  showScreen('soloSetup');
+  pickSoloDeck(0, 'Doflamingo');
+  pickSoloDeck(1, 'Shanks');
 }
 
 // ─── CLICK OUTSIDE ───
