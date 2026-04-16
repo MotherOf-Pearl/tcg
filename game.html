@@ -221,6 +221,62 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 }
 .mp-back-btn:hover{color:var(--text);}
 
+/* Solo setup panel */
+.solo-panel{
+  display:flex;flex-direction:column;align-items:center;
+  background:rgba(40,20,4,0.78);
+  border:1px solid rgba(212,160,32,0.25);
+  border-radius:12px;
+  padding:28px 36px;
+  width:320px;
+  backdrop-filter:blur(6px);
+  z-index:1;
+}
+.solo-title{
+  font-family:'Cinzel',serif;
+  font-size:1.15rem;
+  color:var(--gold);
+  letter-spacing:3px;
+  text-transform:uppercase;
+  margin-bottom:20px;
+}
+.solo-pick-row{
+  display:flex;align-items:center;gap:12px;width:100%;
+}
+.solo-label{
+  font-family:'Cinzel',serif;
+  font-size:1.1rem;
+  font-weight:700;
+  color:var(--gold);
+  min-width:32px;
+  text-align:center;
+}
+.solo-select{
+  flex:1;
+  appearance:none;
+  -webkit-appearance:none;
+  background:rgba(255,255,255,0.06) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23d4a020'/%3E%3C/svg%3E") no-repeat right 12px center;
+  border:1px solid rgba(212,160,32,0.3);
+  border-radius:6px;
+  padding:10px 32px 10px 14px;
+  color:var(--text);
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:1rem;
+  font-weight:600;
+  letter-spacing:1px;
+  cursor:pointer;
+  transition:border-color 0.15s;
+}
+.solo-select:focus{outline:none;border-color:var(--gold);}
+.solo-select option{background:#1a0e00;color:var(--text);}
+.solo-vs{
+  font-family:'Cinzel',serif;
+  font-size:0.72rem;
+  color:var(--muted);
+  letter-spacing:4px;
+  margin:10px 0;
+}
+
 /* ════════════════════════════════════════════════════
    WAITING SCREEN
 ════════════════════════════════════════════════════ */
@@ -326,81 +382,228 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
    GAME BOARD
 ════════════════════════════════════════════════════ */
 #game{
-  display:flex;flex-direction:column;
+  display:none;
   height:100vh;overflow:hidden;
-  background:var(--board-bg);
+  /* wood texture background */
+  background-color: var(--w-base);
+  background-image:
+    radial-gradient(ellipse 160px 80px at 12% 28%, rgba(60,25,3,0.30) 0%, transparent 100%),
+    radial-gradient(ellipse 120px 60px at 80% 65%, rgba(60,25,3,0.22) 0%, transparent 100%),
+    radial-gradient(ellipse 200px 50px at 55% 10%, rgba(60,25,3,0.18) 0%, transparent 100%),
+    radial-gradient(ellipse 100px 80px at 35% 85%, rgba(60,25,3,0.20) 0%, transparent 100%),
+    repeating-linear-gradient(
+      88.5deg,
+      transparent 0px, transparent 6px,
+      rgba(80,30,2,0.10) 6px, rgba(80,30,2,0.10) 7px,
+      transparent 7px, transparent 13px,
+      rgba(200,120,40,0.07) 13px, rgba(200,120,40,0.07) 14px,
+      transparent 14px, transparent 22px,
+      rgba(60,20,2,0.06) 22px, rgba(60,20,2,0.06) 23px
+    ),
+    repeating-linear-gradient(
+      91deg,
+      rgba(170,85,15,0.14) 0px, rgba(140,65,10,0.10) 18px,
+      rgba(185,100,25,0.14) 36px, rgba(155,75,12,0.10) 54px,
+      rgba(170,85,15,0.14) 72px
+    ),
+    radial-gradient(ellipse at center, rgba(190,105,30,0.15) 0%, rgba(60,20,2,0.50) 100%);
 }
-
-/* TOP BAR */
-.topbar{
-  background:rgba(0,0,0,0.72);
-  border-bottom:2px solid var(--gold-dim);
-  padding:5px 12px;
-  display:flex;align-items:center;gap:10px;
-  flex-shrink:0;z-index:10;
-}
-.phase-pill{
-  background:var(--gold);color:#190800;
-  padding:3px 11px;border-radius:3px;
-  font-family:'Barlow Condensed',sans-serif;
-  font-size:0.76rem;font-weight:700;
-  letter-spacing:3px;text-transform:uppercase;
-}
-.turn-text{font-size:0.7rem;color:var(--muted);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
-.active-text{font-size:0.7rem;color:#4ade80;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
-.topbar-btns{margin-left:auto;display:flex;gap:5px;}
-
-/* BOARD WRAPPER */
-.board{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-
-/* ── PLAYMAT ZONES ── */
-.playmat{
-  flex:1;
+#game.active{
   display:grid;
-  grid-template-columns:86px 1fr 140px;
+  grid-template-columns:300px 1fr 220px;
+  grid-template-rows:1fr;
+}
+
+/* ── LEFT COLUMN ── */
+.gb-left{
+  display:flex;flex-direction:column;
+  gap:0;overflow:hidden;
+  border-right:1px solid rgba(0,0,0,0.25);
+}
+.gb-opp-hand,.gb-self-hand{
+  display:flex;gap:3px;overflow-x:auto;
+  padding:6px;align-items:center;
+  min-height:calc(var(--card-h) + 14px);
+  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+  background:rgba(0,0,0,0.18);
+}
+.gb-log{
+  flex:1;overflow-y:auto;padding:8px 10px;min-height:60px;
+  background:linear-gradient(180deg,#f0e6cc 0%,#e4d6b0 100%);
+  border-top:1px solid rgba(0,0,0,0.2);
+  border-bottom:1px solid rgba(0,0,0,0.2);
+  scrollbar-width:thin;scrollbar-color:#b8a880 transparent;
+}
+.gb-log p{font-size:0.65rem;color:#3a2a10;line-height:1.55;}
+.gb-log p:last-child{color:#1a0e00;font-weight:600;}
+
+/* ── CENTER BOARD ── */
+.gb-board{
+  display:flex;flex-direction:column;
+  overflow:hidden;
+}
+.gb-zone{
+  flex:1;display:flex;flex-direction:column;
+  padding:4px 8px;gap:3px;
   position:relative;overflow:hidden;min-height:0;
 }
-/* Warm-wood base + colour tint per side */
-.playmat.opp{
-  background-color:#2a0a0a;
-  background-image:
-    repeating-linear-gradient(88deg,transparent,transparent 22px,rgba(80,15,5,0.08) 22px,rgba(80,15,5,0.08) 44px),
-    repeating-linear-gradient(92deg,transparent,transparent 55px,rgba(0,0,0,0.06) 55px,rgba(0,0,0,0.06) 56px),
-    radial-gradient(ellipse at 50% 50%,rgba(60,10,10,0.5) 0%,rgba(20,4,4,0.6) 100%);
-  border-bottom:1px solid rgba(212,160,32,0.12);
+.gb-zone-opp{
+  background:rgba(120,20,20,0.35);
+  border-bottom:2px solid rgba(180,40,40,0.4);
+  transform:rotate(180deg);
 }
-.playmat.self{
-  background-color:#050d1e;
-  background-image:
-    repeating-linear-gradient(88deg,transparent,transparent 22px,rgba(5,20,60,0.08) 22px,rgba(5,20,60,0.08) 44px),
-    repeating-linear-gradient(92deg,transparent,transparent 55px,rgba(0,0,0,0.06) 55px,rgba(0,0,0,0.06) 56px),
-    radial-gradient(ellipse at 50% 50%,rgba(10,25,55,0.5) 0%,rgba(3,8,20,0.6) 100%);
-  border-top:1px solid rgba(212,160,32,0.12);
+.gb-zone-self{
+  background:rgba(20,90,40,0.28);
+  border-top:2px solid rgba(40,140,60,0.4);
 }
-/* "ONE PIECE CARD GAME" watermark */
-.playmat::after{
-  content:'ONE PIECE CARD GAME';
-  position:absolute;left:50%;top:50%;
-  transform:translate(-50%,-50%);
-  font-family:'Cinzel',serif;font-size:0.52rem;
-  letter-spacing:6px;color:rgba(212,160,32,0.055);
-  white-space:nowrap;pointer-events:none;z-index:0;
+.gb-row{
+  display:flex;gap:5px;align-items:center;
+  flex-shrink:0;padding:2px 0;
+}
+.gb-row-flex{flex:1;min-height:0;}
+.gb-area-bar{
+  display:flex;align-items:center;gap:4px;
+  padding:3px 8px;border-radius:4px;
+  min-height:calc(var(--card-h) + 8px);
+  overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+}
+.gb-cost-bar{
+  flex:1;
+  background:rgba(0,0,0,0.18);
+  border:1px dashed rgba(255,255,255,0.12);
+  border-radius:4px;
+}
+.gb-zone-opp .gb-cost-bar{background:rgba(140,20,20,0.18);border-color:rgba(180,40,40,0.2);}
+.gb-zone-self .gb-cost-bar{background:rgba(60,120,40,0.15);border-color:rgba(80,160,60,0.2);}
+.gb-char-bar{
+  flex:1;
+  background:rgba(0,0,0,0.14);
+  border:1px dashed rgba(255,255,255,0.08);
+  border-radius:4px;
+  flex-wrap:nowrap;
+}
+.gb-zone-opp .gb-char-bar{background:rgba(140,20,20,0.12);}
+.gb-zone-self .gb-char-bar{background:rgba(20,90,40,0.12);}
+.gb-area-label{
+  color:rgba(255,255,255,0.18);font-size:0.6rem;font-style:italic;
+  margin:auto;font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:2px;text-transform:uppercase;
+  white-space:nowrap;
+}
+.gb-slot{
+  width:var(--card-w);height:var(--card-h);
+  border:1px dashed rgba(255,255,255,0.12);
+  border-radius:4px;background:rgba(0,0,0,0.10);
+  display:flex;align-items:center;justify-content:center;
+  font-size:0.5rem;color:rgba(255,255,255,0.2);
+  font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:1px;text-transform:uppercase;
+  flex-shrink:0;
+}
+.gb-deck-pile{
+  width:var(--card-w);height:var(--card-h);
+  border-radius:4px;
+  background:var(--card-back);
+  border:1.5px solid var(--card-bb);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-family:'Cinzel',serif;font-size:0.38rem;
+  color:var(--card-bb);letter-spacing:1px;
+  flex-shrink:0;position:relative;text-align:center;line-height:1.3;
+}
+.gb-deck-count{
+  display:block;font-family:'Barlow Condensed',sans-serif;
+  font-size:0.85rem;font-weight:700;color:var(--gold);
+  margin-top:2px;letter-spacing:0;
+}
+.gb-trash-slot{
+  width:var(--card-w);height:var(--card-h);
+  border-radius:4px;border:1px solid rgba(255,255,255,0.12);
+  background:rgba(0,0,0,0.25);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:0.5rem;color:rgba(255,255,255,0.35);
+  font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;
+  text-transform:uppercase;cursor:pointer;flex-shrink:0;
+}
+.gb-trash-slot:hover{border-color:var(--gold);color:var(--gold);}
+.gb-watermark{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  font-family:'Cinzel',serif;font-size:0.44rem;
+  letter-spacing:5px;color:rgba(255,255,255,0.04);
+  text-align:center;line-height:1.5;white-space:nowrap;
+  pointer-events:none;min-width:40px;
+}
+.gb-life{
+  display:flex;flex-direction:column;gap:2px;align-items:center;
+  flex-shrink:0;
 }
 
-/* ZONE LABELS */
-.zlbl{
+/* ── RIGHT COLUMN ── */
+.gb-right-col{
+  display:flex;flex-direction:column;
+  padding:12px 10px;gap:10px;
+  border-left:1px solid rgba(0,0,0,0.25);
+  background:rgba(0,0,0,0.12);
+}
+.gb-right-top{display:flex;flex-direction:column;gap:6px;}
+.gb-info{
+  display:flex;flex-direction:column;align-items:center;gap:4px;
+  padding:10px 0;
+}
+.gb-info-phase{
+  background:var(--gold);color:#190800;
+  padding:4px 14px;border-radius:4px;
   font-family:'Barlow Condensed',sans-serif;
-  font-size:0.46rem;letter-spacing:1.5px;
-  color:rgba(212,160,32,0.45);
-  text-transform:uppercase;text-align:center;white-space:nowrap;
+  font-size:0.8rem;font-weight:700;
+  letter-spacing:3px;text-transform:uppercase;
 }
-/* LEFT COLUMN */
-.pm-left{
-  display:flex;flex-direction:column;align-items:center;
-  gap:4px;padding:5px 3px 5px 5px;
-  border-right:1px solid rgba(212,160,32,0.07);z-index:1;
+.gb-info-turn{font-size:0.72rem;color:var(--muted);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
+.gb-info-active{font-size:0.72rem;color:#4ade80;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;}
+.gb-right-bottom{
+  margin-top:auto;
+  display:flex;flex-direction:column;gap:6px;
 }
-/* LIFE CARDS — card-back style */
+.gb-pbtn{
+  font-family:'Barlow Condensed',sans-serif;
+  font-size:0.82rem;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;
+  color:var(--btn-text);
+  background:linear-gradient(180deg, #eddfc0 0%, #d4c090 50%, #c8b080 100%);
+  border:1px solid var(--btn-border);
+  border-radius:6px;
+  cursor:pointer;
+  box-shadow:0 3px 8px var(--btn-shadow), inset 0 1px 0 rgba(255,255,255,0.45);
+  transition:all 0.12s;
+  padding:7px 14px;
+  text-align:center;
+}
+.gb-pbtn:hover{
+  background:linear-gradient(180deg, #f5ebcc 0%, #e0cc9c 50%, #d4bc8c 100%);
+  box-shadow:0 4px 12px var(--btn-shadow), inset 0 1px 0 rgba(255,255,255,0.55);
+  transform:translateY(-1px);
+}
+.gb-pbtn:active{
+  background:linear-gradient(180deg, #c8b080 0%, #d4c090 100%);
+  box-shadow:0 2px 5px var(--btn-shadow), inset 0 2px 3px rgba(0,0,0,0.15);
+  transform:translateY(1px);
+}
+.gb-pbtn-lg{
+  padding:14px 20px;
+  font-size:1.1rem;
+  letter-spacing:3px;
+}
+.gb-hint{
+  font-size:0.66rem;color:var(--muted);
+  font-family:'Barlow Condensed',sans-serif;
+  text-align:center;margin-top:4px;
+}
+.gb-version{
+  font-size:0.55rem;color:var(--muted);
+  text-align:center;margin-top:8px;
+  font-family:'Barlow Condensed',sans-serif;
+  letter-spacing:1px;
+}
+
+/* ── LIFE / DON (shared) ── */
 .life-stack{display:flex;flex-direction:column;gap:2px;align-items:center;}
 .life-pip{
   width:36px;height:50px;border-radius:3px;
@@ -411,11 +614,9 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   flex-shrink:0;transition:opacity 0.18s;
 }
 .life-pip.lost{background:rgba(9,21,40,0.15);border-color:rgba(176,144,16,0.16);color:rgba(176,144,16,0.16);}
-/* Small pips for midstrip */
 .life-row{display:flex;gap:2px;align-items:center;}
 .life-row .life-pip{width:12px;height:17px;font-size:0.38rem;}
-/* DON!! tokens */
-.don-area{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;max-width:74px;}
+.don-area{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;max-width:120px;}
 .don-pip{
   width:12px;height:12px;border-radius:50%;
   border:1px solid rgba(155,25,25,0.55);
@@ -425,91 +626,8 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .don-pip.active{background:var(--red);border-color:var(--red);color:#fff;}
 .don-row{display:flex;flex-wrap:wrap;gap:2px;align-items:center;}
 .don-row .don-pip{width:10px;height:10px;font-size:0.28rem;}
-/* DON!! DECK slot */
-.don-deck-pile{
-  width:36px;height:50px;border-radius:3px;
-  border:1.5px solid rgba(155,25,25,0.6);
-  background:rgba(50,6,6,0.55);
-  display:flex;flex-direction:column;align-items:center;justify-content:center;
-  flex-shrink:0;
-}
-.don-deck-text{font-family:'Cinzel',serif;font-size:0.34rem;color:var(--red);letter-spacing:1px;font-weight:700;}
-.don-deck-count{font-family:'Barlow Condensed',sans-serif;font-size:1.05rem;font-weight:700;color:var(--red);line-height:1;}
 
-/* CENTER COLUMN */
-.pm-center{
-  display:flex;flex-direction:column;
-  padding:3px 5px;gap:3px;
-  overflow:hidden;z-index:1;
-}
-.field-lbl{
-  font-family:'Barlow Condensed',sans-serif;font-size:0.44rem;
-  letter-spacing:2px;color:rgba(212,160,32,0.32);
-  text-transform:uppercase;padding:0 2px;
-}
-.pm-field{
-  display:flex;flex-wrap:nowrap;gap:4px;align-items:center;flex:1;
-  min-height:calc(var(--card-h) + 4px);padding:3px 4px;
-  border:1px dashed rgba(212,160,32,0.09);border-radius:4px;
-  background:rgba(0,0,0,0.14);
-  overflow-x:auto;scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
-}
-.field-empty{
-  color:rgba(212,160,32,0.16);font-size:0.58rem;font-style:italic;
-  margin:auto;font-family:'Barlow Condensed',sans-serif;
-  letter-spacing:1px;text-transform:uppercase;
-}
-.pm-leader-row{display:flex;gap:4px;align-items:flex-start;flex-shrink:0;}
-.pm-slot{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
-.slot-lbl{
-  font-family:'Barlow Condensed',sans-serif;font-size:0.42rem;
-  letter-spacing:1px;color:rgba(212,160,32,0.42);
-  text-transform:uppercase;text-align:center;margin-bottom:2px;
-}
-.pm-hand-area{display:flex;flex-direction:column;flex:1;min-width:0;overflow:hidden;}
-.hand{
-  display:flex;gap:3px;overflow-x:auto;
-  min-height:calc(var(--card-h) + 4px);padding:2px 0;
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
-  align-items:center;
-}
-
-/* RIGHT COLUMN */
-.pm-right{
-  display:flex;flex-direction:column;align-items:center;
-  gap:5px;padding:5px 5px 5px 3px;
-  border-left:1px solid rgba(212,160,32,0.07);z-index:1;
-}
-/* PILE */
-.pile{
-  width:calc(var(--card-w) - 10px);height:calc(var(--card-h) - 10px);
-  border-radius:4px;border:1px solid var(--border);
-  background:var(--card-back);
-  display:flex;align-items:center;justify-content:center;
-  cursor:pointer;position:relative;
-  transition:border-color 0.12s;flex-shrink:0;
-  font-size:1rem;color:var(--card-bb);
-}
-.pile:hover{border-color:var(--gold);}
-.pile-count{
-  position:absolute;bottom:-14px;left:0;right:0;
-  text-align:center;font-size:0.6rem;font-weight:700;
-  color:var(--gold);font-family:'Barlow Condensed',sans-serif;
-}
-
-/* MID STRIP */
-.midstrip{
-  background:rgba(0,0,0,0.74);
-  border-top:1px solid var(--gold-dim);border-bottom:1px solid var(--gold-dim);
-  padding:3px 12px;
-  display:flex;align-items:center;justify-content:space-between;
-  gap:8px;flex-shrink:0;min-height:30px;
-}
-.mid-sec{display:flex;align-items:center;gap:5px;}
-.mid-lbl{font-size:0.5rem;color:var(--muted);letter-spacing:2px;text-transform:uppercase;font-family:'Barlow Condensed',sans-serif;}
-.mid-phase{font-family:'Cinzel',serif;color:var(--gold);font-size:0.78rem;letter-spacing:2px;text-shadow:0 0 10px rgba(212,160,32,0.4);}
-
-/* GAME CARDS */
+/* ── GAME CARDS ── */
 .gcard{
   width:var(--card-w);height:var(--card-h);
   border-radius:4px;border:1px solid rgba(212,160,32,0.16);
@@ -531,29 +649,13 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gcard-badge{position:absolute;top:2px;right:2px;font-size:0.37rem;font-weight:700;padding:1px 2px;border-radius:2px;text-transform:uppercase;}
 .gcard-don{position:absolute;bottom:2px;left:2px;background:rgba(155,25,25,0.9);color:#fff;font-size:0.4rem;font-weight:700;padding:1px 3px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;}
 .gcard-cost{position:absolute;top:2px;left:2px;background:rgba(0,0,0,0.82);color:var(--gold);font-size:0.4rem;padding:1px 3px;border-radius:2px;font-family:'Barlow Condensed',sans-serif;font-weight:700;}
-/* Opponent hand — navy card back */
+/* Opponent hand -- navy card back */
 .card-back{
   width:var(--card-w);height:var(--card-h);border-radius:4px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
   font-size:1.15rem;color:var(--card-bb);flex-shrink:0;
 }
-
-/* LOG */
-.logbar{
-  background:rgba(0,0,0,0.55);border-top:1px solid var(--border);
-  padding:3px 10px;max-height:54px;overflow-y:auto;
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;flex-shrink:0;
-}
-.logbar p{font-size:0.63rem;color:var(--muted);line-height:1.5;}
-.logbar p:last-child{color:var(--text);}
-
-/* ACTIONS */
-.actionbar{
-  background:rgba(0,0,0,0.65);border-top:1px solid var(--border);
-  padding:5px 10px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;flex-shrink:0;
-}
-.action-hint{font-size:0.66rem;color:var(--muted);flex:1;font-family:'Barlow Condensed',sans-serif;}
 
 /* TOOLTIP */
 .tooltip{
@@ -579,13 +681,24 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .counter-banner{background:rgba(155,25,25,0.14);border:1px solid rgba(155,25,25,0.4);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:0.72rem;}
 .counter-banner b{color:var(--red);}
 
-@media(max-width:620px){
+@media(max-width:820px){
   :root{--card-w:52px;--card-h:74px;}
-  .playmat{grid-template-columns:64px 1fr 104px;}
+  #game.active{grid-template-columns:200px 1fr 160px;}
+  .gb-pbtn{font-size:0.72rem;padding:5px 10px;}
+  .gb-pbtn-lg{padding:10px 14px;font-size:0.95rem;}
   .editor-layout{grid-template-columns:1fr;}
   .deck-panel{display:none;}
   .menu-row{flex-wrap:wrap;justify-content:center;}
   .mbtn-sec{width:130px;}
+}
+@media(max-width:600px){
+  #game.active{grid-template-columns:1fr;grid-template-rows:auto 1fr auto;}
+  .gb-left{flex-direction:row;max-height:120px;}
+  .gb-log{display:none;}
+  .gb-right-col{flex-direction:row;flex-wrap:wrap;padding:6px;gap:4px;}
+  .gb-right-top{flex-direction:row;}
+  .gb-right-bottom{margin-top:0;flex-direction:row;flex-wrap:wrap;}
+  .gb-info{flex-direction:row;}
 }
 </style>
 </head>
@@ -623,9 +736,11 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <input class="mp-input" id="createName" placeholder="Your nickname">
         <div class="mp-form-label">Choose Deck</div>
         <div class="deck-row">
-          <button class="mbtn" id="cDeckBtn_Doflamingo" onclick="pickDeck('Doflamingo')">🎭 Doflamingo</button>
-          <button class="mbtn" id="cDeckBtn_Shanks"     onclick="pickDeck('Shanks')">⚔️ Shanks</button>
-          <button class="mbtn" id="cDeckBtn_Blackbeard" onclick="pickDeck('Blackbeard')">🖤 Blackbeard</button>
+          <button class="mbtn" id="cDeckBtn_Anna of Brittany" onclick="pickDeck('Anna of Brittany')">Anna of Brittany</button>
+          <button class="mbtn" id="cDeckBtn_Kaido Ramp"       onclick="pickDeck('Kaido Ramp')">Kaido Ramp</button>
+          <button class="mbtn" id="cDeckBtn_Doflamingo"        onclick="pickDeck('Doflamingo')">Doflamingo</button>
+          <button class="mbtn" id="cDeckBtn_Shanks"            onclick="pickDeck('Shanks')">Shanks</button>
+          <button class="mbtn" id="cDeckBtn_Blackbeard"        onclick="pickDeck('Blackbeard')">Blackbeard</button>
         </div>
         <button class="mbtn mp-submit" onclick="createRoom()">Create Game</button>
         <button class="mp-back-btn" onclick="closeMPForm()">← Back</button>
@@ -639,9 +754,11 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <input class="mp-input code-input" id="joinCode" placeholder="XXXXXX" maxlength="6">
         <div class="mp-form-label">Choose Deck</div>
         <div class="deck-row">
-          <button class="mbtn" id="jDeckBtn_Doflamingo" onclick="pickDeck('Doflamingo')">🎭 Doflamingo</button>
-          <button class="mbtn" id="jDeckBtn_Shanks"     onclick="pickDeck('Shanks')">⚔️ Shanks</button>
-          <button class="mbtn" id="jDeckBtn_Blackbeard" onclick="pickDeck('Blackbeard')">🖤 Blackbeard</button>
+          <button class="mbtn" id="jDeckBtn_Anna of Brittany" onclick="pickDeck('Anna of Brittany')">Anna of Brittany</button>
+          <button class="mbtn" id="jDeckBtn_Kaido Ramp"       onclick="pickDeck('Kaido Ramp')">Kaido Ramp</button>
+          <button class="mbtn" id="jDeckBtn_Doflamingo"        onclick="pickDeck('Doflamingo')">Doflamingo</button>
+          <button class="mbtn" id="jDeckBtn_Shanks"            onclick="pickDeck('Shanks')">Shanks</button>
+          <button class="mbtn" id="jDeckBtn_Blackbeard"        onclick="pickDeck('Blackbeard')">Blackbeard</button>
         </div>
         <button class="mbtn mp-submit" onclick="joinRoom()">Join Game</button>
         <button class="mp-back-btn" onclick="closeMPForm()">← Back</button>
@@ -723,11 +840,11 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <h2>Opening Hand</h2>
     <p>Keep your hand or mulligan (draw 5 new cards)</p>
     <div class="mulligan-hand" id="mulliganHand"></div>
-    <div class="mulligan-btns" id="mulliganBtns">
+    <div class="mulligan-btns" id="mulliganBtnsOld">
       <button class="mbtn mbtn-primary" style="font-size:0.9rem;" onclick="doMulligan(false)">✅ Keep Hand</button>
       <button class="mbtn mbtn-primary" style="font-size:0.9rem;" onclick="doMulligan(true)">🔄 Mulligan</button>
     </div>
-    <p class="waiting-msg" id="mulliganWait" style="display:none;">Waiting for opponent…</p>
+    <p class="waiting-msg" id="mulliganWaitOld" style="display:none;">Waiting for opponent…</p>
   </div>
 </div>
 
@@ -735,25 +852,35 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
      SOLO SETUP
 ════════════════════════════════════════════════════ -->
 <div id="soloSetup" class="screen wood-bg" style="align-items:center;justify-content:center;">
-  <div class="menu-center" style="gap:12px;">
-    <h2 style="font-family:'Cinzel',serif;color:var(--gold);font-size:1.3rem;margin-bottom:8px;">Solo vs Self</h2>
+  <div class="solo-panel">
+    <h2 class="solo-title">Solo vs Self</h2>
 
-    <div class="mp-form-label">Player 1 Deck (Bottom)</div>
-    <div class="deck-row" style="margin-bottom:10px;">
-      <button class="mbtn" id="s1Deck_Doflamingo" onclick="pickSoloDeck(0,'Doflamingo')">Doflamingo</button>
-      <button class="mbtn" id="s1Deck_Shanks"     onclick="pickSoloDeck(0,'Shanks')">Shanks</button>
-      <button class="mbtn" id="s1Deck_Blackbeard" onclick="pickSoloDeck(0,'Blackbeard')">Blackbeard</button>
+    <div class="solo-pick-row">
+      <span class="solo-label">P1</span>
+      <select class="solo-select" id="soloDeck1" onchange="pickSoloDeck(0, this.value)">
+        <option value="Anna of Brittany">Anna of Brittany</option>
+        <option value="Kaido Ramp">Kaido Ramp</option>
+        <option value="Doflamingo">Doflamingo</option>
+        <option value="Shanks">Shanks</option>
+        <option value="Blackbeard">Blackbeard</option>
+      </select>
     </div>
 
-    <div class="mp-form-label">Player 2 Deck (Top)</div>
-    <div class="deck-row" style="margin-bottom:14px;">
-      <button class="mbtn" id="s2Deck_Doflamingo" onclick="pickSoloDeck(1,'Doflamingo')">Doflamingo</button>
-      <button class="mbtn" id="s2Deck_Shanks"     onclick="pickSoloDeck(1,'Shanks')">Shanks</button>
-      <button class="mbtn" id="s2Deck_Blackbeard" onclick="pickSoloDeck(1,'Blackbeard')">Blackbeard</button>
+    <div class="solo-vs">VS</div>
+
+    <div class="solo-pick-row">
+      <span class="solo-label">P2</span>
+      <select class="solo-select" id="soloDeck2" onchange="pickSoloDeck(1, this.value)">
+        <option value="Kaido Ramp">Kaido Ramp</option>
+        <option value="Anna of Brittany">Anna of Brittany</option>
+        <option value="Doflamingo">Doflamingo</option>
+        <option value="Shanks">Shanks</option>
+        <option value="Blackbeard">Blackbeard</option>
+      </select>
     </div>
 
-    <button class="mbtn mbtn-primary" onclick="startSolo()">Start Game</button>
-    <button class="mp-back-btn" onclick="window.location.href='index.html'" style="margin-top:6px;">← Back to Menu</button>
+    <button class="mbtn mbtn-primary" style="margin-top:18px;" onclick="startSolo()">Start Game</button>
+    <button class="mp-back-btn" style="margin-top:8px;" onclick="window.location.href='index.html'">← Back</button>
   </div>
 </div>
 
@@ -761,135 +888,86 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
      GAME BOARD
 ════════════════════════════════════════════════════ -->
 <div id="game" class="screen">
+  <!-- Left Column -->
+  <div class="gb-left">
+    <div class="gb-opp-hand" id="oppHand"></div>
+    <span id="oppHandCount" style="display:none;">0</span>
+    <div class="gb-log" id="logbar"><p>Welcome to OPTCGSim</p></div>
+    <div class="gb-self-hand" id="selfHand"></div>
+  </div>
 
-  <!-- Top bar -->
-  <div class="topbar">
-    <div class="phase-pill" id="phasePill">REFRESH</div>
-    <span class="turn-text" id="turnText">Turn 1</span>
-    <span class="active-text" id="activeText"></span>
-    <div class="topbar-btns">
-      <button class="btn btn-primary btn-sm" onclick="act({type:'NEXT_PHASE'})">Next ▶</button>
-      <button class="btn btn-danger btn-sm" onclick="act({type:'END_TURN'})">End Turn</button>
-      <button class="btn btn-outline btn-sm" id="btnSwitchSides" onclick="switchSides()" style="display:none;">Switch Sides</button>
+  <!-- Center - Game Board -->
+  <div class="gb-board">
+    <!-- Opponent Zone (red, rotated 180deg) -->
+    <div class="gb-zone gb-zone-opp">
+      <div class="gb-row">
+        <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
+        <div class="gb-area-bar gb-cost-bar"><span>COST AREA</span><div class="don-area" id="oppDon"></div></div>
+        <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
+      </div>
+      <div class="gb-row gb-row-flex">
+        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME</div>
+        <div class="gb-slot">STAGE</div>
+        <div id="oppLeader" style="flex-shrink:0;"></div>
+        <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
+        <div class="gb-life" id="oppLife"></div>
+        <span id="oppLifeCount" style="display:none;"></span>
+      </div>
+      <div class="gb-area-bar gb-char-bar" id="oppField"><span class="gb-area-label">CHARACTER AREA</span></div>
+    </div>
+
+    <!-- Player Zone (green) -->
+    <div class="gb-zone gb-zone-self">
+      <div class="gb-area-bar gb-char-bar" id="selfField"><span class="gb-area-label">CHARACTER AREA</span></div>
+      <div class="gb-row gb-row-flex">
+        <div class="gb-watermark">ONE PIECE<br>CARD GAME</div>
+        <div id="selfLeader" style="flex-shrink:0;"></div>
+        <div class="gb-slot"></div>
+        <div class="gb-slot"></div>
+        <div class="gb-slot">STAGE</div>
+        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
+        <div class="gb-life" id="selfLifeStack"></div>
+      </div>
+      <div class="gb-row">
+        <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDonDeck">10</span></div>
+        <div class="gb-area-bar gb-cost-bar"><span>COST AREA</span><div class="don-area" id="selfDon"></div></div>
+        <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
+      </div>
     </div>
   </div>
 
-  <div class="board">
-
-    <!-- ══ OPPONENT PLAYMAT ══ -->
-    <div class="playmat opp">
-
-      <!-- Left: opp life + DON + deck -->
-      <div class="pm-left">
-        <div class="zlbl">LIFE&nbsp;<span id="oppLifeCount" style="color:var(--gold);"></span></div>
-        <div class="life-stack" id="oppLife"></div>
-        <div style="margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:3px;">
-          <div class="zlbl">DON!!</div>
-          <div class="don-area" id="oppDon"></div>
-          <div class="zlbl" style="margin-top:4px;">DECK</div>
-          <div style="position:relative;margin-top:1px;">
-            <div class="pile" id="oppDeck">✦<div class="pile-count" id="oppDeckN">0</div></div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Center: hand (top) → field (bottom) — opponent side flipped -->
-      <div class="pm-center">
-        <div class="pm-leader-row">
-          <div class="pm-slot">
-            <div class="slot-lbl">LEADER</div>
-            <div id="oppLeader"></div>
-          </div>
-          <div class="pm-hand-area">
-            <div class="slot-lbl">HAND&nbsp;(<span id="oppHandCount">0</span>)</div>
-            <div class="hand" id="oppHand"></div>
-          </div>
-        </div>
-        <div class="field-lbl">CHARACTER AREA</div>
-        <div class="pm-field" id="oppField"><span class="field-empty">No characters in play</span></div>
-      </div>
-
-      <!-- Right: trash -->
-      <div class="pm-right">
-        <div class="zlbl">TRASH</div>
-        <div style="position:relative;">
-          <div class="pile" onclick="viewTrash('opp')">🗑<div class="pile-count" id="oppTrashN">0</div></div>
-        </div>
-      </div>
-
-    </div><!-- .opp -->
-
-    <!-- ══ MID STRIP ══ -->
-    <div class="midstrip">
-      <div class="mid-sec">
-        <span class="mid-lbl">YOUR LIFE</span>
-        <div class="life-row" id="selfLife"></div>
-        <span id="selfLifeCount" style="font-size:0.56rem;color:var(--gold);font-family:'Barlow Condensed',sans-serif;margin-left:2px;"></span>
-      </div>
-      <div class="mid-phase" id="midPhase">— PHASE —</div>
-      <div class="mid-sec">
-        <span class="mid-lbl">YOUR DON!!</span>
-        <div class="don-row" id="selfDon"></div>
-      </div>
+  <!-- Right Column -->
+  <div class="gb-right-col">
+    <div class="gb-right-top">
+      <button class="gb-pbtn" onclick="location.href='index.html'">Back to Main</button>
+      <button class="gb-pbtn" onclick="location.reload()">Cancel Match</button>
     </div>
-
-    <!-- ══ SELF PLAYMAT ══ -->
-    <div class="playmat self">
-
-      <!-- Left: self life + DON!! deck -->
-      <div class="pm-left">
-        <div class="zlbl">LIFE</div>
-        <div class="life-stack" id="selfLifeStack"></div>
-        <div style="margin-top:auto;display:flex;flex-direction:column;align-items:center;gap:3px;">
-          <div class="zlbl">DON!! DECK</div>
-          <div class="don-deck-pile">
-            <div class="don-deck-text">DON!!</div>
-            <div class="don-deck-count" id="selfDonDeck">10</div>
-          </div>
-        </div>
+    <div class="gb-info">
+      <div class="gb-info-phase" id="phasePill">REFRESH</div>
+      <div class="gb-info-turn" id="turnText">Turn 1</div>
+      <div class="gb-info-active" id="activeText"></div>
+      <div id="midPhase" style="display:none;"></div>
+    </div>
+    <div id="selfLife" style="display:none;"></div>
+    <div id="selfLifeCount" style="display:none;"></div>
+    <div class="gb-right-bottom">
+      <div id="mulliganBtns" style="display:flex;flex-direction:column;gap:6px;">
+        <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(true)">Mulligan</button>
+        <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(false)">Keep</button>
       </div>
-
-      <!-- Center: leader → field → hand -->
-      <div class="pm-center">
-        <div class="pm-leader-row">
-          <div class="pm-slot">
-            <div class="slot-lbl">LEADER</div>
-            <div id="selfLeader"></div>
-          </div>
-        </div>
-        <div class="field-lbl">CHARACTER AREA</div>
-        <div class="pm-field" id="selfField"><span class="field-empty">No characters in play</span></div>
-        <div class="slot-lbl" style="margin-top:2px;">YOUR HAND</div>
-        <div class="hand" id="selfHand"></div>
+      <p id="mulliganWait" style="display:none;color:#8a7860;font-size:0.8rem;text-align:center;">Waiting for opponent…</p>
+      <div id="playBtns" style="display:none;flex-direction:column;gap:5px;">
+        <button class="gb-pbtn" style="width:100%;" onclick="act({type:'NEXT_PHASE'})">Next Phase</button>
+        <button class="gb-pbtn" style="width:100%;" onclick="act({type:'END_TURN'})">End Turn</button>
+        <button class="gb-pbtn" style="width:100%;display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
+        <button class="gb-pbtn" style="width:100%;display:none;" id="btnCounter" onclick="passCounter()">Pass Counter</button>
+        <button class="gb-pbtn" style="width:100%;display:none;" id="btnSwitchSides" onclick="switchSides()">Switch Sides</button>
+        <button class="gb-pbtn" style="width:100%;" onclick="cancelSel()">Cancel</button>
       </div>
-
-      <!-- Right: deck + trash -->
-      <div class="pm-right">
-        <div class="zlbl">DECK</div>
-        <div style="position:relative;margin-bottom:18px;">
-          <div class="pile">✦<div class="pile-count" id="selfDeckN">0</div></div>
-        </div>
-        <div class="zlbl">TRASH</div>
-        <div style="position:relative;">
-          <div class="pile" onclick="viewTrash('self')">🗑<div class="pile-count" id="selfTrashN">0</div></div>
-        </div>
-      </div>
-
-    </div><!-- .self -->
-
-  </div><!-- .board -->
-
-  <!-- Log -->
-  <div class="logbar" id="logbar"></div>
-
-  <!-- Actions -->
-  <div class="actionbar">
-    <span class="action-hint" id="actionHint">Waiting…</span>
-    <button class="btn btn-outline btn-sm" id="btnAttachDon" onclick="attachDon()" style="display:none;">Attach DON!!</button>
-    <button class="btn btn-outline btn-sm" id="btnCounter"   onclick="passCounter()" style="display:none;">Pass Counter</button>
-    <button class="btn btn-ghost btn-sm" onclick="cancelSel()">✕ Cancel</button>
+      <span id="actionHint" class="gb-hint">Waiting…</span>
+    </div>
+    <div class="gb-version">v 1.34c</div>
   </div>
-
 </div><!-- #game -->
 
 <!-- WIN MODAL -->
@@ -952,6 +1030,27 @@ const PRESET_DECKS = {
       {id:'ST27-003',count:4},{id:'OP09-093',count:4},{id:'OP09-096',count:4},
       {id:'OP09-097',count:1},{id:'OP09-098',count:4},{id:'OP09-099',count:4},
     ]
+  },
+  'Anna of Brittany': {
+    leaderId: 'ST03-001',
+    cards: [
+      {id:'OP01-079',count:4},{id:'OP01-077',count:4},{id:'OP01-083',count:4},
+      {id:'OP01-085',count:4},{id:'ST03-014',count:3},{id:'OP01-084',count:4},
+      {id:'ST03-003',count:4},{id:'OP01-067',count:3},{id:'ST03-015',count:4},
+      {id:'ST03-016',count:4},{id:'ST03-017',count:4},{id:'OP01-087',count:4},
+      {id:'OP01-090',count:4},
+    ]
+  },
+  'Kaido Ramp': {
+    leaderId: 'ST04-001',
+    cards: [
+      {id:'OP01-100',count:4},{id:'ST04-010',count:4},{id:'OP01-101',count:4},
+      {id:'ST04-008',count:4},{id:'ST04-002',count:4},{id:'ST04-012',count:4},
+      {id:'ST04-005',count:4},{id:'ST04-004',count:2},{id:'OP01-096',count:2},
+      {id:'ST04-003',count:2},{id:'OP01-094',count:2},{id:'ST04-016',count:4},
+      {id:'OP01-117',count:1},{id:'OP01-119',count:3},{id:'ST04-015',count:2},
+      {id:'ST04-017',count:4},
+    ]
   }
 };
 
@@ -961,7 +1060,7 @@ function pickDeck(name) {
   selectedDeck = { leaderId: preset.leaderId, cards: preset.cards };
   localStorage.setItem('boohawk_deck', JSON.stringify(selectedDeck));
   ['c','j'].forEach(prefix => {
-    ['Doflamingo','Shanks','Blackbeard'].forEach(n => {
+    Object.keys(PRESET_DECKS).forEach(n => {
       const btn = document.getElementById(`${prefix}DeckBtn_${n}`);
       if (btn) {
         const active = n === name;
@@ -986,18 +1085,10 @@ let sel = null, attackMode = false, counterMode = false;
 const isSolo = new URLSearchParams(window.location.search).get('solo') === 'true';
 let soloWs = [null, null];
 let soloIds = [null, null];
-let soloDecks = [PRESET_DECKS['Doflamingo'], PRESET_DECKS['Shanks']];
+let soloDecks = [PRESET_DECKS['Anna of Brittany'], PRESET_DECKS['Kaido Ramp']];
 
 function pickSoloDeck(side, name) {
   soloDecks[side] = PRESET_DECKS[name];
-  ['Doflamingo','Shanks','Blackbeard'].forEach(n => {
-    const btn = document.getElementById(`s${side+1}Deck_${n}`);
-    if (btn) {
-      const active = n === name;
-      btn.style.background = active ? 'linear-gradient(180deg,#c8a040 0%,#a07828 100%)' : '';
-      btn.style.border = active ? '2px solid rgba(0,0,0,0.5)' : '';
-    }
-  });
 }
 
 function startSolo() {
@@ -1110,12 +1201,13 @@ function handleMsg(msg) {
       roomId = msg.roomId; myId = msg.playerId;
       break;
     case 'GAME_STARTED':
-      showScreen('mulligan');
+      showScreen('game');
       break;
     case 'GAME_STATE':
       game = msg.game;
+      showScreen('game');
       if (game.phase === 'MULLIGAN') renderMulligan();
-      else { showScreen('game'); renderGame(); }
+      else renderGame();
       break;
     case 'ERROR':
       hint(msg.msg, true);
@@ -1144,18 +1236,29 @@ function joinRoom() {
 // ─── MULLIGAN ───
 function renderMulligan() {
   if (!game) return;
-  // In solo mode, auto-switch to the side that hasn't mulliganed yet
   if (isSolo && game.mulliganDone[myId]) {
     const otherId = myId === soloIds[0] ? soloIds[1] : soloIds[0];
     if (otherId && !game.mulliganDone[otherId]) myId = otherId;
   }
   const p = game.players[myId];
-  const container = document.getElementById('mulliganHand');
-  container.innerHTML = '';
-  p.hand.forEach(card => container.appendChild(makeBrowserCard(card, null, true)));
+  const oppId = Object.keys(game.players).find(id => id !== myId);
+  const opp = game.players[oppId];
+
+  // Render hands on the game board
+  const handEl = document.getElementById('selfHand');
+  handEl.innerHTML = '';
+  p.hand.forEach(card => handEl.appendChild(makeGameCard(card, null, false)));
+
+  renderOppHand('oppHand', opp.hand.length);
+  if (p.leader) renderLeader('selfLeader', p.leader, false);
+  if (opp.leader) renderLeader('oppLeader', opp.leader, false);
+
   const done = game.mulliganDone[myId];
   document.getElementById('mulliganBtns').style.display = done ? 'none' : 'flex';
   document.getElementById('mulliganWait').style.display = done ? 'block' : 'none';
+  document.getElementById('playBtns').style.display = 'none';
+
+  renderLog();
 }
 function doMulligan(mulligan) {
   act({ type: 'MULLIGAN', doMulligan: mulligan });
@@ -1176,6 +1279,10 @@ function renderGame() {
     }
     document.getElementById('btnSwitchSides').style.display = 'inline-block';
   }
+
+  document.getElementById('mulliganBtns').style.display = 'none';
+  document.getElementById('mulliganWait').style.display = 'none';
+  document.getElementById('playBtns').style.display = 'flex';
 
   const me = game.players[myId];
   const oppId = Object.keys(game.players).find(id => id !== myId);
@@ -1208,6 +1315,7 @@ function renderGame() {
   renderDon('oppDon',  opp.donActive, opp.donRested, opp.donActive + opp.donRested);
 
   renderLife('selfLife', 'selfLifeCount', me.leader.life,  me.life.length);
+  renderLife('selfLifeStack', null, me.leader.life, me.life.length);
   renderLife('oppLife',  'oppLifeCount',  opp.leader.life, opp.life.length);
 
   renderLog();
@@ -1258,7 +1366,7 @@ function renderLeader(slotId, leader, isSelf) {
 
 function renderField(fieldId, field, isSelf) {
   const el = document.getElementById(fieldId);
-  if (!field.length) { el.innerHTML = '<span class="field-empty">No characters in play</span>'; return; }
+  if (!field.length) { el.innerHTML = '<span class="gb-area-label">CHARACTER AREA</span>'; return; }
   el.innerHTML = '';
   field.forEach(card => {
     el.appendChild(makeGameCard(card,
@@ -1583,13 +1691,11 @@ function getLocalCardDb() {
 // ─── SOLO AUTO-START ───
 if (isSolo) {
   showScreen('soloSetup');
-  pickSoloDeck(0, 'Doflamingo');
-  pickSoloDeck(1, 'Shanks');
 }
 
 // ─── CLICK OUTSIDE ───
 document.addEventListener('click', e => {
-  if (!e.target.closest('.gcard') && !e.target.closest('.actionbar')) cancelSel();
+  if (!e.target.closest('.gcard') && !e.target.closest('.gb-right-col')) cancelSel();
   if (!e.target.closest('#mpPanel') && !e.target.closest('.mbtn-primary')) {
     /* keep panel open when interacting inside it */
   }
