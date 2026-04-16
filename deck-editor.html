@@ -315,19 +315,17 @@
 
     <script>
     // ── Image URL helper ──
-    const IMG_BASE_LOCAL = 'file:///C:/Users/jackb/Downloads/OPTCG/Builds_Windows/OPTCGSim_Data/StreamingAssets/Cards';
-    const IMG_BASE_REMOTE = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main';
+    const IMG_BASE = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main';
     function cardImg(id, ext) {
         const set = id.replace(/-\d+$/, '');
-        return `${IMG_BASE_LOCAL}/${set}/${id}.${ext || 'png'}`;
+        return `${IMG_BASE}/${set}/${id}.${ext || 'png'}`;
     }
     function cardImgRemote(id, ext) {
-        const set = id.replace(/-\d+$/, '');
-        return `${IMG_BASE_REMOTE}/${set}/${id}.${ext || 'png'}`;
+        return cardImg(id, ext);
     }
     function cardImgAlt(id, ext) {
         const set = id.replace(/-\d+$/, '');
-        return `${IMG_BASE_LOCAL}/${set}/${id}_alt.${ext || 'png'}`;
+        return `${IMG_BASE}/${set}/${id}_alt.${ext || 'png'}`;
     }
 
     // Track which cards are showing alt art
@@ -795,13 +793,8 @@
           img.loading = 'lazy';
           img.draggable = false;
           img.onerror = function() {
-            if (!this.dataset.triedRemote) {
-              this.dataset.triedRemote = '1';
-              this.src = cardImgRemote(entry.id, imgExt);
-            } else {
               this.style.background = 'linear-gradient(180deg, #f2e8cc 0%, #e0d4a8 100%)';
               this.style.minHeight = '150px';
-            }
           };
           stack.appendChild(img);
         }
@@ -851,9 +844,8 @@
       if (card.counter > 0) stats += `<span>Counter: ${card.counter}</span>`;
       if (card.life) stats += `<span>Life: ${card.life}</span>`;
       const imgSrc = altState[card.id] ? cardImgAlt(card.id, card.imgExt) : cardImg(card.id, card.imgExt);
-      const remoteSrc = cardImgRemote(card.id, card.imgExt);
       preview.innerHTML =
-        `<img src="${imgSrc}" alt="${card.name}" onerror="if(!this.dataset.triedRemote){this.dataset.triedRemote='1';this.src='${remoteSrc}';}else{this.style.display='none';}">` +
+        `<img src="${imgSrc}" alt="${card.name}" onerror="this.style.display='none';">` +
         `<div class="cp-name">${card.name}</div>` +
         `<div class="cp-stats">${stats}</div>` +
         `<div class="cp-ability">${card.ability || ''}</div>`;
