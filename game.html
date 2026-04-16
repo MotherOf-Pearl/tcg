@@ -470,7 +470,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* Zone uses CSS grid with 2 rows: char area on top, slots row below */
 .gb-zone-grid{
   display:grid;width:100%;height:100%;
-  grid-template-rows:calc(var(--card-h) + 20px) 1fr;
+  grid-template-rows:calc(var(--card-h) + 20px) calc(var(--card-h) + 20px);
   grid-template-columns:1fr;
   gap:6px;
 }
