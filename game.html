@@ -392,20 +392,14 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     repeating-linear-gradient(91deg,rgba(170,85,15,.14) 0px,rgba(140,65,10,.10) 18px,rgba(185,100,25,.14) 36px,rgba(155,75,12,.10) 54px,rgba(170,85,15,.14) 72px),
     radial-gradient(ellipse at center,rgba(190,105,30,.15) 0%,rgba(60,20,2,.50) 100%);
 }
-#game.active{display:grid;grid-template-columns:2fr 3fr 200px;grid-template-rows:1fr;}
+#game.active{display:grid;grid-template-columns:2fr 3fr 200px;grid-template-rows:1fr;padding-top:114px;padding-bottom:114px;}
 
-/* ═══ LEFT PANEL — HANDS + PREVIEW ═══ */
-.gb-left{display:flex;flex-direction:column;overflow:hidden;}
-/* Opponent hand — top */
-.gb-opp-hand{
-  display:flex;flex-wrap:wrap;align-content:flex-start;
-  gap:4px;padding:6px;overflow-y:auto;min-height:160px;
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
-}
-/* Card preview — center */
+/* ═══ LEFT PANEL — PREVIEW ONLY (hands are fixed-position) ═══ */
+.gb-left{display:flex;flex-direction:column;overflow:hidden;justify-content:center;}
+/* Card preview — fills left panel */
 .gb-card-preview{
   display:flex;align-items:center;justify-content:center;
-  padding:8px 16px;flex-shrink:0;min-height:0;
+  padding:8px 16px;flex:1;min-height:0;
   pointer-events:none;
 }
 .gb-card-preview img{
@@ -413,27 +407,23 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   box-shadow:0 6px 28px rgba(0,0,0,.7);
   object-fit:contain;
 }
-.gb-card-preview.has-card{flex:2;}
+.gb-card-preview.has-card{display:flex;}
 .gb-card-preview:not(.has-card){display:none;}
-/* Player hand — bottom */
-.gb-self-hand{
-  display:flex;flex-wrap:wrap;align-content:flex-end;
-  gap:4px;padding:6px;overflow-y:auto;min-height:160px;
-  border-top:1px solid rgba(212,160,32,.12);
-  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+
+/* ═══ FIXED HANDS — pinned to screen edges ═══ */
+.gb-opp-hand,.gb-self-hand{
+  position:fixed;left:0;right:0;
+  height:110px;z-index:50;
+  display:flex;flex-wrap:nowrap;align-items:center;
+  padding:4px 12px;overflow:hidden;
 }
-/* When no preview showing, hands split 50/50 */
-.gb-opp-hand,.gb-self-hand{flex:1;}
-/* Overlapping hand cards */
-.gb-opp-hand .gcard,.gb-self-hand .gcard{margin-right:-14px;position:relative;}
-.gb-opp-hand .gcard:last-child,.gb-self-hand .gcard:last-child{margin-right:0;}
-.gb-opp-hand .gcard:hover,.gb-self-hand .gcard:hover{z-index:20;margin-right:4px;}
-.gb-opp-hand .card-back,.gb-self-hand .card-back{margin-right:-14px;}
-.gb-opp-hand .card-back:last-child,.gb-self-hand .card-back:last-child{margin-right:0;}
-/* Larger hand cards */
-.gb-opp-hand .gcard,.gb-self-hand .gcard{width:105px;height:147px;}
+.gb-opp-hand{top:0;}
+.gb-self-hand{bottom:0;}
+/* Hand card sizing */
+.gb-opp-hand .gcard,.gb-self-hand .gcard{width:90px;height:100px;position:relative;flex-shrink:0;}
 .gb-opp-hand .gcard img,.gb-self-hand .gcard img{height:100%;}
-.gb-opp-hand .card-back,.gb-self-hand .card-back{width:105px;height:147px;}
+.gb-opp-hand .gcard:hover,.gb-self-hand .gcard:hover{z-index:60;transform:translateY(-8px) scale(1.15);}
+.gb-opp-hand .card-back,.gb-self-hand .card-back{width:90px;height:100px;flex-shrink:0;}
 
 /* ═══ CENTER — BOARD ═══ */
 .gb-board{
@@ -1263,6 +1253,7 @@ function renderMulligan() {
   const handEl = document.getElementById('selfHand');
   handEl.innerHTML = '';
   p.hand.forEach(card => handEl.appendChild(makeGameCard(card, null, false)));
+  fanHandCards(handEl, p.hand.length);
 
   if (isSolo) renderSoloOppHand('oppHand', opp.hand);
   else renderOppHand('oppHand', opp.hand.length);
@@ -1419,6 +1410,21 @@ function renderField(fieldId, field, isSelf) {
   });
 }
 
+function fanHandCards(el, count) {
+  if (!count) return;
+  const cardW = 90;
+  const availW = el.clientWidth || window.innerWidth;
+  const totalNeeded = cardW * count;
+  let margin = 0;
+  if (totalNeeded > availW - 24) {
+    margin = -Math.ceil((totalNeeded - availW + 24) / Math.max(count - 1, 1));
+    margin = Math.max(margin, -(cardW - 20)); // never hide more than card minus 20px
+  }
+  el.querySelectorAll('.gcard,.card-back').forEach((c, i) => {
+    c.style.marginRight = (i < count - 1) ? margin + 'px' : '0';
+  });
+}
+
 function renderHand(handId, hand, isSelf) {
   const el = document.getElementById(handId);
   el.innerHTML = '';
@@ -1435,6 +1441,7 @@ function renderHand(handId, hand, isSelf) {
     };
     el.appendChild(makeGameCard(card, handler, false));
   });
+  fanHandCards(el, hand.length);
 }
 
 function renderOppHand(handId, count) {
@@ -1443,9 +1450,9 @@ function renderOppHand(handId, count) {
   for (let i = 0; i < count; i++) {
     const c = document.createElement('div');
     c.className = 'card-back';
-    c.textContent = '✦';
     el.appendChild(c);
   }
+  fanHandCards(el, count);
 }
 
 function renderSoloOppHand(handId, hand) {
@@ -1453,11 +1460,11 @@ function renderSoloOppHand(handId, hand) {
   el.innerHTML = '';
   hand.forEach(card => {
     const handler = () => {
-      // Clicking opponent hand in solo mode switches to their side
       switchSides();
     };
     el.appendChild(makeGameCard(card, handler, false));
   });
+  fanHandCards(el, hand.length);
 }
 
 function renderDon(id, active, rested, total) {
