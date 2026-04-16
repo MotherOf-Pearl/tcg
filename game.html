@@ -961,11 +961,9 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       <p id="mulliganWait" style="display:none;color:#8a7860;font-size:0.8rem;text-align:center;">Waiting for opponent…</p>
       <div id="playBtns" style="display:none;flex-direction:column;gap:4px;">
         <button class="gb-pbtn gb-pbtn-lg" onclick="act({type:'END_TURN'})">End Turn</button>
-        <button class="gb-pbtn gb-pbtn-sm" onclick="act({type:'NEXT_PHASE'})">Next Phase</button>
         <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
         <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnCounter" onclick="passCounter()">Pass Counter</button>
         <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnSwitchSides" onclick="switchSides()">Switch Sides</button>
-        <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
       </div>
       <span id="actionHint" class="gb-hint">Waiting…</span>
     </div>
