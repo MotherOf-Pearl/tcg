@@ -293,6 +293,136 @@ const CARD_DB = [
   { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:'',
     power:0, cost:1, counter:0, image:IMG('OP09','OP09-099','jpg'),
     ability:"[Activate: Main] You may trash 1 card from your hand and rest this Stage: Look at 3 cards from the top of your deck; reveal up to 1 {Blackbeard Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+
+  // ══════════════════════════════
+  // ANNA OF BRITTANY DECK (Blue)
+  // ══════════════════════════════
+  { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special',
+    power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'),
+    ability:"[Activate: Main] Once per turn, you may rest 1 of your Characters: Draw 1 card." },
+
+  { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'),
+    ability:"[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order." },
+
+  { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:1000, cost:3, counter:1000, image:IMG('OP01','OP01-079','png'),
+    ability:"[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand." },
+
+  { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-083','png'),
+    ability:"[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash." },
+
+  { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-084','png'),
+    ability:"[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+
+  { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-085','png'),
+    ability:"[On Play] If your Leader has the {Duchess of Brittany} type, select up to 1 of your opponent's Characters with a cost of 4 or less. The selected Character cannot attack until the end of your opponent's next turn." },
+
+  { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:6000, cost:5, counter:0, image:IMG('ST03','ST03-003','png'),
+    ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
+
+  { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:4000, cost:4, counter:1000, image:IMG('ST03','ST03-014','png'),
+    ability:"[On Play] Return up to 1 Character with a cost of 3 or less to the owner's hand." },
+
+  { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special',
+    power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'),
+    ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
+
+  { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue',
+    power:0, cost:4, counter:0, image:IMG('ST03','ST03-015','png'),
+    ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
+
+  { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue',
+    power:0, cost:2, counter:0, image:IMG('ST03','ST03-016','png'),
+    ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
+
+  { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue',
+    power:0, cost:2, counter:0, image:IMG('ST03','ST03-017','png'),
+    ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand." },
+
+  { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue',
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-087','png'),
+    ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
+
+  { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'',
+    power:0, cost:1, counter:0, image:IMG('OP01','OP01-090','png'),
+    ability:"[Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+
+  // ══════════════════════════════
+  // KAIDO RAMP DECK (Purple)
+  // ══════════════════════════════
+  { id:'ST04-001', name:'Kaido', type:'LEADER', color:'Purple', attribute:'Strike',
+    power:5000, life:5, cost:0, counter:0, image:IMG('ST04','ST04-001','png'),
+    ability:"[Activate: Main] [Once Per Turn] You may trash 1 of your Characters: Add up to 1 DON!! card from your DON!! deck and rest it." },
+
+  { id:'OP01-100', name:'Kurozumi Higurashi', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
+    power:0, cost:1, counter:2000, image:IMG('OP01','OP01-100','png'),
+    ability:"[On Play] Add up to 1 DON!! from your DON!! deck and rest it." },
+
+  { id:'ST04-010', name:"Who's Who", type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:3000, cost:3, counter:2000, image:IMG('ST04','ST04-010','png'),
+    ability:"" },
+
+  { id:'OP01-101', name:'Sasaki', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:4000, cost:3, counter:1000, image:IMG('OP01','OP01-101','png'),
+    ability:"" },
+
+  { id:'ST04-008', name:'Jack', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-008','png'),
+    ability:"" },
+
+  { id:'ST04-002', name:'Ulti', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:2000, cost:2, counter:1000, image:IMG('ST04','ST04-002','png'),
+    ability:"" },
+
+  { id:'ST04-012', name:'Page One', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:3000, cost:2, counter:1000, image:IMG('ST04','ST04-012','png'),
+    ability:"" },
+
+  { id:'ST04-005', name:'Queen', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
+    power:5000, cost:4, counter:1000, image:IMG('ST04','ST04-005','png'),
+    ability:"" },
+
+  { id:'ST04-004', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:6000, cost:5, counter:0, image:IMG('ST04','ST04-004','png'),
+    ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
+
+  { id:'OP01-096', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:7000, cost:6, counter:0, image:IMG('OP01','OP01-096','png'),
+    ability:"[DON!! x1] [When Attacking] K.O. up to 1 of your opponent's Characters with 2000 power or less." },
+
+  { id:'ST04-003', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:8000, cost:7, counter:0, image:IMG('ST04','ST04-003','png'),
+    ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
+
+  { id:'OP01-094', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:12000, cost:10, counter:0, image:IMG('OP01','OP01-094','png'),
+    ability:"[Rush] [On Play] K.O. up to 1 of your opponent's Characters." },
+
+  { id:'ST04-016', name:'Blast Breath', type:'EVENT', color:'Purple',
+    power:0, cost:1, counter:0, image:IMG('ST04','ST04-016','png'),
+    ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+
+  { id:'OP01-117', name:"Sheep's Horn", type:'EVENT', color:'Purple',
+    power:0, cost:4, counter:0, image:IMG('OP01','OP01-117','png'),
+    ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+
+  { id:'OP01-119', name:'Thunder Bagua', type:'EVENT', color:'Purple',
+    power:0, cost:1, counter:0, image:IMG('OP01','OP01-119','png'),
+    ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+
+  { id:'ST04-015', name:'Brachio Bomber', type:'EVENT', color:'Purple',
+    power:0, cost:4, counter:0, image:IMG('ST04','ST04-015','png'),
+    ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+
+  { id:'ST04-017', name:'Onigashima', type:'STAGE', color:'Purple', attribute:'',
+    power:0, cost:1, counter:0, image:IMG('ST04','ST04-017','png'),
+    ability:"[Activate: Main] You may rest this Stage: If you have 8 or more DON!! cards on your field, give up to 1 of your Characters +1000 power during this turn." },
 ];
 
 // ─── PRESET DECKS ───
@@ -330,6 +460,27 @@ const PRESET_DECKS = {
       {id:'PRB02-015',count:1},{id:'OP10-082',count:4},{id:'OP09-084',count:1},
       {id:'ST27-003',count:4},{id:'OP09-093',count:4},{id:'OP09-096',count:4},
       {id:'OP09-097',count:1},{id:'OP09-098',count:4},{id:'OP09-099',count:4},
+    ]
+  },
+  'Anna of Brittany': {
+    leaderId: 'ST03-001',
+    cards: [
+      {id:'OP01-079',count:4},{id:'OP01-077',count:4},{id:'OP01-083',count:4},
+      {id:'OP01-085',count:4},{id:'ST03-014',count:3},{id:'OP01-084',count:4},
+      {id:'ST03-003',count:4},{id:'OP01-067',count:3},{id:'ST03-015',count:4},
+      {id:'ST03-016',count:4},{id:'ST03-017',count:4},{id:'OP01-087',count:4},
+      {id:'OP01-090',count:4},
+    ]
+  },
+  'Kaido Ramp': {
+    leaderId: 'ST04-001',
+    cards: [
+      {id:'OP01-100',count:4},{id:'ST04-010',count:4},{id:'OP01-101',count:4},
+      {id:'ST04-008',count:4},{id:'ST04-002',count:4},{id:'ST04-012',count:4},
+      {id:'ST04-005',count:4},{id:'ST04-004',count:2},{id:'OP01-096',count:2},
+      {id:'ST04-003',count:2},{id:'OP01-094',count:2},{id:'ST04-016',count:4},
+      {id:'OP01-117',count:1},{id:'OP01-119',count:3},{id:'ST04-015',count:2},
+      {id:'ST04-017',count:4},
     ]
   }
 };
