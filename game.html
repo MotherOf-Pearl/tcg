@@ -469,7 +469,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* Zone splits into 3 horizontal rows: char area | leader row | cost area */
 .gb-zone-grid{
   display:flex;flex-direction:column;
-  width:100%;height:100%;gap:5px;
+  width:100%;height:100%;gap:8px;
 }
 
 /* ── CARD MAT MODULES ── */
@@ -479,13 +479,13 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   box-shadow:inset 0 1px 6px rgba(0,0,0,.25),0 2px 4px rgba(0,0,0,.15);
 }
 
-/* Row 1: Character Area — top, nearly full width */
+/* Row 1: Character Area — top, pushed right to clear life cards */
 .gb-char-bar{
   display:flex;align-items:center;gap:4px;
-  padding:5px 8px;overflow-x:auto;flex-shrink:0;
-  min-height:calc(var(--card-h) + 12px);
-  max-height:calc(var(--card-h) + 14px);
-  width:92%;align-self:center;
+  padding:4px 8px;overflow-x:auto;flex-shrink:0;
+  min-height:calc(var(--card-h) + 8px);
+  max-height:calc(var(--card-h) + 10px);
+  width:82%;align-self:flex-end;margin-right:4px;
   scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
@@ -521,13 +521,13 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   display:flex;flex-direction:column;gap:3px;align-items:center;flex-shrink:0;
 }
 
-/* Row 3: Cost Area + Trash — bottom row, cost centered, trash far right */
+/* Row 3: Cost Area + Trash — bottom row, cost centered and compact */
 .gb-bottom-row{
-  display:flex;align-items:center;gap:6px;padding:0 8px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;gap:6px;padding:0 8px;flex-shrink:0;
 }
 .gb-cost-bar{
-  display:flex;align-items:center;gap:4px;padding:5px 8px;flex:1;
-  overflow-x:auto;position:relative;
+  display:flex;align-items:center;gap:4px;padding:3px 8px;
+  overflow-x:auto;position:relative;max-width:70%;
   scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
