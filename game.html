@@ -970,7 +970,6 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <button class="gb-pbtn gb-pbtn-lg" onclick="act({type:'END_TURN'})">End Turn</button>
         <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
         <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnCounter" onclick="passCounter()">Pass Counter</button>
-        <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnSwitchSides" onclick="switchSides()">Switch Sides</button>
       </div>
       <span id="actionHint" class="gb-hint">Waiting…</span>
     </div>
@@ -1307,7 +1306,6 @@ function renderGame() {
     } else if (!game.counterWindow) {
       myId = game.activePlayer;
     }
-    document.getElementById('btnSwitchSides').style.display = 'inline-block';
   }
 
   document.getElementById('mulliganBtns').style.display = 'none';
