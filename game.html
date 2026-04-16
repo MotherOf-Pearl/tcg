@@ -1240,10 +1240,16 @@ function joinRoom() {
 // ─── MULLIGAN ───
 function renderMulligan() {
   if (!game) return;
-  // In solo mode, auto-switch to the side that hasn't mulliganed yet
+  // In solo mode, auto-keep for the opponent after player mulligans
   if (isSolo && game.mulliganDone[myId]) {
     const otherId = myId === soloIds[0] ? soloIds[1] : soloIds[0];
-    if (otherId && !game.mulliganDone[otherId]) myId = otherId;
+    if (otherId && !game.mulliganDone[otherId]) {
+      // Send keep for the other side automatically — no perspective flip
+      const idx = otherId === soloIds[0] ? 0 : 1;
+      const sws = soloWs[idx];
+      if (sws?.readyState === 1) sws.send(JSON.stringify({ type: 'ACTION', action: { type: 'MULLIGAN', doMulligan: false } }));
+      return; // Wait for next state update
+    }
   }
   const p = game.players[myId];
   const oppId = Object.keys(game.players).find(id => id !== myId);

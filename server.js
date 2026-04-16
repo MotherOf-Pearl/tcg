@@ -684,8 +684,8 @@ function handleAction(roomId, playerId, action) {
       if (game.phase !== 'MULLIGAN' || game.mulliganDone[playerId]) return;
       if (action.doMulligan) {
         game.mulliganDone[playerId] = true;
+        // Put hand cards at the bottom of the deck, draw 5 new from the top
         p.deck.push(...p.hand);
-        p.deck = shuffle(p.deck);
         p.hand = p.deck.splice(0, 5);
         log(game, `${playerId.slice(0,6)} mulligans.`);
       } else {
