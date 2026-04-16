@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPTCGSim - Deck Editor</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
+        }
+
+        /* Warm wood background */
+        body::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(ellipse at 25% 45%, rgba(220, 170, 100, 0.9) 0%, transparent 55%),
+                radial-gradient(ellipse at 75% 35%, rgba(215, 160, 90, 0.7) 0%, transparent 50%),
+                radial-gradient(ellipse at 55% 75%, rgba(195, 135, 65, 0.6) 0%, transparent 45%),
+                radial-gradient(ellipse at 85% 65%, rgba(210, 155, 85, 0.8) 0%, transparent 40%),
+                radial-gradient(ellipse at 15% 15%, rgba(200, 148, 75, 0.5) 0%, transparent 45%),
+                radial-gradient(ellipse at 50% 50%, rgba(190, 130, 55, 0.3) 0%, transparent 70%);
+            background-color: #a86a2e;
+            z-index: 0;
+        }
+
+        /* Wood grain texture */
+        body::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background:
+                repeating-linear-gradient(
+                    2deg,
+                    transparent 0px, transparent 6px,
+                    rgba(100, 55, 15, 0.06) 6px, rgba(100, 55, 15, 0.06) 7px
+                ),
+                repeating-linear-gradient(
+                    -0.5deg,
+                    transparent 0px, transparent 12px,
+                    rgba(140, 85, 30, 0.04) 12px, rgba(140, 85, 30, 0.04) 13px
+                ),
+                repeating-linear-gradient(
+                    1deg,
+                    transparent 0px, transparent 18px,
+                    rgba(90, 50, 10, 0.05) 18px, rgba(90, 50, 10, 0.05) 20px
+                );
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        .layout {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            grid-template-rows: 1fr;
+            gap: 10px;
+            padding: 12px;
+        }
+
+        /* ── Parchment shared styles ── */
+        .parch-btn {
+            background: linear-gradient(180deg, #f2e8cc 0%, #ebe0ba 40%, #e0d4a8 100%);
+            border: 1px solid #c4b48a;
+            color: #3c2e1e;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.35);
+            transition: filter 0.1s ease;
+            white-space: nowrap;
+        }
+        .parch-btn:hover { filter: brightness(1.04); }
+        .parch-btn:active { filter: brightness(0.96); box-shadow: 0 1px 2px rgba(0,0,0,0.15); }
+
+        .parch-input {
+            background: linear-gradient(180deg, #f5edda 0%, #ede3c8 100%);
+            border: 1px solid #c4b48a;
+            color: #3c2e1e;
+            font-family: inherit;
+            font-size: 12px;
+            padding: 4px 6px;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.12);
+        }
+        .parch-input:focus { outline: 2px solid #b89a5a; }
+
+        select.parch-input { cursor: pointer; }
+
+        /* ── Left sidebar ── */
+        .sidebar {
+            grid-row: 1 / 3;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .card-preview {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 6px 0;
+        }
+
+        .card-preview img {
+            width: 100%;
+            max-width: 300px;
+            height: auto;
+            border-radius: 6px;
+            border: 2px solid #a08050;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.35);
+        }
+
+        .card-preview .cp-name {
+            font-size: 17px;
+            font-weight: 700;
+            color: #2a1a08;
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        .card-preview .cp-stats {
+            font-size: 12px;
+            color: #4a3a20;
+            margin-top: 4px;
+            text-align: center;
+            line-height: 1.6;
+        }
+
+        .card-preview .cp-stats span {
+            display: inline-block;
+            background: rgba(0,0,0,0.07);
+            padding: 2px 7px;
+            border-radius: 3px;
+            margin: 2px 2px;
+        }
+
+        .card-preview .cp-ability {
+            font-size: 13px;
+            color: #3c2e1e;
+            line-height: 1.5;
+            margin-top: 8px;
+            padding: 8px 10px;
+            text-align: left;
+            background: rgba(255,245,220,0.55);
+            border: 1px solid rgba(196,180,138,0.5);
+            border-radius: 4px;
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .card-preview .cp-placeholder {
+            color: rgba(60,46,30,0.4);
+            font-size: 13px;
+            font-weight: 500;
+            margin-top: 40px;
+            text-align: center;
+        }
+
+        .sidebar .bottom-btns {
+            display: flex;
+            gap: 6px;
+            margin-top: auto;
+            padding-top: 6px;
+        }
+        .sidebar .bottom-btns .parch-btn {
+            flex: 1;
+            padding: 10px 6px;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* ── Panels (top-right deck, bottom-right browser) ── */
+        .panel {
+            background:
+                linear-gradient(180deg,
+                    rgba(180,120,50,0.25) 0%,
+                    rgba(160,100,35,0.18) 50%,
+                    rgba(140,80,20,0.28) 100%);
+            border: 2px solid rgba(100,55,15,0.35);
+            border-radius: 4px;
+            box-shadow: inset 0 2px 8px rgba(60,30,5,0.22);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ── Deck panel (top right) ── */
+        .deck-panel {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .deck-counter {
+            position: absolute;
+            top: 6px;
+            right: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            color: #f2e8cc;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.6);
+            z-index: 5;
+        }
+
+        .deck-grid {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 10px 12px;
+        }
+
+        /* Card stack in deck */
+        .deck-card-stack {
+            position: relative;
+            cursor: pointer;
+            margin-bottom: 6px;
+        }
+
+        .deck-card-img {
+            width: 110px;
+            display: block;
+            border-radius: 5px;
+            border: 2px solid #b8a47a;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            transition: filter 0.1s;
+        }
+
+        .deck-card-img.stacked {
+            margin-top: -85%;
+        }
+
+        .deck-card-stack:hover .deck-card-img {
+            filter: brightness(1.08);
+        }
+
+        .deck-card-label {
+            text-align: center;
+            font-size: 9px;
+            font-weight: 600;
+            color: #3c2e1e;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 110px;
+        }
+
+        .alt-btn {
+            display: block;
+            margin: 3px auto 0;
+            padding: 1px 8px;
+            font-size: 8px;
+            font-weight: 700;
+            color: #d4a020;
+            background: rgba(30,18,8,0.85);
+            border: 1px solid #a08040;
+            border-radius: 3px;
+            cursor: pointer;
+            letter-spacing: 1px;
+        }
+        .alt-btn:hover { background: rgba(60,40,15,0.9); }
+
+
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.08); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(140,100,50,0.4); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(140,100,50,0.6); }
+
+    </style>
+</head>
+<body>
+    <div class="layout">
+        <!-- LEFT SIDEBAR -->
+        <div class="sidebar">
+            <select class="parch-input" id="deckSelect" style="width:100%;"></select>
+
+            <div class="card-preview" id="cardPreview">
+                <div class="cp-placeholder">Hover a card to preview</div>
+            </div>
+
+            <div class="bottom-btns">
+                <button class="parch-btn" id="lobbyBtn">Back to Lobby</button>
+                <button class="parch-btn" id="clearBtn">Clear Deck</button>
+            </div>
+        </div>
+
+        <!-- DECK PANEL (top right) -->
+        <div class="panel deck-panel">
+            <div class="deck-counter"><span id="deckCount">0</span> / 51</div>
+            <div class="deck-grid" id="deckGrid"></div>
+        </div>
+
+    </div>
+
+
+    <script>
+    // ── Image URL helper ──
+    const IMG_BASE_LOCAL = 'file:///C:/Users/jackb/Downloads/OPTCG/Builds_Windows/OPTCGSim_Data/StreamingAssets/Cards';
+    const IMG_BASE_REMOTE = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main';
+    function cardImg(id, ext) {
+        const set = id.replace(/-\d+$/, '');
+        return `${IMG_BASE_LOCAL}/${set}/${id}.${ext || 'png'}`;
+    }
+    function cardImgRemote(id, ext) {
+        const set = id.replace(/-\d+$/, '');
+        return `${IMG_BASE_REMOTE}/${set}/${id}.${ext || 'png'}`;
+    }
+    function cardImgAlt(id, ext) {
+        const set = id.replace(/-\d+$/, '');
+        return `${IMG_BASE_LOCAL}/${set}/${id}_alt.${ext || 'png'}`;
+    }
+
+    // Track which cards are showing alt art
+    const altState = {};
+
+    // ── Card Database ──
+    const CARD_DB = [
+      // DOFLAMINGO (Purple)
+      { id:'OP14-060', name:'Donquixote Doflamingo', type:'LEADER', color:'Purple', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png',
+        ability:"[On Your Opponent's Attack] [Once Per Turn] DON!! -1: Select your Leader or 1 of your {Donquixote Pirates} type Characters. Change the attack target to the selected card." },
+      { id:'OP10-065', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'jpg',
+        ability:'[Activate: Main] You may rest 1 of your DON!! and this Character: Look at the top 5 cards of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand.' },
+      { id:'OP14-067', name:'Dellinger', type:'CHARACTER', color:'Purple', attribute:'Strike', power:2000, cost:1, counter:1000, imgExt:'png',
+        ability:'[On K.O.] Add up to 1 DON!! card from your DON!! deck and rest it.' },
+      { id:'ST18-001', name:'Usohachi', type:'CHARACTER', color:'Yellow', attribute:'Ranged', power:3000, cost:3, counter:2000, imgExt:'png',
+        ability:"[On Play] If you have 8 or more DON!! cards, rest up to 1 of your opponent's Characters with a cost of 5 or less." },
+      { id:'OP10-076', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:3, counter:2000, imgExt:'jpg',
+        ability:"[On Play] You may discard 1 card from your hand: add up to 1 DON!! from your DON!! deck and set it as active." },
+      { id:'OP14-072', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:4, counter:1000, imgExt:'png',
+        ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] DON!! -1: Add up to 1 card from the top of your deck to the top of your Life cards.' },
+      { id:'OP14-063', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:4, counter:1000, imgExt:'png',
+        ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active." },
+      { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike', power:7000, cost:5, counter:0, imgExt:'png',
+        ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead." },
+      { id:'OP10-072', name:'Donquixote Rosinante', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'jpg',
+        ability:'[On Play] You may trash 1 event card from your hand: Draw 2 cards.' },
+      { id:'OP14-074', name:'Monet', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png',
+        ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] Draw 2 cards and trash 1 card from your hand." },
+      { id:'OP14-068', name:'Trebol', type:'CHARACTER', color:'Purple', attribute:'Special', power:5000, cost:5, counter:2000, imgExt:'png',
+        ability:"[Opponent's Turn] [Once Per Turn] When a DON!! card is returned to your DON!! deck, add up to 1 DON!! card from your DON!! deck and rest it." },
+      { id:'OP10-071', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special', power:9000, cost:8, counter:0, imgExt:'jpg',
+        ability:"[On Play] DON!! -1: Play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand." },
+      { id:'OP11-067', name:'Charlotte Katakuri', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:8, counter:0, imgExt:'jpg',
+        ability:'[Blocker] [End of Your Turn] Set up to 2 of your {Big Mom Pirates} type Characters as active.' },
+      { id:'OP14-069', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special', power:10000, cost:10, counter:0, imgExt:'png',
+        ability:"[On Play] DON!! -3: K.O. up to 1 of your opponent's Characters with a cost of 8 or less." },
+      { id:'OP10-078', name:'I can never forgive anyone...', type:'EVENT', color:'Purple', power:0, cost:1, counter:0, imgExt:'jpg',
+        ability:"[Main] [Counter] Look at 3 cards from the top of your deck; reveal up to 1 {Donquixote Pirates} type card and add it to your hand." },
+      { id:'OP13-076', name:'Divine Departure', type:'EVENT', color:'Purple', power:0, cost:0, counter:0, imgExt:'png',
+        ability:"[Main] You may rest 5 of your DON!! cards: Give up to 1 of your opponent's Characters -8000 power during this turn." },
+      { id:'OP07-076', name:'NoroNoro Beam Sword', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png',
+        ability:"[Counter] DON!! -1: Give up to 1 of your Leader or Character cards +2000 power for this battle." },
+      { id:'OP14-078', name:'Bullet String', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png',
+        ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'OP10-079', name:'God Thread', type:'EVENT', color:'Purple', power:0, cost:5, counter:0, imgExt:'jpg',
+        ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 5 or less." },
+
+      // SHANKS (Red)
+      { id:'OP09-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'jpg',
+        ability:"[Once Per Turn] When your opponent attacks, give up to 1 of your opponent's leader or characters -1000 power." },
+      { id:'OP09-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'jpg',
+        ability:"[On Play] Look at the top 5 cards of your deck, reveal up to 1 {Red Hair Pirates} type card and add it to your hand." },
+      { id:'OP01-006', name:'Otama', type:'CHARACTER', color:'Red', attribute:'Special', power:0, cost:1, counter:2000, imgExt:'png',
+        ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'OP09-008', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash', power:2000, cost:1, counter:0, imgExt:'jpg',
+        ability:"[Activate: Main] Place this character on the bottom of its owner's deck: Give up to one of your opponent's characters -3000 power." },
+      { id:'OP09-011', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Strike', power:3000, cost:3, counter:2000, imgExt:'jpg',
+        ability:"[Activate: Main] Rest this character: Give up to 1 of your opponent's characters -2000 power." },
+      { id:'OP09-014', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Special', power:3000, cost:3, counter:2000, imgExt:'jpg',
+        ability:"[On Play] Up to one of your opponents characters with power 4000 or less cannot activate [Blocker]." },
+      { id:'OP12-008', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:4, counter:0, imgExt:'jpg',
+        ability:"[Blocker] [On Your Opponent's Attack] [Once Per Turn] Trash 1 card: Give opponent -2000 power." },
+      { id:'OP09-015', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged', power:5000, cost:4, counter:1000, imgExt:'jpg',
+        ability:"[Blocker] [On K.O.] K.O. up to 1 of your opponent's Characters with an original power of 6000 or less." },
+      { id:'OP10-011', name:'Tony Tony Chopper', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:4000, cost:4, counter:2000, imgExt:'jpg',
+        ability:"[Blocker] [Opponent's Turn] This character has +2000 power." },
+      { id:'PRB02-003', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:4, counter:1000, imgExt:'jpg',
+        ability:"[Blocker] [On Play] Trash 1 Character card with power 6000+: Draw 2 cards." },
+      { id:'OP03-013', name:'Marco', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png',
+        ability:"[Your Turn] [On Play] K.O. up to 1 of your opponent's Characters with 3000 Power or less." },
+      { id:'OP09-013', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:6000, cost:5, counter:1000, imgExt:'jpg',
+        ability:"[On Play] Leader gains +1000 power until end of opponent's next turn." },
+      { id:'ST15-005', name:'Portgas D. Ace', type:'CHARACTER', color:'Red', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png',
+        ability:"[Once Per Turn] If this character would be removed by opponent's effect, give -2000 power instead." },
+      { id:'ST23-001', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:4000, cost:6, counter:2000, imgExt:'jpg',
+        ability:"If you have a Character with 10000+ power, this card costs -4. [Blocker]" },
+      { id:'PRB02-002', name:'Trafalgar Law', type:'CHARACTER', color:'Red', attribute:'Slash', power:7000, cost:6, counter:1000, imgExt:'jpg',
+        ability:"[Once Per Turn] Can't be removed by opponent's effect (take -2000 instead). [When Attacking] Give opponent's character -2000." },
+      { id:'OP09-009', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged', power:7000, cost:7, counter:1000, imgExt:'jpg',
+        ability:"[On Play] K.O. up to 1 of your opponents Characters with power 6000 or less." },
+      { id:'ST15-002', name:'Edward Newgate', type:'CHARACTER', color:'Red', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png',
+        ability:"[On Play] Give your leader or one character up to one rested DON!!." },
+      { id:'OP08-118', name:'Silvers Rayleigh', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:8000, cost:8, counter:0, imgExt:'png',
+        ability:"[On Play] Choose up to two opponent's characters: give one -3000 and the other -2000 power." },
+      { id:'ST23-002', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:10000, cost:9, counter:0, imgExt:'jpg',
+        ability:"If opponent has 8000+ base power character, this costs -3. [On Play] Leader gains +2000 power." },
+      { id:'OP06-007', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:12000, cost:10, counter:0, imgExt:'png',
+        ability:"[On Play] K.O. up to 1 of your opponent's characters with 10000 power or less." },
+      { id:'OP09-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:12000, cost:10, counter:0, imgExt:'jpg',
+        ability:"All of your opponents characters have -1000 power. [Rush]" },
+      { id:'OP09-021', name:'Red Force', type:'STAGE', color:'Red', attribute:'', power:0, cost:2, counter:0, imgExt:'jpg',
+        ability:"[Activate: Main] Rest this stage: Give opponent's character -1000 power." },
+      { id:'OP04-016', name:'Bad Manners Kick Course', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png',
+        ability:"[Counter] Trash 1 card: Give +3000 Power this battle." },
+      { id:'OP10-018', name:'Kamakura Jussoushi', type:'EVENT', color:'Red', power:0, cost:2, counter:0, imgExt:'jpg',
+        ability:"[Counter] +3000 power this battle. Give opponent -2000 during this turn." },
+      { id:'OP10-019', name:'Divine Departure', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'jpg',
+        ability:"[Main] Rest 5 DON!!: K.O. opponent's character with 8000 Power or less." },
+      { id:'OP01-026', name:'Gum-Gum Red Hawk', type:'EVENT', color:'Red', power:0, cost:2, counter:0, imgExt:'png',
+        ability:"[Counter] +4000 power this battle. K.O. opponent's character with 4000 or less." },
+      { id:'OP09-020', name:"Come on!! We'll fight you!!", type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'jpg',
+        ability:"[Activate: Main] Look at top 5, reveal 1 {Red Hair Pirates} card." },
+      { id:'ST21-017', name:'Gum-Gum Mole Gun', type:'EVENT', color:'Red', power:0, cost:4, counter:0, imgExt:'jpg',
+        ability:"[Main] Give opponent's character -5000 power." },
+
+      // BLACKBEARD (Black/Multi)
+      { id:'OP09-081', name:'Marshall D. Teach', type:'LEADER', color:'Black', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'jpg',
+        ability:"Your [On Play] abilities don't activate. [Activate: Main] Trash 1 card: opponent's [On Play] don't activate." },
+      { id:'OP05-086', name:'Nefertari Vivi', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:1000, cost:1, counter:1000, imgExt:'png',
+        ability:"If your trash has 10+ cards, this character gains [Blocker]." },
+      { id:'OP09-095', name:'Laffitte', type:'CHARACTER', color:'Purple', attribute:'Strike', power:1000, cost:1, counter:1000, imgExt:'jpg',
+        ability:"[Activate: Main] Rest this and 1 DON!!: Look at top 5, reveal 1 {Blackbeard Pirates} card." },
+      { id:'OP11-083', name:'Caribou', type:'CHARACTER', color:'Black', attribute:'Special', power:2000, cost:1, counter:2000, imgExt:'jpg',
+        ability:"[Blocker] [On Play] Trash 2 cards from your hand." },
+      { id:'OP09-089', name:'Stronger', type:'CHARACTER', color:'Blue', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'jpg',
+        ability:"[Activate: Main] Trash 1 card and this character: Draw 1 card. Give opponent's character -2 cost." },
+      { id:'OP09-088', name:'Shiryuu', type:'CHARACTER', color:'Black', attribute:'Slash', power:4000, cost:3, counter:2000, imgExt:'jpg',
+        ability:"[DON!! x1] [When Attacking] Trash 2 cards: Draw 2 cards." },
+      { id:'OP09-086', name:'Jesus Burgess', type:'CHARACTER', color:'Purple', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'jpg',
+        ability:"Can't be K.O'd by opponent's effects. Gets +1000 power per 4 cards in trash." },
+      { id:'PRB02-015', name:'Shiryu', type:'CHARACTER', color:'Black', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'jpg',
+        ability:"Gains [Blocker] if leader is {Blackbeard Pirates}. [On K.O.] K.O. opponent's character cost 4 or less." },
+      { id:'OP10-082', name:'Kuzan', type:'CHARACTER', color:'Purple', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'jpg',
+        ability:"Can't be removed by opponent. [Activate: Main] Trash this: Draw 1 card. Play {Blackbeard Pirates} cost 5 or less from trash." },
+      { id:'OP09-084', name:'Catarina Devon', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'jpg',
+        ability:"[Activate: Main] [Once Per Turn] Gains [Double Attack]+[Banish] or [Blocker] until end of opponent's next turn." },
+      { id:'ST27-003', name:'Kuzan', type:'CHARACTER', color:'Blue', attribute:'Special', power:6000, cost:6, counter:1000, imgExt:'jpg',
+        ability:"[Blocker] [On K.O.] Play {Blackbeard Pirates} cost 5 or less from trash rested." },
+      { id:'OP09-093', name:'Marshall D. Teach', type:'CHARACTER', color:'Black', attribute:'Special', power:12000, cost:10, counter:0, imgExt:'jpg',
+        ability:"[Blocker] [Activate: Main] [Once Per Turn] Negate opponent's leader and character effects." },
+      { id:'OP09-096', name:"This is MY AGE!!!!", type:'EVENT', color:'Yellow', power:0, cost:1, counter:0, imgExt:'jpg',
+        ability:"[Main] Look at top 3, reveal 1 {Blackbeard Pirates} card." },
+      { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black', power:0, cost:3, counter:0, imgExt:'jpg',
+        ability:"[Counter] +4000 power this battle. Trash top 2 cards." },
+      { id:'OP09-098', name:'Black Hole', type:'EVENT', color:'Black', power:0, cost:5, counter:0, imgExt:'jpg',
+        ability:"[Main] Return opponent's character to bottom of deck." },
+      { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:'', power:0, cost:1, counter:0, imgExt:'jpg',
+        ability:"[Activate: Main] Trash 1 card and rest this: Look at top 3, reveal 1 {Blackbeard Pirates} card." },
+
+      // ── Starter Deck cards (ST01-ST07) ──
+      // ST01 - Straw Hat Crew (Red)
+      { id:'ST01-001', name:'Monkey D. Luffy', type:'LEADER', color:'Red', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] Give up to 1 of your Characters +1000 power during this turn." },
+      { id:'ST01-002', name:'Usopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST01-003', name:'Karoo', type:'CHARACTER', color:'Red', attribute:'Strike', power:1000, cost:1, counter:1000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST01-004', name:'Sanji', type:'CHARACTER', color:'Red', attribute:'Strike', power:2000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST01-005', name:'Jinbe', type:'CHARACTER', color:'Red', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST01-006', name:'Tony Tony Chopper', type:'CHARACTER', color:'Red', attribute:'Strike', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST01-007', name:'Nami', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck; reveal up to 1 {Straw Hat Crew} type card and add it to your hand." },
+      { id:'ST01-008', name:'Nico Robin', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST01-009', name:'Franky', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST01-010', name:'Brook', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST01-011', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"[Rush]" },
+      { id:'ST01-012', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:7000, cost:7, counter:0, imgExt:'png', ability:"[DON!! x2] This Character gains [Rush]." },
+      { id:'ST01-013', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:5000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST01-014', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] Your opponent cannot activate [Blocker] during this battle." },
+      { id:'ST01-015', name:'Jet Pistol', type:'EVENT', color:'Red', power:0, cost:4, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+      { id:'ST01-016', name:'Guard Point', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'ST01-017', name:'Thousand Sunny', type:'STAGE', color:'Red', attribute:'', power:0, cost:2, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your Characters +1000 power during this turn." },
+
+      // ST02 - Worst Generation (Green)
+      { id:'ST02-001', name:'Eustass "Captain" Kid', type:'LEADER', color:'Green', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[DON!! x1] [Activate: Main] [Once Per Turn] Set up to 1 of your rested DON!! cards as active." },
+      { id:'ST02-002', name:'Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST02-003', name:'Capone "Gang" Bege', type:'CHARACTER', color:'Green', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST02-004', name:'Capone "Gang" Bege', type:'CHARACTER', color:'Green', attribute:'Ranged', power:2000, cost:1, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST02-005', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST02-006', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] You may rest 1 of your DON!!: Set up to 1 of your Characters as active." },
+      { id:'ST02-007', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:3000, cost:1, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST02-008', name:'Scratchmen Apoo', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST02-009', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:3, counter:1000, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] Rest 1 DON!!: Set this Character as active." },
+      { id:'ST02-010', name:'Basil Hawkins', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST02-011', name:'Urouge', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST02-012', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Set up to 1 of your DON!! as active." },
+      { id:'ST02-013', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] Set up to 1 of your DON!! as active." },
+      { id:'ST02-014', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST02-015', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"[DON!! x2] This Character gains [Rush]." },
+      { id:'ST02-016', name:'Punk Gibson', type:'EVENT', color:'Green', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Rest up to 1 of your opponent's Characters with 5000 power or less." },
+      { id:'ST02-017', name:'Shambles', type:'EVENT', color:'Green', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+
+      // ST03 - Seven Warlords (Blue)
+      { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] Once per turn, you may rest 1 of your Characters: Draw 1 card." },
+      { id:'ST03-002', name:'Dracule Mihawk', type:'CHARACTER', color:'Blue', attribute:'Slash', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', power:6000, cost:5, counter:0, imgExt:'png', ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
+      { id:'ST03-004', name:'Jinbe', type:'CHARACTER', color:'Blue', attribute:'Strike', power:4000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST03-005', name:'Gecko Moria', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST03-006', name:'Boa Hancock', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:3, counter:1000, imgExt:'png', ability:"[On Play] Draw 1 card, then place 1 card from your hand on the top of your deck." },
+      { id:'ST03-007', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Blue', attribute:'Special', power:5000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST03-008', name:'Bartholomew Kuma', type:'CHARACTER', color:'Blue', attribute:'Wisdom', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST03-009', name:'Dracule Mihawk', type:'CHARACTER', color:'Blue', attribute:'Slash', power:7000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Return up to 1 Character with 3000 power or less to its owner's hand." },
+      { id:'ST03-010', name:'Mr. 1 (Daz Bones)', type:'CHARACTER', color:'Blue', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST03-011', name:'Marshall D. Teach', type:'CHARACTER', color:'Blue', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST03-012', name:'Buggy', type:'CHARACTER', color:'Blue', attribute:'Slash', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST03-013', name:'Perona', type:'CHARACTER', color:'Blue', attribute:'Special', power:1000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', power:4000, cost:4, counter:1000, imgExt:'png', ability:"[On Play] Return up to 1 Character with a cost of 3 or less to the owner's hand." },
+      { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
+      { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
+      { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand." },
+
+      // ST04 - Animal Kingdom (Purple)
+      { id:'ST04-001', name:'Kaido', type:'LEADER', color:'Purple', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] You may trash 1 of your Characters: Add up to 1 DON!! card from your DON!! deck and rest it." },
+      { id:'ST04-002', name:'Ulti', type:'CHARACTER', color:'Purple', attribute:'Strike', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-003', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
+      { id:'ST04-004', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
+      { id:'ST04-005', name:'Queen', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-006', name:'Sasaki', type:'CHARACTER', color:'Purple', attribute:'Strike', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST04-007', name:'Sheepshead', type:'CHARACTER', color:'Purple', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-008', name:'Jack', type:'CHARACTER', color:'Purple', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-009', name:'Ginrummy', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-010', name:"Who's Who", type:'CHARACTER', color:'Purple', attribute:'Strike', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST04-011', name:'Black Maria', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST04-012', name:'Page One', type:'CHARACTER', color:'Purple', attribute:'Strike', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-013', name:'Speed', type:'CHARACTER', color:'Purple', attribute:'Ranged', power:3000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST04-014', name:'Babanuki', type:'CHARACTER', color:'Purple', attribute:'Ranged', power:5000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-015', name:'Brachio Bomber', type:'EVENT', color:'Purple', power:0, cost:4, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+      { id:'ST04-016', name:'Blast Breath', type:'EVENT', color:'Purple', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'ST04-017', name:'Onigashima', type:'STAGE', color:'Purple', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: If you have 8 or more DON!! cards on your field, give up to 1 of your Characters +1000 power during this turn." },
+
+      // ST05 - Film Red (Red)
+      { id:'ST05-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] Rest 1 DON!!: Give up to 1 of your Characters +1000 power during this turn." },
+      { id:'ST05-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST05-003', name:'Gordon', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST05-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST05-005', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:3000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST05-006', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Strike', power:3000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST05-007', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST05-008', name:'Rockstar', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST05-009', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST05-010', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Ranged', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST05-011', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[Rush]" },
+      { id:'ST05-012', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST05-013', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:7000, cost:5, counter:0, imgExt:'png', ability:"[Rush]" },
+      { id:'ST05-014', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:7000, cost:7, counter:0, imgExt:'png', ability:"[On Play] K.O. up to 1 of your opponent's Characters with 3000 power or less." },
+      { id:'ST05-015', name:'Uta Uta no Mi', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +3000 power during this battle." },
+      { id:'ST05-016', name:'New Genesis', type:'EVENT', color:'Red', power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Draw 2 cards." },
+      { id:'ST05-017', name:'Red Force', type:'STAGE', color:'Red', attribute:'', power:0, cost:2, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your Characters +1000 power during this turn." },
+
+      // ST06 - Navy (Black)
+      { id:'ST06-001', name:'Sakazuki', type:'LEADER', color:'Black', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] You may trash 1 card from your hand: Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'ST06-002', name:'Hina', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST06-003', name:'Tashigi', type:'CHARACTER', color:'Black', attribute:'Slash', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST06-004', name:'Smoker', type:'CHARACTER', color:'Black', attribute:'Special', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST06-005', name:'Sentomaru', type:'CHARACTER', color:'Black', attribute:'Strike', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST06-006', name:'Helmeppo', type:'CHARACTER', color:'Black', attribute:'Slash', power:2000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'ST06-007', name:'Borsalino', type:'CHARACTER', color:'Black', attribute:'Special', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST06-008', name:'Koby', type:'CHARACTER', color:'Black', attribute:'Strike', power:3000, cost:3, counter:1000, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -3000 power during this turn." },
+      { id:'ST06-009', name:'Monkey D. Garp', type:'CHARACTER', color:'Black', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST06-010', name:'Sakazuki', type:'CHARACTER', color:'Black', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -3000 power during this turn." },
+      { id:'ST06-011', name:'Sengoku', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST06-012', name:'Tsuru', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST06-013', name:'Kuzan', type:'CHARACTER', color:'Black', attribute:'Special', power:6000, cost:6, counter:0, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -5000 power during this turn." },
+      { id:'ST06-014', name:'Sakazuki', type:'CHARACTER', color:'Black', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -3000 power during this turn." },
+      { id:'ST06-015', name:'Great Eruption', type:'EVENT', color:'Black', power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Give up to 1 of your opponent's Characters -5000 power during this turn." },
+      { id:'ST06-016', name:'Ice Age', type:'EVENT', color:'Black', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'ST06-017', name:'Navy HQ', type:'STAGE', color:'Black', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your opponent's Characters -1000 power during this turn." },
+
+      // ST07 - Big Mom (Yellow)
+      { id:'ST07-001', name:'Charlotte Linlin', type:'LEADER', color:'Yellow', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] You may add 1 card from the top of your Life cards to your hand: Play up to 1 Character with a cost of 4 or less from your hand." },
+      { id:'ST07-002', name:'Charlotte Katakuri', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST07-003', name:'Charlotte Cracker', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST07-004', name:'Charlotte Smoothie', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST07-005', name:'Charlotte Daifuku', type:'CHARACTER', color:'Yellow', attribute:'Special', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST07-006', name:'Charlotte Pudding', type:'CHARACTER', color:'Yellow', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck; reveal up to 1 {Big Mom Pirates} type card and add it to your hand." },
+      { id:'ST07-007', name:'Charlotte Perospero', type:'CHARACTER', color:'Yellow', attribute:'Special', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST07-008', name:'Zeus', type:'CHARACTER', color:'Yellow', attribute:'Special', power:2000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST07-009', name:'Prometheus', type:'CHARACTER', color:'Yellow', attribute:'Special', power:1000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST07-010', name:'Charlotte Oven', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST07-011', name:'Charlotte Katakuri', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST07-012', name:'Charlotte Linlin', type:'CHARACTER', color:'Yellow', attribute:'Special', power:7000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] You may add 1 card from the top of your Life cards to your hand: This Character gains +1000 power during this turn." },
+      { id:'ST07-013', name:'Charlotte Linlin', type:'CHARACTER', color:'Yellow', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] You may trash 1 of your Characters: Play up to 1 {Big Mom Pirates} type Character with a cost of 4 or less from your deck and place the rest at the bottom of your deck." },
+      { id:'ST07-014', name:'Napoleon', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Set up to 1 of your opponent's Characters with a cost of 4 or less face down at the bottom of the owner's Life area." },
+      { id:'ST07-015', name:'Heavenly Fire', type:'EVENT', color:'Yellow', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'ST07-016', name:'Thunder Bolt', type:'EVENT', color:'Yellow', power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Set up to 1 of your opponent's Characters with a cost of 3 or less face down at the bottom of the owner's Life area." },
+      { id:'ST07-017', name:'Whole Cake Island', type:'STAGE', color:'Yellow', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: If you have 2 or less Life cards, give up to 1 of your Characters +2000 power during this turn." },
+
+      // Additional OP cards referenced in decks
+      { id:'OP01-001', name:'Roronoa Zoro', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] Give this Leader +1000 power during this battle." },
+      { id:'OP01-004', name:'Usopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'OP01-013', name:'Sanji', type:'CHARACTER', color:'Red', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-014', name:'Jinbe', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-016', name:'Nami', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck; reveal up to 1 card with a cost of 1 and add it to your hand." },
+      { id:'OP01-017', name:'Nico Robin', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:1000, imgExt:'png', ability:"[On Play] Draw 2 cards and trash 1 card from your hand." },
+      { id:'OP01-021', name:'Franky', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-022', name:'Brook', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'OP01-024', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:"[Rush]" },
+      { id:'OP01-025', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] The opponent cannot activate [Blocker]." },
+      { id:'OP01-029', name:'In 2 years!!! To Sabaody', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Main] Draw 2 cards and trash 1 card from your hand." },
+      { id:'OP01-030', name:'In 2 years!!! To Sabaody', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Main] If your Leader is {Straw Hat Crew}, draw 2 cards and trash 1." },
+      { id:'OP01-033', name:'Izou', type:'CHARACTER', color:'Red', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck." },
+      { id:'OP01-039', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-047', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Play up to 1 Character with a cost of 3 or less from your hand." },
+      { id:'OP01-051', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"[Rush]" },
+      { id:'OP01-054', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] You may rest 2 of your DON!!: Play up to 1 green Character with a cost of 3 or less from your hand." },
+      { id:'OP01-057', name:'Paradise Waterfall', type:'EVENT', color:'Green', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'OP01-058', name:'Punk Gibson', type:'EVENT', color:'Green', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Rest up to 1 of your opponent's Characters with 6000 power or less." },
+      { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', power:7000, cost:7, counter:1000, imgExt:'png', hasAlt:true, ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
+      { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', power:1000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order." },
+      { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special', power:1000, cost:3, counter:1000, imgExt:'png', ability:"[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand." },
+      { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash." },
+      { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special', power:4000, cost:3, counter:2000, imgExt:'png', ability:"[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+      { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] If your Leader has the {Duchess of Brittany} type, select up to 1 of your opponent's Characters with a cost of 4 or less. The selected Character cannot attack until the end of your opponent's next turn." },
+      { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
+      { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+      { id:'OP01-094', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:12000, cost:10, counter:0, imgExt:'png', ability:"[Rush] [On Play] K.O. up to 1 of your opponent's Characters." },
+      { id:'OP01-096', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike', power:7000, cost:6, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] K.O. up to 1 of your opponent's Characters with 2000 power or less." },
+      { id:'OP01-100', name:'Kurozumi Higurashi', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'png', ability:"[On Play] Add up to 1 DON!! from your DON!! deck and rest it." },
+      { id:'OP01-101', name:'Sasaki', type:'CHARACTER', color:'Purple', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-117', name:"Sheep's Horn", type:'EVENT', color:'Purple', power:0, cost:4, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+      { id:'OP01-119', name:'Thunder Bagua', type:'EVENT', color:'Purple', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+
+      // Additional cards from other decks
+      { id:'EB01-003', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'EB01-014', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP02-034', name:'Izou', type:'CHARACTER', color:'Green', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP02-036', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP02-040', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP02-041', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP03-031', name:'Boa Hancock', type:'CHARACTER', color:'Green', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP03-033', name:'Nico Robin', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP04-021', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Green', attribute:'Special', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'ST11-001', name:'Uta', type:'LEADER', color:'Green', attribute:'Special', power:5000, life:4, cost:0, counter:0, imgExt:'png', ability:"" },
+      { id:'ST11-002', name:'Shanks', type:'CHARACTER', color:'Green', attribute:'Slash', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST11-003', name:'Gordon', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST11-004', name:'Uta', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST16-001', name:'Nami', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST16-003', name:'Luffy', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST16-004', name:'Robin', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:4000, cost:3, counter:2000, imgExt:'png', ability:"" },
+      { id:'ST16-005', name:'Zoro', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP09-005', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:3000, cost:2, counter:2000, imgExt:'jpg', ability:"" },
+
+      // Yamato deck cards
+      { id:'OP06-022', name:'Yamato', type:'LEADER', color:'Green', attribute:'Strike', power:5000, life:4, cost:0, counter:0, imgExt:'png', ability:"" },
+      { id:'OP06-035', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP04-104', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:9000, cost:8, counter:0, imgExt:'png', ability:"" },
+      { id:'OP05-099', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP05-100', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:7000, cost:6, counter:0, imgExt:'png', ability:"" },
+      { id:'OP05-105', name:'Thunder Bagua', type:'EVENT', color:'Green', power:0, cost:1, counter:0, imgExt:'png', ability:"" },
+      { id:'OP06-101', name:'Ace', type:'CHARACTER', color:'Red', attribute:'Special', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP06-104', name:'Sabo', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP08-111', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP09-107', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"" },
+      { id:'OP07-036', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+      { id:'OP08-036', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP03-120', name:'Thunder Bagua', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png', ability:"" },
+      { id:'OP06-115', name:'Namuji Ice Breaker', type:'EVENT', color:'Green', power:0, cost:2, counter:0, imgExt:'png', ability:"" },
+      { id:'OP08-039', name:'Shambles', type:'EVENT', color:'Green', power:0, cost:3, counter:0, imgExt:'png', ability:"" },
+    ];
+
+    // Build lookup
+    const cardMap = {};
+    CARD_DB.forEach(c => { cardMap[c.id] = c; });
+
+    // ── Saved Decks (localStorage + pre-loaded) ──
+    const PRELOADED_DECKS = {
+      'ST01 - Strawhat': '1xST01-001\n4xST01-002\n4xST01-003\n4xST01-004\n4xST01-005\n4xST01-006\n4xST01-007\n4xST01-008\n4xST01-009\n4xST01-010\n2xST01-011\n2xST01-012\n2xST01-013\n2xST01-014\n2xST01-015\n2xST01-016\n2xST01-017',
+      'ST02 - Worst Generation': '1xST02-001\n4xST02-002\n2xST02-003\n4xST02-004\n2xST02-005\n4xST02-006\n4xST02-007\n4xST02-008\n2xST02-009\n2xST02-010\n4xST02-011\n4xST02-012\n2xST02-013\n4xST02-014\n2xST02-015\n4xST02-016\n2xST02-017',
+      'ST03 - Seven Warlords': '1xST03-001\n4xST03-002\n2xST03-003\n2xST03-004\n2xST03-005\n4xST03-006\n2xST03-007\n4xST03-008\n2xST03-009\n4xST03-010\n4xST03-011\n4xST03-012\n4xST03-013\n2xST03-014\n4xST03-015\n4xST03-016\n2xST03-017',
+      'ST04 - Animal Kingdom': '1xST04-001\n4xST04-002\n2xST04-003\n2xST04-004\n2xST04-005\n4xST04-006\n4xST04-007\n2xST04-008\n4xST04-009\n2xST04-010\n4xST04-011\n4xST04-012\n4xST04-013\n2xST04-014\n2xST04-015\n4xST04-016\n4xST04-017',
+      'Anna of Brittany': '1xST03-001\n4xOP01-079\n4xOP01-077\n4xOP01-083\n4xOP01-085\n3xST03-014\n4xOP01-084\n4xST03-003\n3xOP01-067\n4xST03-015\n4xST03-016\n4xST03-017\n4xOP01-087\n4xOP01-090',
+      'Crocodile Duchess of Brittany': '1xST03-001\n4xOP01-079\n4xOP01-077\n4xOP01-083\n4xOP01-085\n3xST03-014\n4xOP01-084\n4xST03-003\n3xOP01-067\n4xST03-015\n4xST03-016\n4xST03-017\n4xOP01-087\n4xOP01-090',
+      'Kaido Ramp': '1xST04-001\n4xOP01-100\n4xST04-010\n4xOP01-101\n4xST04-008\n4xST04-002\n4xST04-012\n4xST04-005\n2xST04-004\n2xOP01-096\n2xST04-003\n2xOP01-094\n4xST04-016\n1xOP01-117\n3xOP01-119\n2xST04-015\n4xST04-017',
+      'Kid Supernovas': '1xST02-001\n4xST02-004\n4xST02-007\n4xOP01-039\n4xOP01-033\n4xST02-005\n4xST02-008\n4xST02-014\n4xOP01-047\n4xOP01-054\n4xST02-009\n4xOP01-051\n2xOP01-057\n4xOP01-058',
+    };
+
+    function getAllDecks() {
+      const stored = JSON.parse(localStorage.getItem('optcg_decks') || '{}');
+      return { ...PRELOADED_DECKS, ...stored };
+    }
+
+    // ── Current deck state ──
+    // deck = [ { id, count } ]
+    let currentDeck = [];
+
+    function deckTotal() { return currentDeck.reduce((s, e) => s + e.count, 0); }
+
+    function addCardToDeck(id) {
+      const existing = currentDeck.find(e => e.id === id);
+      const count = existing ? existing.count : 0;
+      const card = cardMap[id];
+      const max = card && card.type === 'LEADER' ? 1 : 4;
+      if (count >= max) return;
+      if (existing) existing.count++;
+      else currentDeck.push({ id, count: 1 });
+      renderDeck();
+
+    }
+
+    function removeCardFromDeck(id) {
+      const idx = currentDeck.findIndex(e => e.id === id);
+      if (idx === -1) return;
+      currentDeck[idx].count--;
+      if (currentDeck[idx].count <= 0) currentDeck.splice(idx, 1);
+      renderDeck();
+
+    }
+
+    function clearDeck() {
+      currentDeck = [];
+      renderDeck();
+
+    }
+
+    // ── Parse deck string ──
+    function parseDeckString(str) {
+      const lines = str.trim().split('\n');
+      const result = [];
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith('//')) continue;
+        // Format: 4xST01-002 or 4 ST01-002 Name
+        let m = trimmed.match(/^(\d+)x([A-Z0-9]+-\d+)/i);
+        if (m) { result.push({ id: m[2], count: parseInt(m[1]) }); continue; }
+        m = trimmed.match(/^(\d+)\s+([A-Z0-9]+-\d+)/i);
+        if (m) { result.push({ id: m[2], count: parseInt(m[1]) }); continue; }
+      }
+      return result;
+    }
+
+
+    // ── Populate deck select ──
+    function populateDeckSelect() {
+      const sel = document.getElementById('deckSelect');
+      sel.innerHTML = '';
+      const placeholder = document.createElement('option');
+      placeholder.value = '';
+      placeholder.textContent = 'Select your deck';
+      placeholder.disabled = true;
+      placeholder.selected = true;
+      sel.appendChild(placeholder);
+      const decks = getAllDecks();
+      for (const name of Object.keys(decks).sort()) {
+        const opt = document.createElement('option');
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      }
+    }
+
+    // ── Render deck panel ──
+    function renderDeck() {
+      const grid = document.getElementById('deckGrid');
+      grid.innerHTML = '';
+      document.getElementById('deckCount').textContent = deckTotal();
+
+      // Sort deck: leaders first, then by cost, then by id
+      const sorted = [...currentDeck].sort((a, b) => {
+        const ca = cardMap[a.id], cb = cardMap[b.id];
+        const typeOrder = t => t === 'LEADER' ? 0 : t === 'CHARACTER' ? 1 : t === 'EVENT' ? 2 : 3;
+        const ta = ca ? typeOrder(ca.type) : 9, tb = cb ? typeOrder(cb.type) : 9;
+        if (ta !== tb) return ta - tb;
+        const costA = ca ? ca.cost : 0, costB = cb ? cb.cost : 0;
+        if (costA !== costB) return costA - costB;
+        return a.id.localeCompare(b.id);
+      });
+
+      for (const entry of sorted) {
+        const card = cardMap[entry.id];
+        const stack = document.createElement('div');
+        stack.className = 'deck-card-stack';
+
+        for (let i = 0; i < entry.count; i++) {
+          const img = document.createElement('img');
+          img.className = 'deck-card-img' + (i > 0 ? ' stacked' : '');
+          const imgExt = card ? card.imgExt : 'png';
+          img.src = altState[entry.id] ? cardImgAlt(entry.id, imgExt) : cardImg(entry.id, imgExt);
+          img.alt = card ? card.name : entry.id;
+          img.loading = 'lazy';
+          img.draggable = false;
+          img.onerror = function() {
+            if (!this.dataset.triedRemote) {
+              this.dataset.triedRemote = '1';
+              this.src = cardImgRemote(entry.id, imgExt);
+            } else {
+              this.style.background = 'linear-gradient(180deg, #f2e8cc 0%, #e0d4a8 100%)';
+              this.style.minHeight = '150px';
+            }
+          };
+          stack.appendChild(img);
+        }
+        const label = document.createElement('div');
+        label.className = 'deck-card-label';
+        label.textContent = (card ? card.name : entry.id) + ' x' + entry.count;
+        stack.appendChild(label);
+
+        // ALT button for cards with alt art
+        if (card && card.hasAlt) {
+          const altBtn = document.createElement('button');
+          altBtn.className = 'alt-btn';
+          altBtn.textContent = altState[entry.id] ? 'STD' : 'ALT';
+          altBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            altState[entry.id] = !altState[entry.id];
+            renderDeck();
+          });
+          stack.appendChild(altBtn);
+        }
+
+        // Right-click to remove
+        stack.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          removeCardFromDeck(entry.id);
+        });
+
+        // Hover preview
+        stack.addEventListener('mouseenter', () => showPreview(entry.id));
+        stack.addEventListener('mouseleave', hidePreview);
+
+        grid.appendChild(stack);
+      }
+    }
+
+    // ── Card Preview (sidebar) ──
+    const preview = document.getElementById('cardPreview');
+    function showPreview(id) {
+      const card = cardMap[id];
+      if (!card) return;
+      let stats = '';
+      stats += `<span>${card.id}</span>`;
+      stats += `<span>${card.type}</span>`;
+      stats += `<span>${card.color}</span>`;
+      if (card.cost > 0) stats += `<span>Cost: ${card.cost}</span>`;
+      if (card.power > 0) stats += `<span>Power: ${card.power}</span>`;
+      if (card.counter > 0) stats += `<span>Counter: ${card.counter}</span>`;
+      if (card.life) stats += `<span>Life: ${card.life}</span>`;
+      const imgSrc = altState[card.id] ? cardImgAlt(card.id, card.imgExt) : cardImg(card.id, card.imgExt);
+      const remoteSrc = cardImgRemote(card.id, card.imgExt);
+      preview.innerHTML =
+        `<img src="${imgSrc}" alt="${card.name}" onerror="if(!this.dataset.triedRemote){this.dataset.triedRemote='1';this.src='${remoteSrc}';}else{this.style.display='none';}">` +
+        `<div class="cp-name">${card.name}</div>` +
+        `<div class="cp-stats">${stats}</div>` +
+        `<div class="cp-ability">${card.ability || ''}</div>`;
+    }
+    function hidePreview() {
+      preview.innerHTML = '<div class="cp-placeholder">Hover a card to preview</div>';
+    }
+
+    // ── Wire up controls ──
+    document.getElementById('deckSelect').addEventListener('change', () => {
+      const name = document.getElementById('deckSelect').value;
+      if (!name) return;
+      const decks = getAllDecks();
+      const data = decks[name];
+      if (!data) return;
+      currentDeck = parseDeckString(data);
+      renderDeck();
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      if (currentDeck.length > 0 && !confirm('Clear the current deck?')) return;
+      clearDeck();
+    });
+
+    document.getElementById('lobbyBtn').addEventListener('click', () => {
+      window.location.href = 'index.html';
+    });
+
+    // Init
+    populateDeckSelect();
+    renderDeck();
+    </script>
+</body>
+</html>
