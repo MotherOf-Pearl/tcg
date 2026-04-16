@@ -37,8 +37,8 @@
   --card-back:  #091528;
   --card-bb:    #b09010;
 
-  --card-w: 70px;
-  --card-h: 98px;
+  --card-w: 98px;
+  --card-h: 137px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow-x:hidden;}
@@ -431,9 +431,9 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gb-opp-hand .card-back,.gb-self-hand .card-back{margin-right:-14px;}
 .gb-opp-hand .card-back:last-child,.gb-self-hand .card-back:last-child{margin-right:0;}
 /* Larger hand cards */
-.gb-opp-hand .gcard,.gb-self-hand .gcard{width:82px;height:115px;}
+.gb-opp-hand .gcard,.gb-self-hand .gcard{width:105px;height:147px;}
 .gb-opp-hand .gcard img,.gb-self-hand .gcard img{height:62%;}
-.gb-opp-hand .card-back,.gb-self-hand .card-back{width:82px;height:115px;}
+.gb-opp-hand .card-back,.gb-self-hand .card-back{width:105px;height:147px;}
 
 /* ═══ CENTER — BOARD ═══ */
 .gb-board{
@@ -590,7 +590,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
 .life-stack{display:flex;flex-direction:column;align-items:center;}
 .life-pip{
-  width:70px;height:98px;border-radius:4px;margin-bottom:-82px;
+  width:var(--card-w);height:var(--card-h);border-radius:4px;margin-bottom:-115px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
   font-family:'Cinzel',serif;font-size:.28rem;color:var(--card-bb);
@@ -691,7 +691,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .counter-banner b{color:var(--red);}
 
 @media(max-width:900px){
-  :root{--card-w:52px;--card-h:74px;}
+  :root{--card-w:70px;--card-h:98px;}
   #game.active{grid-template-columns:200px 1fr 160px;}
   .gb-opp-hand .gcard,.gb-self-hand .gcard{width:60px;height:84px;}
   .gb-opp-hand .card-back,.gb-self-hand .card-back{width:60px;height:84px;}
@@ -963,7 +963,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   <!-- ═══ RIGHT 1/3 — LOG + BUTTONS ═══ -->
   <div class="gb-right-col">
     <div class="gb-right-top">
-      <button class="gb-pbtn" onclick="location.href='index.html'">Back to Main</button>
+      <button class="gb-pbtn" onclick="window.location.href='/index.html'">Back to Main</button>
     </div>
     <div class="gb-info">
       <div class="gb-info-phase" id="phasePill">DON</div>
@@ -1280,6 +1280,10 @@ function renderMulligan() {
   renderOppHand('oppHand', opp.hand.length);
   if (p.leader) renderLeader('selfLeader', p.leader, false);
   if (opp.leader) renderLeader('oppLeader', opp.leader, false);
+
+  // Render life cards during mulligan
+  renderLife('selfLifeStack', null, p.leader.life, p.life.length);
+  renderLife('oppLife', 'oppLifeCount', opp.leader.life, opp.life.length);
 
   const done = game.mulliganDone[myId];
   document.getElementById('mulliganBtns').style.display = done ? 'none' : 'flex';
