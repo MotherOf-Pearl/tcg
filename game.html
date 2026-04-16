@@ -392,29 +392,48 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     repeating-linear-gradient(91deg,rgba(170,85,15,.14) 0px,rgba(140,65,10,.10) 18px,rgba(185,100,25,.14) 36px,rgba(155,75,12,.10) 54px,rgba(170,85,15,.14) 72px),
     radial-gradient(ellipse at center,rgba(190,105,30,.15) 0%,rgba(60,20,2,.50) 100%);
 }
-#game.active{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr;}
+#game.active{display:grid;grid-template-columns:280px 1fr 200px;grid-template-rows:1fr;}
 
-/* ═══ LEFT 1/3 — HANDS ═══ */
+/* ═══ LEFT PANEL — HANDS + PREVIEW ═══ */
 .gb-left{display:flex;flex-direction:column;overflow:hidden;}
-/* Opponent hand — top half */
+/* Opponent hand — top */
 .gb-opp-hand{
-  flex:1;display:flex;flex-wrap:wrap;align-content:flex-start;
-  gap:4px;padding:8px;overflow-y:auto;
+  display:flex;flex-wrap:wrap;align-content:flex-start;
+  gap:4px;padding:6px;overflow-y:auto;min-height:100px;
   scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
-/* Player hand — bottom half */
+/* Card preview — center */
+.gb-card-preview{
+  display:flex;align-items:center;justify-content:center;
+  padding:6px;flex-shrink:0;min-height:0;
+  pointer-events:none;
+}
+.gb-card-preview img{
+  max-width:100%;max-height:100%;border-radius:6px;
+  box-shadow:0 4px 20px rgba(0,0,0,.6);
+  object-fit:contain;
+}
+.gb-card-preview.has-card{flex:1;}
+.gb-card-preview:not(.has-card){display:none;}
+/* Player hand — bottom */
 .gb-self-hand{
-  flex:1;display:flex;flex-wrap:wrap;align-content:flex-end;
-  gap:4px;padding:8px;overflow-y:auto;
+  display:flex;flex-wrap:wrap;align-content:flex-end;
+  gap:4px;padding:6px;overflow-y:auto;min-height:100px;
   border-top:1px solid rgba(212,160,32,.12);
   scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
-/* Overlapping hand cards with negative margin */
-.gb-opp-hand .gcard,.gb-self-hand .gcard{margin-right:-18px;position:relative;}
+/* When no preview showing, hands split 50/50 */
+.gb-opp-hand,.gb-self-hand{flex:1;}
+/* Overlapping hand cards */
+.gb-opp-hand .gcard,.gb-self-hand .gcard{margin-right:-14px;position:relative;}
 .gb-opp-hand .gcard:last-child,.gb-self-hand .gcard:last-child{margin-right:0;}
-.gb-opp-hand .gcard:hover,.gb-self-hand .gcard:hover{z-index:20;margin-right:0;}
-.gb-opp-hand .card-back,.gb-self-hand .card-back{margin-right:-18px;}
+.gb-opp-hand .gcard:hover,.gb-self-hand .gcard:hover{z-index:20;margin-right:4px;}
+.gb-opp-hand .card-back,.gb-self-hand .card-back{margin-right:-14px;}
 .gb-opp-hand .card-back:last-child,.gb-self-hand .card-back:last-child{margin-right:0;}
+/* Larger hand cards */
+.gb-opp-hand .gcard,.gb-self-hand .gcard{width:82px;height:115px;}
+.gb-opp-hand .gcard img,.gb-self-hand .gcard img{height:62%;}
+.gb-opp-hand .card-back,.gb-self-hand .card-back{width:82px;height:115px;}
 
 /* ═══ CENTER 1/3 — BOARD ═══ */
 .gb-board{display:flex;flex-direction:column;overflow:hidden;}
@@ -605,8 +624,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
 @media(max-width:900px){
   :root{--card-w:52px;--card-h:74px;}
+  #game.active{grid-template-columns:200px 1fr 160px;}
+  .gb-opp-hand .gcard,.gb-self-hand .gcard{width:60px;height:84px;}
+  .gb-opp-hand .card-back,.gb-self-hand .card-back{width:60px;height:84px;}
   .gb-area-label,.gb-cost-label{font-size:1rem;letter-spacing:4px;}
   .gb-pbtn-lg{font-size:1rem;padding:10px 14px;}
+  .gb-card-preview img{max-height:160px;}
   .editor-layout{grid-template-columns:1fr;}
   .deck-panel{display:none;}
   .menu-row{flex-wrap:wrap;justify-content:center;}
@@ -805,6 +828,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   <div class="gb-left">
     <div class="gb-opp-hand" id="oppHand"></div>
     <span id="oppHandCount" style="display:none;">0</span>
+    <div class="gb-card-preview" id="cardPreview"></div>
     <div class="gb-self-hand" id="selfHand"></div>
   </div>
 
@@ -1530,8 +1554,18 @@ function showTooltip(card, e) {
   t.style.left = Math.min(r.right + 8, window.innerWidth - 200) + 'px';
   t.style.top  = Math.max(r.top - 20, 8) + 'px';
   t.classList.add('show');
+  // Show large card preview in left panel
+  const preview = document.getElementById('cardPreview');
+  if (preview && card.image) {
+    preview.innerHTML = `<img src="${card.image}" alt="${card.name}">`;
+    preview.classList.add('has-card');
+  }
 }
-function hideTooltip() { document.getElementById('tooltip').classList.remove('show'); }
+function hideTooltip() {
+  document.getElementById('tooltip').classList.remove('show');
+  const preview = document.getElementById('cardPreview');
+  if (preview) { preview.innerHTML = ''; preview.classList.remove('has-card'); }
+}
 
 // ─── DECK EDITOR ───
 let filterMode = 'ALL';
