@@ -396,10 +396,11 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
 /* ═══ LEFT PANEL — HANDS + PREVIEW ═══ */
 .gb-left{display:flex;flex-direction:column;overflow:hidden;}
-/* Opponent hand — top */
+/* Opponent hand — top, single row */
 .gb-opp-hand{
-  display:flex;flex-wrap:wrap;align-content:flex-start;
-  gap:4px;padding:6px;overflow-y:auto;min-height:160px;
+  display:flex;flex-wrap:nowrap;align-items:flex-end;
+  padding:6px;min-height:160px;
+  overflow-x:auto;overflow-y:hidden;white-space:nowrap;
   scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
 /* Card preview — center */
@@ -415,25 +416,21 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 }
 .gb-card-preview.has-card{flex:2;}
 .gb-card-preview:not(.has-card){display:none;}
-/* Player hand — bottom */
+/* Player hand — bottom, single row */
 .gb-self-hand{
-  display:flex;flex-wrap:wrap;align-content:flex-end;
-  gap:4px;padding:6px;overflow-y:auto;min-height:160px;
+  display:flex;flex-wrap:nowrap;align-items:flex-start;
+  padding:6px;min-height:160px;
+  overflow-x:auto;overflow-y:hidden;white-space:nowrap;
   border-top:1px solid rgba(212,160,32,.12);
   scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
 /* When no preview showing, hands split 50/50 */
 .gb-opp-hand,.gb-self-hand{flex:1;}
-/* Overlapping hand cards */
-.gb-opp-hand .gcard,.gb-self-hand .gcard{margin-right:-14px;position:relative;}
-.gb-opp-hand .gcard:last-child,.gb-self-hand .gcard:last-child{margin-right:0;}
-.gb-opp-hand .gcard:hover,.gb-self-hand .gcard:hover{z-index:20;margin-right:4px;}
-.gb-opp-hand .card-back,.gb-self-hand .card-back{margin-right:-14px;}
-.gb-opp-hand .card-back:last-child,.gb-self-hand .card-back:last-child{margin-right:0;}
-/* Larger hand cards */
-.gb-opp-hand .gcard,.gb-self-hand .gcard{width:105px;height:147px;}
+/* Hand cards — sized by JS, base styles */
+.gb-opp-hand .gcard,.gb-self-hand .gcard{height:147px;position:relative;flex-shrink:0;}
 .gb-opp-hand .gcard img,.gb-self-hand .gcard img{height:100%;}
-.gb-opp-hand .card-back,.gb-self-hand .card-back{width:105px;height:147px;}
+.gb-opp-hand .gcard:hover,.gb-self-hand .gcard:hover{z-index:20;}
+.gb-opp-hand .card-back,.gb-self-hand .card-back{height:147px;flex-shrink:0;}
 
 /* ═══ CENTER — BOARD ═══ */
 .gb-board{
@@ -1264,6 +1261,7 @@ function renderMulligan() {
   const handEl = document.getElementById('selfHand');
   handEl.innerHTML = '';
   p.hand.forEach(card => handEl.appendChild(makeGameCard(card, null, false)));
+  sizeHandCards(handEl, p.hand.length);
 
   if (isSolo) renderSoloOppHand('oppHand', opp.hand);
   else renderOppHand('oppHand', opp.hand.length);
@@ -1421,6 +1419,15 @@ function renderField(fieldId, field, isSelf) {
   });
 }
 
+function sizeHandCards(el, count) {
+  if (!count) return;
+  const availW = el.clientWidth - 12; // padding
+  const maxW = 105;
+  const minW = 60;
+  const cardW = Math.max(minW, Math.min(maxW, Math.floor(availW / count)));
+  el.querySelectorAll('.gcard,.card-back').forEach(c => { c.style.width = cardW + 'px'; });
+}
+
 function renderHand(handId, hand, isSelf) {
   const el = document.getElementById(handId);
   el.innerHTML = '';
@@ -1437,6 +1444,7 @@ function renderHand(handId, hand, isSelf) {
     };
     el.appendChild(makeGameCard(card, handler, false));
   });
+  sizeHandCards(el, hand.length);
 }
 
 function renderOppHand(handId, count) {
@@ -1445,9 +1453,9 @@ function renderOppHand(handId, count) {
   for (let i = 0; i < count; i++) {
     const c = document.createElement('div');
     c.className = 'card-back';
-    c.textContent = '✦';
     el.appendChild(c);
   }
+  sizeHandCards(el, count);
 }
 
 function renderSoloOppHand(handId, hand) {
@@ -1455,11 +1463,11 @@ function renderSoloOppHand(handId, hand) {
   el.innerHTML = '';
   hand.forEach(card => {
     const handler = () => {
-      // Clicking opponent hand in solo mode switches to their side
       switchSides();
     };
     el.appendChild(makeGameCard(card, handler, false));
   });
+  sizeHandCards(el, hand.length);
 }
 
 function renderDon(id, active, rested, total) {
