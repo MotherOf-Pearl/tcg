@@ -1285,16 +1285,15 @@ function renderMulligan() {
   document.getElementById('mulliganBtns').style.display = done ? 'none' : 'flex';
   document.getElementById('mulliganWait').style.display = done ? 'block' : 'none';
   document.getElementById('playBtns').style.display = 'none';
+  document.getElementById('drawBtns').style.display = 'none';
 
   renderLog();
 }
 function doMulligan(mulligan) {
   act({ type: 'MULLIGAN', doMulligan: mulligan });
-  // In solo mode, let renderMulligan handle button visibility on next state update
-  if (!isSolo) {
-    document.getElementById('mulliganBtns').style.display = 'none';
-    document.getElementById('mulliganWait').style.display = 'block';
-  }
+  // Immediately hide buttons and show waiting for both solo and multiplayer
+  document.getElementById('mulliganBtns').style.display = 'none';
+  document.getElementById('mulliganWait').style.display = 'block';
 }
 
 // ─── GAME RENDER ───
