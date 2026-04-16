@@ -575,11 +575,11 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   color:rgba(180,140,50,.25);letter-spacing:1px;text-transform:uppercase;
 }
 .gb-trash-slot:hover{border-color:var(--gold);color:var(--gold);}
-/* Life cards — face-down card backs, overlapping vertically */
-.gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;}
+/* Life cards — face-down card backs, tightly overlapping vertically */
+.gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-bottom:12px;}
 .life-stack{display:flex;flex-direction:column;align-items:center;}
 .life-pip{
-  width:var(--card-w);height:var(--card-h);border-radius:4px;margin-bottom:-115px;
+  width:var(--card-w);height:var(--card-h);border-radius:4px;margin-bottom:-125px;
   background:var(--card-back);border:1.5px solid var(--card-bb);
   display:flex;align-items:center;justify-content:center;
   font-family:'Cinzel',serif;font-size:.28rem;color:var(--card-bb);
