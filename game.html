@@ -438,7 +438,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* ═══ CENTER — BOARD ═══ */
 .gb-board{
   display:flex;flex-direction:column;overflow:hidden;
-  margin:10px 6px;border-radius:8px;
+  margin:10px 6px 14px;border-radius:8px;
   /* Opaque Carolingian board surface */
   background:
     /* Subtle cross-hatch weave texture */
@@ -470,7 +470,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* Zone uses CSS grid with 3 fixed rows — no overlapping */
 .gb-zone-grid{
   display:grid;width:100%;height:100%;
-  grid-template-rows:calc(var(--card-h) * .6) 1fr calc(var(--card-h) * .7);
+  grid-template-rows:calc(var(--card-h) + 20px) 1fr calc(var(--card-h) * .42);
   grid-template-columns:1fr;
   gap:6px;
 }
