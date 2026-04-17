@@ -560,6 +560,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .scry-card:hover{border-color:var(--gold);}
 .scry-card img{width:100%;height:100%;object-fit:cover;display:block;}
 .scry-card.kept{border-color:#4ade80;box-shadow:0 0 8px rgba(74,222,128,.5);}
+/* Pin scry overlay directly above the player hand while scry is active */
+.gb-left.scry-active .gb-self-hand{flex:0 0 auto;}
+.gb-left.scry-active .gb-card-preview.has-card{flex:0 1 auto;}
+.gb-left.scry-active .gb-card-preview img{max-height:34vh;}
 .scry-order{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   background:rgba(0,0,0,.8);color:var(--gold);
@@ -941,7 +945,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <div id="scryOverlay" style="display:none;flex-direction:column;align-items:center;gap:4px;padding:6px;background:rgba(20,12,4,.85);border:1px solid rgba(180,140,50,.3);border-radius:6px;margin:2px 4px;flex-shrink:0;">
       <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);text-align:center;" id="scryTitle">Select order (1 = top)</div>
       <div id="scryCards" style="display:flex;gap:4px;justify-content:center;"></div>
-      <button class="gb-pbtn gb-pbtn-sm" id="scryConfirm" onclick="confirmScry()" style="display:none;">Confirm Order</button>
+      <div style="display:flex;gap:6px;">
+        <button class="gb-pbtn gb-pbtn-sm" id="scryConfirm" onclick="confirmScry()" style="display:none;">Confirm Order</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="scrySkip" onclick="skipScry()" style="display:none;">Skip</button>
+      </div>
     </div>
     <div class="gb-self-hand" id="selfHand"></div>
   </div>
@@ -1642,23 +1649,23 @@ let scryKeep = [];
 let scryCards = [];
 
 function renderScry() {
+  const left = document.querySelector('.gb-left');
   if (!game || !game.scryWindow || game.scryWindow.playerId !== myId) {
     document.getElementById('scryOverlay').style.display = 'none';
-    document.getElementById('cardPreview').style.display = '';
+    if (left) left.classList.remove('scry-active');
     return;
   }
-  // Hide card preview to make room for scry
-  document.getElementById('cardPreview').style.display = 'none';
   const sw = game.scryWindow;
   scryCards = sw.cards;
   scryOrder = [];
   scryKeep = [];
   const overlay = document.getElementById('scryOverlay');
   overlay.style.display = 'flex';
+  if (left) left.classList.add('scry-active');
 
   const title = document.getElementById('scryTitle');
   if (sw.keepCount > 0) {
-    title.textContent = `Pick up to ${sw.keepCount} card(s) to keep, then order the rest (1 = top)`;
+    title.textContent = `Select up to ${sw.keepCount} card(s) to add to your hand, then order the rest (1 = top)`;
   } else {
     title.textContent = 'Click cards in the order to place on deck (1 = top)';
   }
@@ -1679,6 +1686,7 @@ function renderScry() {
     container.appendChild(el);
   });
   document.getElementById('scryConfirm').style.display = 'none';
+  document.getElementById('scrySkip').style.display = sw.keepCount > 0 ? 'block' : 'none';
 }
 
 function scryCardClick(idx, keepCount) {
@@ -1741,8 +1749,25 @@ function confirmScry() {
     keptIndices: scryKeep,
     order: orderedRemaining,
   });
+  closeScry();
+}
+
+function skipScry() {
+  // Keep nothing; place all cards on bottom of deck in their current order
+  act({
+    type: 'SCRY_RESOLVE',
+    keptIndices: [],
+    order: scryCards.map((_, i) => i),
+  });
+  closeScry();
+}
+
+function closeScry() {
   document.getElementById('scryOverlay').style.display = 'none';
-  document.getElementById('cardPreview').style.display = '';
+  document.getElementById('scrySkip').style.display = 'none';
+  document.getElementById('scryConfirm').style.display = 'none';
+  const left = document.querySelector('.gb-left');
+  if (left) left.classList.remove('scry-active');
   scryOrder = [];
   scryKeep = [];
   scryCards = [];
