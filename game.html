@@ -700,11 +700,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gcard-wrap.rested{transform:rotate(90deg);margin:14px 4px;}
 .gcard-wrap.rested .gcard{transform:none;margin:0;}
 .don-under{
-  position:absolute;
-  width:calc(var(--card-w) - 8px);height:var(--card-h);
+  position:absolute;top:0;left:0;
+  width:var(--card-w);height:var(--card-h);
   border-radius:4px;border:1.5px solid rgba(140,120,50,.5);
   background:url('don-card.png') center/cover no-repeat;
-  box-shadow:0 1px 3px rgba(0,0,0,.3);
+  box-shadow:1px 1px 3px rgba(0,0,0,.25);
+  pointer-events:none;
 }
 .gcard-cost{display:none;}
 .card-back{
@@ -1857,15 +1858,16 @@ function makeGameCard(card, onClick, isOpp) {
     }
     wrap.dataset.uid = card.uid;
     wrap.appendChild(gcard);
+    // Layer DON behind the card, staircasing down-right like the deck stack (+4px per layer).
     for (let i = 0; i < donCount; i++) {
       const don = document.createElement('div');
       don.className = 'don-under';
-      don.style.bottom = -(22 + i * 8) + 'px';
-      don.style.left = (4 + i * 4) + 'px';
+      const offset = (i + 1) * 4;
+      don.style.top = offset + 'px';
+      don.style.left = offset + 'px';
       don.style.zIndex = -(i + 1);
       wrap.appendChild(don);
     }
-    wrap.style.marginBottom = (22 + (donCount - 1) * 8) + 'px';
     return wrap;
   }
   return gcard;
