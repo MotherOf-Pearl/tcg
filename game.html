@@ -574,7 +574,15 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
   font-size:0;color:transparent;
   position:relative;box-shadow:2px 2px 6px rgba(0,0,0,.3);
+  margin-bottom:12px;margin-right:12px;
 }
+.gb-deck-pile::before,.gb-deck-pile::after{
+  content:'';position:absolute;width:100%;height:100%;border-radius:4px;
+  background:url('card-back.png') center/cover no-repeat;
+  border:1.5px solid var(--card-bb);
+}
+.gb-deck-pile::before{top:4px;left:4px;z-index:-1;box-shadow:1px 1px 3px rgba(0,0,0,.2);}
+.gb-deck-pile::after{top:8px;left:8px;z-index:-2;box-shadow:1px 1px 3px rgba(0,0,0,.15);}
 .gb-deck-count{display:block;font-family:'Barlow Condensed',sans-serif;font-size:.8rem;font-weight:700;color:#fff;margin-top:2px;text-shadow:0 1px 3px rgba(0,0,0,.8);}
 /* Trash slot */
 .gb-trash-slot{
@@ -1522,8 +1530,8 @@ function makeDonStack(count, isRested) {
   for (let i = 0; i < maxVisible; i++) {
     const card = document.createElement('div');
     card.className = 'don-stack-card';
-    card.style.top = (i * 2) + 'px';
-    card.style.left = (i * 2) + 'px';
+    card.style.top = (i * 12) + 'px';
+    card.style.left = (i * 12) + 'px';
     card.style.zIndex = i;
     // Fallback if DON image fails
     card.innerHTML = `<img src="don-card.png" style="width:100%;height:100%;border-radius:4px;display:block;" onerror="this.style.display='none';this.parentElement.style.background='var(--card-back)';this.parentElement.style.display='flex';this.parentElement.style.alignItems='center';this.parentElement.style.justifyContent='center';this.parentElement.innerHTML='<span style=\\'font-family:Cinzel,serif;font-size:.35rem;color:#b09010;text-align:center;line-height:1.3\\'>DON!!<br>+1000</span>';">`;
@@ -1537,8 +1545,8 @@ function makeDonStack(count, isRested) {
     stack.appendChild(badge);
   }
   // Adjust stack size for offset
-  stack.style.width = 'calc(var(--card-w) + ' + (maxVisible * 2) + 'px)';
-  stack.style.height = 'calc(var(--card-h) + ' + (maxVisible * 2) + 'px)';
+  stack.style.width = 'calc(var(--card-w) + ' + (maxVisible * 12) + 'px)';
+  stack.style.height = 'calc(var(--card-h) + ' + (maxVisible * 12) + 'px)';
   return stack;
 }
 
