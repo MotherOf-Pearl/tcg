@@ -1366,18 +1366,20 @@ function renderGame() {
   const opp = game.players[oppId];
   const isActive = game.activePlayer === myId;
 
-  // Show buttons based on phase — End Turn always visible for active player
-  document.getElementById('playBtns').style.display = isActive ? 'flex' : 'none';
+  // Show buttons based on phase — End Turn only in MAIN phase
   if (game.phase === 'DRAW' && isActive) {
     document.getElementById('drawBtns').style.display = 'flex';
     document.getElementById('btnDrawCard').style.display = 'block';
     document.getElementById('btnDrawDon').style.display = 'none';
+    document.getElementById('playBtns').style.display = 'none';
   } else if (game.phase === 'DON' && isActive) {
     document.getElementById('drawBtns').style.display = 'flex';
     document.getElementById('btnDrawCard').style.display = 'none';
     document.getElementById('btnDrawDon').style.display = 'block';
+    document.getElementById('playBtns').style.display = 'none';
   } else if (game.phase === 'MAIN' && isActive) {
     document.getElementById('drawBtns').style.display = 'none';
+    document.getElementById('playBtns').style.display = 'flex';
   } else {
     document.getElementById('drawBtns').style.display = 'none';
     document.getElementById('playBtns').style.display = 'none';
@@ -1820,10 +1822,11 @@ function cancelSel() {
   sel = null; attackMode = false; counterMode = false; donAttachMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
   hideAllBtnGroups();
-  // Restore default buttons for current phase — End Turn always available
+  // Restore default buttons for current phase
   if (game && isMyTurn()) {
-    document.getElementById('playBtns').style.display = 'flex';
-    if (game.phase === 'DRAW' || game.phase === 'DON') {
+    if (game.phase === 'MAIN') {
+      document.getElementById('playBtns').style.display = 'flex';
+    } else if (game.phase === 'DRAW' || game.phase === 'DON') {
       document.getElementById('drawBtns').style.display = 'flex';
     }
   }
