@@ -936,7 +936,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
             <span class="gb-cost-label">COST AREA</span>
             <div class="don-area" id="oppDon"></div>
           </div>
-          <div class="gb-slot">STAGE</div>
+          <div class="gb-slot" id="oppStage">STAGE</div>
           <div class="gb-deck-pile" id="oppDeck">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="oppDeckN">0</span></div>
           <div class="gb-trash-slot" onclick="viewTrash('opp')">TRASH<br><span id="oppTrashN">0</span></div>
         </div>
@@ -956,7 +956,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
             <span class="gb-cost-label">COST AREA</span>
             <div class="don-area" id="selfDon"></div>
           </div>
-          <div class="gb-slot">STAGE</div>
+          <div class="gb-slot" id="selfStage">STAGE</div>
           <div class="gb-deck-pile">ONE PIECE<br>CARD GAME<span class="gb-deck-count" id="selfDeckN">0</span></div>
           <div class="gb-trash-slot" onclick="viewTrash('self')">TRASH<br><span id="selfTrashN">0</span></div>
         </div>
@@ -1395,8 +1395,10 @@ function renderGame() {
 
   renderLeader('selfLeader', me.leader, true);
   renderLeader('oppLeader', opp.leader, false);
-  renderField('selfField', me.field, true);
-  renderField('oppField', opp.field, false);
+  renderField('selfField', me.field.filter(c => c.type !== 'STAGE'), true);
+  renderField('oppField', opp.field.filter(c => c.type !== 'STAGE'), false);
+  renderStage('selfStage', me.field.find(c => c.type === 'STAGE'), true);
+  renderStage('oppStage', opp.field.find(c => c.type === 'STAGE'), false);
   renderHand('selfHand', me.hand, true);
   if (isSolo) renderSoloOppHand('oppHand', opp.hand);
   else renderOppHand('oppHand', opp.hand.length);
@@ -1486,6 +1488,19 @@ function renderField(fieldId, field, isSelf) {
           },
       !isSelf));
   });
+}
+
+function renderStage(slotId, stageCard, isSelf) {
+  const el = document.getElementById(slotId);
+  if (!el) return;
+  if (!stageCard) {
+    el.innerHTML = 'STAGE';
+    return;
+  }
+  el.innerHTML = '';
+  el.appendChild(makeGameCard(stageCard,
+    isSelf ? () => selectCard(stageCard.uid, 'field') : null,
+    !isSelf));
 }
 
 function renderHand(handId, hand, isSelf) {
