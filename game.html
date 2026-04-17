@@ -516,8 +516,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 }
 /* Cost area — inline between leader and stage, fills available width */
 .gb-cost-bar{
-  flex:1;display:flex;align-items:center;gap:4px;padding:2px 8px;
+  flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:2px 8px;
   overflow:hidden;position:relative;min-width:80px;
+  /* Leave enough headroom for a rotated DON card (card-w tall after rotation) plus breathing room. */
+  min-height:calc(var(--card-h) + 8px);
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
     linear-gradient(180deg,#3a3a14 0%,#2e2e0e 100%);
@@ -538,6 +540,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .don-area{
   display:flex;align-items:center;z-index:1;
   position:relative;height:var(--card-h);
+  overflow:visible;max-width:100%;
 }
 .don-single{
   position:absolute;
@@ -546,8 +549,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   background:url('don-card.png') center/cover no-repeat;
   box-shadow:1px 1px 4px rgba(0,0,0,.25);
 }
+/* Rested cards rotate 90° then shift right by (card-h - card-w)/2 so the rotated
+   bounding box sits entirely inside the card's CSS slot (left edge stays at `left`). */
 .don-single.rested{
-  transform:rotate(90deg);
+  transform:translateX(calc((var(--card-h) - var(--card-w)) / 2)) rotate(90deg);
   transform-origin:center center;
 }
 .don-area.don-glow{box-shadow:0 0 12px 4px rgba(212,180,50,.6);border-radius:6px;}
@@ -1579,7 +1584,11 @@ function renderDon(id, active, rested, total) {
   const el = document.getElementById(id);
   if (!el) return;
   el.innerHTML = '';
-  if (total === 0) return;
+  if (total === 0) { el.style.width = '0px'; return; }
+
+  const css = getComputedStyle(document.documentElement);
+  const CW = parseInt(css.getPropertyValue('--card-w')) || 98;
+  const CH = parseInt(css.getPropertyValue('--card-h')) || 137;
 
   const spacing = 14;
   // Rested cards go first (left, behind), then active cards on top (right, front)
@@ -1605,8 +1614,11 @@ function renderDon(id, active, rested, total) {
   badge.style.zIndex = 25;
   el.appendChild(badge);
 
-  // Set container width to fit all cards
-  el.style.width = ((total - 1) * spacing + 98) + 'px';
+  // Container width: last card's rightmost edge. Rested cards (rotated) visually span CH, active span CW.
+  const lastLeft = (total - 1) * spacing;
+  const lastIsActive = active > 0;
+  const lastSpan = lastIsActive ? CW : CH;
+  el.style.width = (lastLeft + lastSpan) + 'px';
 
   // Make clickable for attach mode
   el.style.cursor = 'pointer';

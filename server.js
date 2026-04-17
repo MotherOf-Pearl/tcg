@@ -776,14 +776,32 @@ function handleAction(roomId, playerId, action) {
 
     case 'PLAY_CARD': {
       if (!isActive || game.phase !== 'MAIN') return;
+      // Locate the card in the active player's hand by uid — never read cost from anywhere else.
       const idx = p.hand.findIndex(c => c.uid === action.cardUid);
       if (idx === -1) return;
       const card = p.hand[idx];
-      console.log('PLAY_CARD:', { name: card.name, type: card.type, cost: card.cost, donActive: p.donActive, donRested: p.donRested });
-      if (p.donActive < card.cost) { send(playerId, {type:'ERROR', msg:'Not enough DON!!'}); return; }
-      p.donActive -= card.cost;
-      p.donRested += card.cost;
-      console.log('PLAY_CARD after:', { donActive: p.donActive, donRested: p.donRested });
+      const cardCost = Number(card.cost) || 0;
+      const activeDonCount = p.donActive;
+      console.log('PLAY_CARD:', {
+        playerId: playerId.slice(0,6),
+        activePlayer: game.activePlayer.slice(0,6),
+        cardUid: action.cardUid,
+        cardName: card.name,
+        cardCost,
+        activeDonCount,
+        donRested: p.donRested,
+      });
+      if (activeDonCount < cardCost) { send(playerId, {type:'ERROR', msg:'Not enough DON!!'}); return; }
+      // Deduct EXACTLY card.cost from the active player (playerId is the sender and must equal game.activePlayer here).
+      p.donActive = activeDonCount - cardCost;
+      p.donRested += cardCost;
+      console.log('PLAY_CARD after:', {
+        playerId: playerId.slice(0,6),
+        cardCost,
+        donActive: p.donActive,
+        donRested: p.donRested,
+        deducted: activeDonCount - p.donActive,
+      });
       p.hand.splice(idx, 1);
       if (card.type === 'CHARACTER') {
         card.rested = false;
