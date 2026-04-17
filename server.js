@@ -585,7 +585,8 @@ function nextPhase(game) {
 function doRefresh(game) {
   const p = game.players[game.activePlayer];
   p.leader.rested = false;
-  p.field.forEach(c => { c.rested = false; });
+  p.leader.usedThisTurn = false;
+  p.field.forEach(c => { c.rested = false; c.usedThisTurn = false; });
   p.donActive += p.donRested;
   p.donRested = 0;
   log(game, `Turn ${game.turn}: ${game.activePlayer.slice(0,6)} refreshes all cards.`);
@@ -636,15 +637,36 @@ function resolveCounter(roomId) {
   const finalAttack = cw.attackPower;
   const finalDefend = cw.defendPower;
 
+  // Find the attacker card for keyword checks
+  const attackerPlayer = game.players[cw.attackerId];
+  let attackerCard = null;
+  if (attackerPlayer.leader.uid === cw.attackerUid) attackerCard = attackerPlayer.leader;
+  else attackerCard = attackerPlayer.field.find(c => c.uid === cw.attackerUid);
+
+  const isDoubleAttack = attackerCard && hasDoubleAttack(attackerCard);
+  const isBanish = attackerCard && hasBanish(attackerCard);
+
   if (cw.defenderIsLeader) {
     if (finalAttack > finalDefend) {
-      if (defender.life.length > 0) {
-        const lifeCard = defender.life.pop();
-        defender.hand.push(lifeCard);
-        log(game, `\uD83D\uDCA5 Life card flipped! ${lifeCard.name} added to hand. ${defender.life.length} life remaining.`);
-        if (defender.life.length === 0) {
-          game.winner = cw.attackerId;
-          log(game, `\uD83C\uDFC6 ${cw.attackerId.slice(0,6)} WINS! Opponent has no life cards!`);
+      const hits = isDoubleAttack ? 2 : 1;
+      if (isDoubleAttack) log(game, `\uD83D\uDCA5 [Double Attack] Flipping ${hits} life cards!`);
+      for (let h = 0; h < hits; h++) {
+        if (defender.life.length > 0) {
+          const lifeCard = defender.life.pop();
+          if (isBanish) {
+            defender.trash.push(lifeCard);
+            log(game, `\uD83D\uDCA5 [Banish] Life card ${lifeCard.name} sent to trash! ${defender.life.length} life remaining.`);
+          } else {
+            defender.hand.push(lifeCard);
+            log(game, `\uD83D\uDCA5 Life card flipped! ${lifeCard.name} added to hand. ${defender.life.length} life remaining.`);
+            // Check for [Trigger] effect on the life card
+            applyTriggerEffect(game, cw.defenderId, lifeCard);
+          }
+          if (defender.life.length === 0) {
+            game.winner = cw.attackerId;
+            log(game, `\uD83C\uDFC6 ${cw.attackerId.slice(0,6)} WINS! Opponent has no life cards!`);
+            break;
+          }
         }
       }
     } else {
@@ -657,6 +679,8 @@ function resolveCounter(roomId) {
         defender.field = defender.field.filter(c => c.uid !== cw.defenderUid);
         defender.trash.push(target);
         log(game, `\uD83D\uDC80 ${target.name} is K.O.'d!`);
+        // Trigger [On K.O.] for the KO'd character
+        triggerOnKO(game, cw.defenderId, target, cw.attackerId);
       } else {
         log(game, `\uD83D\uDEE1\uFE0F ${target.name} survives the attack!`);
       }
@@ -747,7 +771,7 @@ function handleAction(roomId, playerId, action) {
         card.attachedDon = 0;
         p.field.push(card);
         log(game, `${playerId.slice(0,6)} plays ${card.name} (${card.power} power).`);
-        applyOnPlay(game, playerId, card, opp);
+        parseAndApply('onPlay', game, playerId, card, opp);
       } else if (card.type === 'STAGE') {
         card.rested = false;
         p.field.push(card);
@@ -755,7 +779,7 @@ function handleAction(roomId, playerId, action) {
       } else if (card.type === 'EVENT') {
         p.trash.push(card);
         log(game, `${playerId.slice(0,6)} plays event ${card.name}.`);
-        applyEventEffect(game, playerId, card, opp);
+        parseAndApply('eventMain', game, playerId, card, opp);
       }
       break;
     }
@@ -801,6 +825,9 @@ function handleAction(roomId, playerId, action) {
 
       log(game, `\u2694\uFE0F ${attacker.name} (${attackPower}) attacks ${defender.name} (${defendPower})!`);
 
+      // Trigger [When Attacking] effects
+      parseAndApply('whenAttacking', game, playerId, attacker, opp);
+
       game.counterWindow = {
         attackerUid: attacker.uid, defenderUid: defender.uid,
         attackPower, defendPower, defenderIsLeader,
@@ -821,6 +848,12 @@ function handleAction(roomId, playerId, action) {
       p.trash.push(card);
       game.counterWindow.defendPower += card.counter;
       log(game, `\uD83D\uDEE1\uFE0F ${playerId.slice(0,6)} counters with ${card.name} (+${card.counter})! Defend: ${game.counterWindow.defendPower}`);
+      // Apply additional [Counter] effects from the card's ability
+      if (card.ability && card.ability.includes('[Counter]')) {
+        const counterOppId = Object.keys(game.players).find(id => id !== playerId);
+        const counterOpp = game.players[counterOppId];
+        parseAndApply('counter', game, playerId, card, counterOpp);
+      }
       break;
     }
 
@@ -847,78 +880,663 @@ function handleAction(roomId, playerId, action) {
   sendState(roomId);
 }
 
-function applyOnPlay(game, playerId, card, opp) {
-  const ab = card.ability;
-  if (ab.includes('[On Play]') && ab.includes('Draw 1 card')) {
-    const p = game.players[playerId];
-    if (p.deck.length > 0) { p.hand.push(p.deck.shift()); log(game, `${card.name}: drew a card.`); }
+// ─── KEYWORD EFFECT INTERPRETER ───
+
+// Helper: draw N cards
+function drawCards(p, count, game, cardName) {
+  let drawn = 0;
+  for (let i = 0; i < count && p.deck.length > 0; i++) {
+    p.hand.push(p.deck.shift());
+    drawn++;
   }
-  if (ab.includes('[On Play]') && ab.includes('Draw 2 cards')) {
-    const p = game.players[playerId];
-    for (let i = 0; i < 2 && p.deck.length > 0; i++) p.hand.push(p.deck.shift());
-    log(game, `${card.name}: drew 2 cards.`);
+  if (drawn > 0) log(game, `${cardName}: drew ${drawn} card(s).`);
+  return drawn;
+}
+
+// Helper: KO opponent character with power <= threshold
+function koByPower(opp, threshold, game, cardName) {
+  const target = opp.field.find(c => c.type === 'CHARACTER' && (c.power + (c.attachedDon || 0) * 1000) <= threshold);
+  if (target) {
+    opp.field = opp.field.filter(c => c.uid !== target.uid);
+    opp.trash.push(target);
+    log(game, `${cardName}: K.O.'d ${target.name} (power <= ${threshold})!`);
+    return target;
   }
-  if (ab.includes('[On Play]') && ab.includes('rest up to 1') && ab.includes('opponent')) {
-    const target = opp.field[0];
-    if (target) { target.rested = true; log(game, `${card.name}: ${target.name} is rested!`); }
+  return null;
+}
+
+// Helper: KO opponent character with cost <= threshold
+function koByCost(opp, threshold, game, cardName) {
+  const target = opp.field.find(c => c.type === 'CHARACTER' && (c.cost || 0) <= threshold);
+  if (target) {
+    opp.field = opp.field.filter(c => c.uid !== target.uid);
+    opp.trash.push(target);
+    log(game, `${cardName}: K.O.'d ${target.name} (cost <= ${threshold})!`);
+    return target;
   }
-  if (ab.includes('[On Play]') && ab.includes('K.O.') && ab.includes('3000')) {
-    const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= 3000);
-    if (target) {
+  return null;
+}
+
+// Helper: add DON from DON deck
+function addDonFromDeck(p, count, rested, game, cardName) {
+  let added = 0;
+  for (let i = 0; i < count && p.donDeck > 0; i++) {
+    p.donDeck--;
+    if (rested) p.donRested++;
+    else p.donActive++;
+    added++;
+  }
+  if (added > 0) log(game, `${cardName}: added ${added} DON!! (${rested ? 'rested' : 'active'}).`);
+  return added;
+}
+
+// Helper: bounce character by power threshold back to owner's hand
+function bounceByPower(opp, threshold, game, cardName) {
+  const target = opp.field.find(c => c.type === 'CHARACTER' && (c.power + (c.attachedDon || 0) * 1000) <= threshold);
+  if (target) {
+    opp.field = opp.field.filter(c => c.uid !== target.uid);
+    target.attachedDon = 0;
+    opp.hand.push(target);
+    log(game, `${cardName}: returned ${target.name} to hand (power <= ${threshold}).`);
+    return target;
+  }
+  return null;
+}
+
+// Helper: bounce character by cost threshold back to owner's hand
+function bounceByCost(targetPlayer, threshold, game, cardName) {
+  const target = targetPlayer.field.find(c => c.type === 'CHARACTER' && (c.cost || 0) <= threshold);
+  if (target) {
+    targetPlayer.field = targetPlayer.field.filter(c => c.uid !== target.uid);
+    target.attachedDon = 0;
+    targetPlayer.hand.push(target);
+    log(game, `${cardName}: returned ${target.name} to hand (cost <= ${threshold}).`);
+    return target;
+  }
+  return null;
+}
+
+// Helper: rest opponent character(s)
+function restOpponentCharacter(opp, game, cardName, costThreshold) {
+  let target;
+  if (costThreshold !== undefined) {
+    target = opp.field.find(c => c.type === 'CHARACTER' && !c.rested && (c.cost || 0) <= costThreshold);
+  } else {
+    target = opp.field.find(c => c.type === 'CHARACTER' && !c.rested);
+  }
+  if (target) {
+    target.rested = true;
+    log(game, `${cardName}: rested ${target.name}!`);
+    return target;
+  }
+  return null;
+}
+
+// Helper: give power reduction to an opponent's character
+function givePowerReduction(opp, amount, game, cardName) {
+  const target = opp.field.find(c => c.type === 'CHARACTER');
+  if (target) {
+    target.power = Math.max(0, target.power - amount);
+    log(game, `${cardName}: gave ${target.name} -${amount} power! (now ${target.power})`);
+    if (target.power <= 0) {
       opp.field = opp.field.filter(c => c.uid !== target.uid);
       opp.trash.push(target);
-      log(game, `${card.name}: K.O.'d ${target.name}!`);
+      log(game, `${target.name} was K.O.'d by power reduction!`);
+      return target;
     }
   }
-  if (ab.includes('[On Play]') && ab.includes('K.O.') && (ab.includes('6000') || ab.includes('5000')) && !ab.includes('3000')) {
-    const threshold = ab.includes('6000') ? 6000 : 5000;
-    const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= threshold);
-    if (target) {
-      opp.field = opp.field.filter(c => c.uid !== target.uid);
-      opp.trash.push(target);
-      log(game, `${card.name}: K.O.'d ${target.name}!`);
+  return null;
+}
+
+// Helper: check if card has enough attached DON for conditional effects
+function checkDonRequirement(card, text) {
+  const donMatch = text.match(/\[DON!!\s*x(\d+)\]/);
+  if (donMatch) {
+    const required = parseInt(donMatch[1]);
+    return (card.attachedDon || 0) >= required;
+  }
+  return true; // no DON requirement
+}
+
+// Helper: check if card has [Blocker]
+function hasBlocker(card) {
+  return card.ability && card.ability.includes('[Blocker]');
+}
+
+// Helper: check if card has [Double Attack]
+function hasDoubleAttack(card) {
+  return card.ability && card.ability.includes('[Double Attack]');
+}
+
+// Helper: check if card has [Banish]
+function hasBanish(card) {
+  return card.ability && card.ability.includes('[Banish]');
+}
+
+// Helper: check if card has [Rush]
+function hasRush(card) {
+  return card.ability && card.ability.includes('[Rush]');
+}
+
+// Helper: extract effect text after a timing keyword
+function extractEffect(ability, keyword) {
+  const idx = ability.indexOf(keyword);
+  if (idx === -1) return null;
+  let text = ability.substring(idx + keyword.length).trim();
+  // Trim to the next timing keyword or end
+  const nextKeywords = ['[On Play]', '[On K.O.]', '[When Attacking]', '[Blocker]', '[Counter]',
+    '[Trigger]', '[Activate: Main]', '[Rush]', '[Double Attack]', '[Banish]',
+    "[On Your Opponent's Attack]", "[Opponent's Turn]", '[Once Per Turn]',
+    '[End of Your Turn]', '[Your Turn]', '[Main]'];
+  let endIdx = text.length;
+  for (const nk of nextKeywords) {
+    const ni = text.indexOf(nk);
+    if (ni > 0 && ni < endIdx) endIdx = ni;
+  }
+  return text.substring(0, endIdx).trim();
+}
+
+// Helper: auto-play a character from hand with cost <= threshold
+function autoPlayFromHand(p, costThreshold, game, cardName, typeFilter) {
+  const idx = p.hand.findIndex(c => c.type === 'CHARACTER' && (c.cost || 0) <= costThreshold &&
+    (!typeFilter || c.ability.includes(typeFilter) || c.name.includes(typeFilter)));
+  if (idx !== -1) {
+    const card = p.hand.splice(idx, 1)[0];
+    card.rested = false;
+    card.attachedDon = card.attachedDon || 0;
+    p.field.push(card);
+    log(game, `${cardName}: played ${card.name} from hand (cost <= ${costThreshold}).`);
+    return card;
+  }
+  return null;
+}
+
+// ─── CENTRAL EFFECT PARSER ───
+
+function parseAndApply(timing, game, playerId, card, opp) {
+  const ab = card.ability || '';
+  if (!ab) return;
+  const p = game.players[playerId];
+
+  // ── [Rush] ──
+  if (timing === 'onPlay' && hasRush(card)) {
+    log(game, `${card.name} has [Rush] — can attack this turn!`);
+  }
+
+  // ── [Blocker] tracking ──
+  if (timing === 'onPlay' && hasBlocker(card)) {
+    log(game, `${card.name} has [Blocker].`);
+  }
+
+  // ── [Activate: Main] — log only ──
+  if (timing === 'onPlay' && ab.includes('[Activate: Main]')) {
+    log(game, `${card.name} has [Activate: Main] ability (manual activation needed).`);
+  }
+
+  // ── [On Play] effects ──
+  if (timing === 'onPlay' && ab.includes('[On Play]')) {
+    const effect = extractEffect(ab, '[On Play]');
+    if (!effect) return;
+
+    // Check DON!! requirement before [On Play] (e.g. "[On Play] DON!! -1:")
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+):/);
+    if (donCostMatch) {
+      const donCost = parseInt(donCostMatch[1]);
+      const totalDon = p.donActive + p.donRested;
+      if (totalDon < donCost) {
+        log(game, `${card.name}: not enough DON!! for effect (need ${donCost}).`);
+        return;
+      }
+      // Pay DON cost from active first, then rested
+      let remaining = donCost;
+      const fromActive = Math.min(remaining, p.donActive);
+      p.donActive -= fromActive;
+      remaining -= fromActive;
+      if (remaining > 0) p.donRested -= remaining;
+      p.donDeck += donCost;
+      log(game, `${card.name}: paid ${donCost} DON!! for effect.`);
+    }
+
+    // Draw N cards
+    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
+    if (drawMatch) {
+      drawCards(p, parseInt(drawMatch[1]), game, card.name);
+    }
+
+    // K.O. by power
+    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch && !effect.includes('cost of')) {
+      const threshold = parseInt(koPowerMatch[1]);
+      const koed = koByPower(opp, threshold, game, card.name);
+      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    }
+
+    // K.O. by cost
+    const koCostMatch = effect.match(/K\.O\.\s+up to 1.*?cost of (\d+) or less/i);
+    if (koCostMatch) {
+      const threshold = parseInt(koCostMatch[1]);
+      const koed = koByCost(opp, threshold, game, card.name);
+      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    }
+
+    // K.O. up to 1 of your opponent's Characters (no threshold — any character)
+    if (/K\.O\.\s+up to 1 of your opponent's Characters\.?$/i.test(effect)) {
+      const target = opp.field.find(c => c.type === 'CHARACTER');
+      if (target) {
+        opp.field = opp.field.filter(c => c.uid !== target.uid);
+        opp.trash.push(target);
+        log(game, `${card.name}: K.O.'d ${target.name}!`);
+        triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), target, playerId);
+      }
+    }
+
+    // Rest opponent character (with optional cost threshold)
+    if (/rest up to 1.*opponent/i.test(effect)) {
+      const costMatch = effect.match(/cost of (\d+) or less/);
+      if (costMatch) {
+        restOpponentCharacter(opp, game, card.name, parseInt(costMatch[1]));
+      } else {
+        restOpponentCharacter(opp, game, card.name);
+      }
+    }
+
+    // Rest multiple opponent characters
+    const restMultiMatch = effect.match(/[Rr]est up to (\d+) of your opponent's Characters/);
+    if (restMultiMatch && parseInt(restMultiMatch[1]) > 1) {
+      const count = parseInt(restMultiMatch[1]);
+      const costMatch = effect.match(/cost of (\d+) or less/);
+      for (let i = 0; i < count; i++) {
+        restOpponentCharacter(opp, game, card.name, costMatch ? parseInt(costMatch[1]) : undefined);
+      }
+    }
+
+    // Give power reduction
+    const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
+    if (powerRedMatch) {
+      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
+    }
+
+    // Add DON rested
+    if (/[Aa]dd up to 1 DON!!.*rest/i.test(effect)) {
+      addDonFromDeck(p, 1, true, game, card.name);
+    }
+    // Add DON active
+    else if (/[Aa]dd up to 1 DON!!.*active/i.test(effect) || /[Aa]dd up to 1 DON!!.*set it as active/i.test(effect)) {
+      addDonFromDeck(p, 1, false, game, card.name);
+    }
+    // Generic add DON (defaults to rested)
+    else if (/[Aa]dd up to (\d+) DON!!/i.test(effect) && !effect.includes('active')) {
+      const donMatch = effect.match(/[Aa]dd up to (\d+) DON!!/i);
+      if (donMatch) addDonFromDeck(p, parseInt(donMatch[1]), true, game, card.name);
+    }
+
+    // Return character to hand by cost
+    const bounceCostMatch = effect.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less.*?hand/i);
+    if (bounceCostMatch) {
+      bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
+    }
+
+    // Return character to hand by power
+    const bouncePowerMatch = effect.match(/[Rr]eturn up to 1 Character.*?(\d+)\s*power or less.*?hand/i);
+    if (bouncePowerMatch && !bounceCostMatch) {
+      bounceByPower(opp, parseInt(bouncePowerMatch[1]), game, card.name);
+    }
+
+    // Look at X cards (simplified: draw 1)
+    if (/[Ll]ook at.*?(\d+) cards? from the top/i.test(effect) && !drawMatch) {
+      if (p.deck.length > 0) {
+        p.hand.push(p.deck.shift());
+        log(game, `${card.name}: searched top of deck (simplified).`);
+      }
+    }
+
+    // Play character from hand
+    const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    if (playMatch) {
+      const played = autoPlayFromHand(p, parseInt(playMatch[1]), game, card.name);
+      if (played) parseAndApply('onPlay', game, playerId, played, opp);
     }
   }
-  if (ab.includes('[On Play]') && (ab.includes('discard') || ab.includes('opponent discards'))) {
-    if (opp.hand.length > 0) { opp.trash.push(opp.hand.shift()); log(game, `${card.name}: opponent discards!`); }
+
+  // ── [On K.O.] effects ──
+  if (timing === 'onKO' && ab.includes('[On K.O.]')) {
+    const effect = extractEffect(ab, '[On K.O.]');
+    if (!effect) return;
+
+    // Check DON!! cost for On K.O.
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+):/);
+    if (donCostMatch) {
+      const donCost = parseInt(donCostMatch[1]);
+      const totalDon = p.donActive + p.donRested;
+      if (totalDon < donCost) return;
+      let remaining = donCost;
+      const fromActive = Math.min(remaining, p.donActive);
+      p.donActive -= fromActive;
+      remaining -= fromActive;
+      if (remaining > 0) p.donRested -= remaining;
+      p.donDeck += donCost;
+      log(game, `${card.name}: paid ${donCost} DON!! for [On K.O.] effect.`);
+    }
+
+    // Draw N cards
+    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
+    if (drawMatch) {
+      drawCards(p, parseInt(drawMatch[1]), game, card.name);
+    }
+
+    // Add DON rested
+    if (/[Aa]dd up to (\d+) DON!!.*rest/i.test(effect)) {
+      const donMatch = effect.match(/[Aa]dd up to (\d+) DON!!/i);
+      addDonFromDeck(p, donMatch ? parseInt(donMatch[1]) : 1, true, game, card.name);
+    }
+    // Add DON active
+    else if (/[Aa]dd up to (\d+) DON!!.*active/i.test(effect)) {
+      const donMatch = effect.match(/[Aa]dd up to (\d+) DON!!/i);
+      addDonFromDeck(p, donMatch ? parseInt(donMatch[1]) : 1, false, game, card.name);
+    }
+
+    // Play this character from trash as rested
+    if (/[Pp]lay this character from the trash as rested/i.test(effect)) {
+      const inTrash = p.trash.find(c => c.uid === card.uid);
+      if (inTrash) {
+        p.trash = p.trash.filter(c => c.uid !== card.uid);
+        inTrash.rested = true;
+        inTrash.attachedDon = 0;
+        p.field.push(inTrash);
+        log(game, `${card.name}: returned to the field from trash (rested)!`);
+      }
+    }
+
+    // Play character from hand with cost threshold
+    const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    if (playMatch) {
+      autoPlayFromHand(p, parseInt(playMatch[1]), game, card.name);
+    }
+
+    // Play character from trash with cost threshold
+    const playTrashMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?trash/i);
+    if (playTrashMatch) {
+      const costThreshold = parseInt(playTrashMatch[1]);
+      const idx = p.trash.findIndex(c => c.type === 'CHARACTER' && (c.cost || 0) <= costThreshold);
+      if (idx !== -1) {
+        const revived = p.trash.splice(idx, 1)[0];
+        revived.rested = true;
+        revived.attachedDon = 0;
+        p.field.push(revived);
+        log(game, `${card.name}: played ${revived.name} from trash (rested).`);
+      }
+    }
+
+    // K.O. opponent character by power
+    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*power or less/i);
+    if (koPowerMatch && !effect.includes('cost of')) {
+      koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+    }
+
+    // K.O. opponent character by cost
+    const koCostMatch = effect.match(/K\.O\.\s+up to 1.*?(?:base )?cost of (\d+) or less/i);
+    if (koCostMatch) {
+      koByCost(opp, parseInt(koCostMatch[1]), game, card.name);
+    }
+
+    // Look at cards (simplified: draw 1)
+    if (/[Ll]ook at.*?(\d+) cards? from the top/i.test(effect) && !drawMatch) {
+      if (p.deck.length > 0) {
+        p.hand.push(p.deck.shift());
+        log(game, `${card.name}: searched top of deck (simplified).`);
+      }
+    }
+
+    // Add life card
+    if (/[Aa]dd up to 1 card from the top of your deck to.*?[Ll]ife/i.test(effect)) {
+      if (p.deck.length > 0) {
+        p.life.push(p.deck.shift());
+        log(game, `${card.name}: added a card to life (now ${p.life.length}).`);
+      }
+    }
+  }
+
+  // ── [When Attacking] effects ──
+  if (timing === 'whenAttacking' && ab.includes('[When Attacking]')) {
+    // Check DON!! requirement
+    const donReqMatch = ab.match(/\[DON!!\s*x(\d+)\]\s*\[When Attacking\]/);
+    if (donReqMatch) {
+      const required = parseInt(donReqMatch[1]);
+      if ((card.attachedDon || 0) < required) return;
+    }
+
+    const effect = extractEffect(ab, '[When Attacking]');
+    if (!effect) return;
+
+    // Check DON!! cost to activate
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+):/);
+    if (donCostMatch) {
+      const donCost = parseInt(donCostMatch[1]);
+      const totalDon = p.donActive + p.donRested;
+      if (totalDon < donCost) return;
+      let remaining = donCost;
+      const fromActive = Math.min(remaining, p.donActive);
+      p.donActive -= fromActive;
+      remaining -= fromActive;
+      if (remaining > 0) p.donRested -= remaining;
+      p.donDeck += donCost;
+      log(game, `${card.name}: paid ${donCost} DON!! for [When Attacking] effect.`);
+    }
+
+    // Power reduction to opponent's character
+    const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
+    if (powerRedMatch) {
+      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
+    }
+
+    // K.O. by power
+    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch) {
+      const koed = koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    }
+
+    // Self power boost
+    const selfBoostMatch = effect.match(/\+(\d+000)\s*power/i);
+    if (selfBoostMatch && !powerRedMatch) {
+      const boost = parseInt(selfBoostMatch[1]);
+      card.power += boost;
+      log(game, `${card.name}: gained +${boost} power this turn! (now ${card.power})`);
+    }
+
+    // Draw cards
+    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
+    if (drawMatch) {
+      drawCards(p, parseInt(drawMatch[1]), game, card.name);
+    }
+  }
+
+  // ── [Counter] effects for EVENTs ──
+  if (timing === 'counter') {
+    // Check for counter effects beyond the base counter value
+    const counterEffect = extractEffect(ab, '[Counter]');
+    if (!counterEffect) return;
+
+    // Power boost (already handled by counter value, but parse for additional effects)
+    const boostMatch = counterEffect.match(/gains?\s*\+(\d+000)\s*power/i);
+
+    // Draw cards from counter effect
+    const drawMatch = counterEffect.match(/[Dd]raw (\d+) card/);
+    if (drawMatch) {
+      drawCards(p, parseInt(drawMatch[1]), game, card.name);
+    }
+
+    // Bounce by cost
+    const bounceCostMatch = counterEffect.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less.*?hand/i);
+    if (bounceCostMatch) {
+      bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
+    }
+
+    // Rest opponent character
+    if (/rest up to 1.*opponent/i.test(counterEffect)) {
+      restOpponentCharacter(opp, game, card.name);
+    }
+
+    // Power reduction in counter
+    const powerRedMatch = counterEffect.match(/opponent.*?-(\d+000)\s*power/i);
+    if (powerRedMatch) {
+      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
+    }
+
+    // K.O. in counter
+    const koPowerMatch = counterEffect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch) {
+      koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+    }
+
+    // Play character from hand
+    const playMatch = counterEffect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    if (playMatch) {
+      autoPlayFromHand(p, parseInt(playMatch[1]), game, card.name);
+    }
+
+    // Nullify effects + power reduction
+    const nullifyPowerMatch = counterEffect.match(/[Nn]ullify.*?-(\d+000)\s*power/i);
+    if (nullifyPowerMatch) {
+      givePowerReduction(opp, parseInt(nullifyPowerMatch[1]), game, card.name);
+    }
+  }
+
+  // ── [Trigger] effects ──
+  if (timing === 'trigger') {
+    if (!ab.includes('[Trigger]')) return;
+    const effect = extractEffect(ab, '[Trigger]');
+    if (!effect) return;
+
+    // Draw cards
+    const drawMatch = effect.match(/[Dd]raw (\d+) card/i);
+    if (drawMatch) {
+      drawCards(p, parseInt(drawMatch[1]), game, card.name);
+    }
+
+    // Add DON active
+    if (/[Aa]dd up to 1.*?DON!!.*active/i.test(effect)) {
+      addDonFromDeck(p, 1, false, game, card.name);
+    }
+    // Add DON rested
+    else if (/[Aa]dd up to 1.*?DON!!/i.test(effect)) {
+      addDonFromDeck(p, 1, true, game, card.name);
+    }
+
+    // Power reduction
+    const powerRedMatch = effect.match(/-(\d+000)\s*power/i);
+    if (powerRedMatch) {
+      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
+    }
+
+    // Bounce by cost
+    const bounceCostMatch = effect.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less/i);
+    if (bounceCostMatch) {
+      bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
+    }
+
+    // Activate Main effect (for triggers that say "Activate this card's [Main] effect")
+    if (/[Aa]ctivate this card's \[Main\] effect/i.test(effect)) {
+      parseEventMain(game, playerId, card, opp);
+    }
+  }
+
+  // ── Event [Main] effects (for PLAY_CARD EVENT) ──
+  if (timing === 'eventMain') {
+    parseEventMain(game, playerId, card, opp);
   }
 }
 
-function applyEventEffect(game, playerId, card, opp) {
+// Separate parser for Event [Main] effects
+function parseEventMain(game, playerId, card, opp) {
+  const ab = card.ability || '';
   const p = game.players[playerId];
-  const ab = card.ability;
-  // Main K.O. by power
-  if (ab.includes('[Main]') && ab.includes('K.O.') && !ab.startsWith('[Counter]')) {
-    const m = ab.match(/(\d+000) [Pp]ower or less/);
-    const threshold = m ? parseInt(m[1]) : 5000;
-    const target = opp.field.find(c => (c.power+(c.attachedDon||0)*1000) <= threshold);
-    if (target) {
-      opp.field = opp.field.filter(c => c.uid !== target.uid);
-      opp.trash.push(target);
-      log(game, `${card.name}: K.O.'d ${target.name}!`);
+
+  if (!ab.includes('[Main]')) return;
+
+  // Extract the [Main] portion only
+  const mainIdx = ab.indexOf('[Main]');
+  let mainText = ab.substring(mainIdx + 6).trim();
+  // Cut at [Counter] or [Trigger]
+  for (const stop of ['[Counter]', '[Trigger]']) {
+    const si = mainText.indexOf(stop);
+    if (si > 0) mainText = mainText.substring(0, si).trim();
+  }
+
+  // Check DON!! rest cost (e.g. "You may rest 5 of your DON!! cards:")
+  const restDonMatch = mainText.match(/rest (\d+).*?DON!!/i);
+  if (restDonMatch) {
+    const restCost = parseInt(restDonMatch[1]);
+    if (p.donActive < restCost) {
+      log(game, `${card.name}: not enough active DON!! (need ${restCost}).`);
+      return;
+    }
+    p.donActive -= restCost;
+    p.donRested += restCost;
+  }
+
+  // K.O. by power
+  const koPowerMatch = mainText.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
+  if (koPowerMatch && !mainText.includes('cost of')) {
+    const koed = koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+    if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+  }
+
+  // K.O. by cost
+  const koCostMatch = mainText.match(/K\.O\.\s+up to 1.*?cost of (\d+) or less/i);
+  if (koCostMatch) {
+    const koed = koByCost(opp, parseInt(koCostMatch[1]), game, card.name);
+    if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+  }
+
+  // Power reduction
+  const powerRedMatch = mainText.match(/-(\d+000)\s*power/i);
+  if (powerRedMatch && !koPowerMatch) {
+    givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
+  }
+
+  // Draw cards
+  const drawMatch = mainText.match(/[Dd]raw (\d+) card/);
+  if (drawMatch) {
+    drawCards(p, parseInt(drawMatch[1]), game, card.name);
+  }
+
+  // Look at top N, add card to hand (search)
+  if (/[Ll]ook at.*?(\d+) cards?/i.test(mainText) && !drawMatch) {
+    if (p.deck.length > 0) {
+      p.hand.push(p.deck.shift());
+      log(game, `${card.name}: searched top of deck (simplified).`);
     }
   }
-  // Main K.O. by cost
-  if (ab.includes('[Main]') && ab.includes('K.O.') && ab.includes('cost of') && !ab.startsWith('[Counter]')) {
-    const m = ab.match(/cost of (\d+) or less/);
-    const threshold = m ? parseInt(m[1]) : 4;
-    const target = opp.field.find(c => (c.cost||0) <= threshold);
-    if (target) {
-      opp.field = opp.field.filter(c => c.uid !== target.uid);
-      opp.trash.push(target);
-      log(game, `${card.name}: K.O.'d ${target.name}!`);
-    }
+
+  // Return/bounce by cost
+  const bounceCostMatch = mainText.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less.*?hand/i);
+  if (bounceCostMatch) {
+    bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
   }
-  // Main draw
-  if (ab.includes('[Main]') && ab.includes('Draw') && !ab.includes('opponent')) {
-    const n = ab.includes('Draw 2') ? 2 : 1;
-    for (let i = 0; i < n && p.deck.length > 0; i++) p.hand.push(p.deck.shift());
-    log(game, `${card.name}: drew ${n} card(s).`);
+
+  // Add DON active
+  if (/[Aa]dd up to 1.*?[Aa]ctive DON!!/i.test(mainText) || /[Aa]dd up to 1 DON!!.*active/i.test(mainText)) {
+    addDonFromDeck(p, 1, false, game, card.name);
   }
-  // Main: look at top N, add card to hand
-  if (ab.includes('[Main]') && ab.includes('Look at') && !ab.includes('[Counter]')) {
-    if (p.deck.length > 0) { p.hand.push(p.deck.shift()); log(game, `${card.name}: searched top of deck.`); }
-  }
+}
+
+// Trigger [On K.O.] for a KO'd character
+function triggerOnKO(game, ownerId, card, killerId) {
+  if (!card.ability || !card.ability.includes('[On K.O.]')) return;
+  const owner = game.players[ownerId];
+  const opp = game.players[killerId];
+  if (!owner || !opp) return;
+  parseAndApply('onKO', game, ownerId, card, opp);
+}
+
+// Check and apply [Trigger] when a life card is flipped
+function applyTriggerEffect(game, playerId, card) {
+  if (!card.ability || !card.ability.includes('[Trigger]')) return;
+  const oppId = Object.keys(game.players).find(id => id !== playerId);
+  const opp = game.players[oppId];
+  log(game, `[Trigger] ${card.name} trigger activated!`);
+  parseAndApply('trigger', game, playerId, card, opp);
 }
 
 // ─── WEBSOCKET ───
