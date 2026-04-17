@@ -431,9 +431,9 @@ const CARD_DB = [
     power:0, cost:4, counter:0, image:IMG('ST04','ST04-015','png'),
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
 
-  { id:'ST04-017', name:'Onigashima', type:'STAGE', color:'Purple', attribute:'',
+  { id:'ST04-017', name:'The Canals', type:'STAGE', color:'Purple', attribute:'',
     power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'),
-    ability:"[Activate: Main] You may rest this Stage: If you have 8 or more DON!! cards on your field, give up to 1 of your Characters +1000 power during this turn." },
+    ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Animal Kingdom Pirates} type, add up to 1 DON!! card from your DON!! deck and rest it." },
 
   // ══════════════════════════════
   // CONSTABLE JACK — HOLY ROMAN EMPIRE (homebrew)
