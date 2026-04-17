@@ -548,7 +548,9 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   background:url('don-card.png') center/cover no-repeat;
   box-shadow:1px 1px 4px rgba(0,0,0,.25);
 }
-.don-stack-rested{opacity:.6;}
+.don-stack-rested .don-stack-card{transform:rotate(90deg);}
+.don-stack-rested{opacity:.7;}
+.don-stack.don-glow{box-shadow:0 0 12px 4px rgba(212,180,50,.6);border-radius:6px;}
 .don-badge{
   position:absolute;bottom:4px;right:4px;
   background:rgba(0,0,0,.75);color:var(--gold);
@@ -1575,19 +1577,26 @@ function enterDonAttachMode() {
   cancelSel();
   donAttachMode = true;
   hideAllBtnGroups();
-  hint('Select a card to attach DON!! to.');
-  // Highlight all friendly leader + characters
+  hint('Select a character or leader to attach DON!! to.');
+  // Glow the active DON stack
+  document.querySelectorAll('.don-stack:not(.don-stack-rested)').forEach(s => s.classList.add('don-glow'));
+  // Highlight all friendly leader + characters as valid targets
   const me = myPlayer();
-  document.querySelector(`[data-uid="${me.leader.uid}"]`)?.classList.add('selected');
+  document.querySelector(`[data-uid="${me.leader.uid}"]`)?.classList.add('targetable');
   me.field.forEach(c => {
-    if (c.type !== 'STAGE') document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('selected');
+    if (c.type !== 'STAGE') document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('targetable');
   });
 }
 
 function handleDonAttach(uid) {
   act({ type: 'ATTACH_DON', targetUid: uid });
   donAttachMode = false;
-  document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected'));
+  document.querySelectorAll('.gcard').forEach(el => el.classList.remove('targetable'));
+  document.querySelectorAll('.don-stack').forEach(s => s.classList.remove('don-glow'));
+  // Restore default buttons
+  if (game && game.phase === 'MAIN' && isMyTurn()) {
+    document.getElementById('playBtns').style.display = 'flex';
+  }
 }
 
 function renderLife(id, countId, max, remaining) {
@@ -1821,6 +1830,7 @@ function passCounter() {
 function cancelSel() {
   sel = null; attackMode = false; counterMode = false; donAttachMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
+  document.querySelectorAll('.don-stack').forEach(s => s.classList.remove('don-glow'));
   hideAllBtnGroups();
   // Restore default buttons for current phase
   if (game && isMyTurn()) {
