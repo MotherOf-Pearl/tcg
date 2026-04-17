@@ -1086,9 +1086,15 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;">Select a target to attack</div>
         <button class="gb-pbtn gb-pbtn-sm" onclick="cancelAttack()">Cancel</button>
       </div>
-      <!-- Phase 1: BLOCK_STEP info for the attacker (Phase 2 will add defender UI) -->
+      <!-- Phase 1: BLOCK_STEP info for the attacker -->
       <div id="blockStepInfo" style="display:none;flex-direction:column;gap:4px;">
         <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);text-align:center;line-height:1.35;" id="blockStepText"></div>
+      </div>
+      <!-- Phase 2: BLOCK_STEP options for the defender -->
+      <div id="blockBtns" style="display:none;flex-direction:column;gap:4px;">
+        <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);text-align:center;line-height:1.35;">Block Step — choose to block or continue</div>
+        <button class="gb-pbtn gb-pbtn-sm" id="btnUseBlocker" onclick="enterBlockerMode()" style="display:none;">Use Blocker</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="btnNoBlocker" onclick="noBlocker()">No Blocker</button>
       </div>
       <!-- Counter/Block -->
       <div id="counterBtns" style="display:none;flex-direction:column;gap:4px;">
@@ -1225,7 +1231,7 @@ let cardDb = [];
 let myDeck = { leaderId: 'OP14-060', cards: [] };
 let selectedDeck = JSON.parse(localStorage.getItem('boohawk_deck') || 'null');
 if (!selectedDeck) pickDeck('Doflamingo');
-let sel = null, attackMode = false, counterMode = false;
+let sel = null, attackMode = false, counterMode = false, blockerMode = false;
 
 // ─── SOLO MODE ───
 const isSolo = new URLSearchParams(window.location.search).get('solo') === 'true';
@@ -1438,10 +1444,13 @@ function doMulligan(mulligan) {
 function renderGame() {
   if (!game || !myId) return;
 
-  // In solo mode, auto-switch to the active player (or defender during counter)
+  // In solo mode, auto-switch to the active player (or defender during counter / block step / counter step)
   if (isSolo) {
     if (game.counterWindow && !game.counterDone[game.counterWindow.defenderId]) {
       myId = game.counterWindow.defenderId;
+    } else if (game.battleState && (game.phase === 'BLOCK_STEP' || game.phase === 'COUNTER_STEP')) {
+      // Defender acts during block/counter steps — switch viewport to them.
+      myId = Object.keys(game.players).find(id => id !== game.battleState.attackerId);
     } else if (!game.counterWindow) {
       myId = game.activePlayer;
     }
@@ -1528,14 +1537,32 @@ function renderGame() {
     highlightTargets();
   } else if (bs && game.phase === 'BLOCK_STEP') {
     if (bs.attackerId === myId) {
+      // Attacker view — info only, waiting for defender.
       hideAllBtnGroups();
       document.getElementById('blockStepInfo').style.display = 'flex';
       document.getElementById('blockStepText').textContent =
         `Attacking: ${bs.attackerName} [${bs.attackerPower.toLocaleString()}] \u2192 ${bs.targetName} [${bs.targetPower.toLocaleString()}]`;
+    } else {
+      // Defender view — Phase 2 block options.
+      hideAllBtnGroups();
+      document.getElementById('blockBtns').style.display = 'flex';
+      const hasViableBlocker = me.field.some(c =>
+        !c.rested && c.ability && c.ability.includes('[Blocker]')
+      );
+      document.getElementById('btnUseBlocker').style.display = hasViableBlocker ? 'block' : 'none';
     }
     // Show arrow + power overlays on both sides after the DOM settles (cards are just rendered).
     requestAnimationFrame(() => {
       // Raise attacker/target above adjacent absolutely-positioned elements (like .don-area).
+      [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
+      drawBattleArrow(bs.attackerUid, bs.targetUid);
+      showPowerOverlay(bs.attackerUid, bs.attackerPower);
+      showPowerOverlay(bs.targetUid, bs.targetPower);
+    });
+  } else if (bs && game.phase === 'COUNTER_STEP') {
+    // Phase 3 will fill this in. For now, keep the arrow + powers visible so the new
+    // target (if a blocker was chosen) is reflected in the UI.
+    requestAnimationFrame(() => {
       [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
       drawBattleArrow(bs.attackerUid, bs.targetUid);
       showPowerOverlay(bs.attackerUid, bs.attackerPower);
@@ -1578,8 +1605,10 @@ function renderGame() {
     // Battle-phase hints take priority so the defender knows what's happening too.
     if (game.phase === 'ATTACKING' && bs?.attackerId === myId) hint('Select a target to attack.');
     else if (game.phase === 'ATTACKING') hint('Opponent is declaring an attack...');
-    else if (game.phase === 'BLOCK_STEP' && bs?.attackerId === myId) hint('Attack declared — awaiting block step.');
-    else if (game.phase === 'BLOCK_STEP') hint('Opponent is attacking...');
+    else if (game.phase === 'BLOCK_STEP' && bs?.attackerId === myId) hint('Awaiting block step.');
+    else if (game.phase === 'BLOCK_STEP') {} // hint left to blockBtns panel
+    else if (game.phase === 'COUNTER_STEP' && bs?.attackerId === myId) hint('Awaiting counter step.');
+    else if (game.phase === 'COUNTER_STEP') hint('Counter step (Phase 3 not built).');
     else if (!isActive) hint("Opponent's turn…");
     else if (game.phase === 'DRAW') hint('Draw a card.');
     else if (game.phase === 'DON') hint('Draw DON.');
@@ -1996,13 +2025,19 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
 }
 
 function selectCard(uid, source) {
+  // Phase 2: defender clicking one of their own active blockers during BLOCK_STEP.
+  // Must run before the isMyTurn/MAIN guards because the defender is not the active player.
+  if (blockerMode && source === 'field') {
+    selectBlocker(uid);
+    return;
+  }
   if (!isMyTurn()) return;
   if (game.phase !== 'MAIN') return;
 
@@ -2106,6 +2141,32 @@ function cancelAttack() {
   act({ type: 'CANCEL_ATTACK' });
 }
 
+// ─── Phase 2 block step ───
+function enterBlockerMode() {
+  if (!game?.battleState || game.phase !== 'BLOCK_STEP') return;
+  blockerMode = true;
+  // Highlight all of my own active [Blocker] characters in red.
+  const me = myPlayer();
+  me.field.forEach(c => {
+    if (!c.rested && c.ability && c.ability.includes('[Blocker]')) {
+      document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('targetable-attack');
+    }
+  });
+  hint('Select a blocker.');
+}
+
+function selectBlocker(uid) {
+  if (!blockerMode) return;
+  blockerMode = false;
+  document.querySelectorAll('.targetable-attack').forEach(el => el.classList.remove('targetable-attack'));
+  act({ type: 'USE_BLOCKER', blockerUid: uid });
+}
+
+function noBlocker() {
+  if (!game?.battleState || game.phase !== 'BLOCK_STEP') return;
+  act({ type: 'NO_BLOCKER' });
+}
+
 function useBlocker() {
   const me = myPlayer();
   const blocker = me.field.find(c => !c.rested && c.ability && c.ability.includes('[Blocker]'));
@@ -2138,7 +2199,7 @@ function passCounter() {
 }
 
 function cancelSel() {
-  sel = null; attackMode = false; counterMode = false; donAttachMode = false;
+  sel = null; attackMode = false; counterMode = false; donAttachMode = false; blockerMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
   document.querySelectorAll('.don-area').forEach(s => s.classList.remove('don-glow'));
   hideAllBtnGroups();

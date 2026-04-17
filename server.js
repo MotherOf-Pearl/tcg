@@ -961,6 +961,38 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // ─── Phase 2 block step ───
+    case 'USE_BLOCKER': {
+      if (game.phase !== 'BLOCK_STEP' || !game.battleState) return;
+      const defenderId = Object.keys(game.players).find(id => id !== game.battleState.attackerId);
+      if (playerId !== defenderId) return;
+      const defender = game.players[defenderId];
+      const blocker = defender.field.find(c => c.uid === action.blockerUid);
+      if (!blocker) { send(playerId, {type:'ERROR', msg:'Invalid blocker'}); return; }
+      if (!blocker.ability || !blocker.ability.includes('[Blocker]')) {
+        send(playerId, {type:'ERROR', msg:'That card has no [Blocker]'}); return;
+      }
+      if (blocker.rested) { send(playerId, {type:'ERROR', msg:'Blocker is rested'}); return; }
+      // Rest the blocker and redirect the battle target onto it.
+      blocker.rested = true;
+      game.battleState.targetUid = blocker.uid;
+      game.battleState.targetName = blocker.name;
+      game.battleState.targetPower = (blocker.power || 0) + (blocker.attachedDon || 0) * 1000;
+      game.battleState.targetIsLeader = false;
+      game.phase = 'COUNTER_STEP';
+      log(game, `\uD83D\uDEE1\uFE0F ${blocker.name} blocks the attack!`);
+      break;
+    }
+
+    case 'NO_BLOCKER': {
+      if (game.phase !== 'BLOCK_STEP' || !game.battleState) return;
+      const defenderId = Object.keys(game.players).find(id => id !== game.battleState.attackerId);
+      if (playerId !== defenderId) return;
+      game.phase = 'COUNTER_STEP';
+      log(game, `Defender declines to block.`);
+      break;
+    }
+
     case 'COUNTER': {
       if (!game.counterWindow || game.counterWindow.defenderId !== playerId) return;
       const idx = p.hand.findIndex(c => c.uid === action.cardUid);
