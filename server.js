@@ -19,8 +19,8 @@ const server = http.createServer((req, res) => {
     const file = path.join(__dirname, page);
     res.writeHead(200, { 'Content-Type': 'text/html' });
     fs.createReadStream(file).pipe(res);
-  } else if (pathname === '/card-back.png') {
-    const file = path.join(__dirname, 'card-back.png');
+  } else if (pathname === '/card-back.png' || pathname === '/don-card.png') {
+    const file = path.join(__dirname, pathname.slice(1));
     res.writeHead(200, { 'Content-Type': 'image/png' });
     fs.createReadStream(file).pipe(res);
   } else {
