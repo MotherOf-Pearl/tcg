@@ -549,6 +549,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     mulliganDone: { [p1id]: false, [p2id]: false },
     counterWindow: null,
     counterDone: { [p1id]: false, [p2id]: false },
+    firstPlayer: p1id,
   };
 }
 
@@ -738,9 +739,10 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'DRAW_DON': {
-      console.log('DRAW_DON:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase });
+      console.log('DRAW_DON:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn, isFirstPlayer: playerId === game.firstPlayer });
       if (!isActive || game.phase !== 'DON') return;
-      const amount = game.turn <= 2 ? 1 : 2;
+      // P1 turn 1 gets 1 DON, everyone else gets 2
+      const amount = (game.turn === 1 && playerId === game.firstPlayer) ? 1 : 2;
       const added = Math.min(amount, p.donDeck);
       p.donDeck -= added;
       p.donActive += added;
