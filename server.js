@@ -594,7 +594,15 @@ function doRefresh(game) {
   const p = game.players[game.activePlayer];
   p.leader.rested = false;
   p.leader.usedThisTurn = false;
-  p.field.forEach(c => { c.rested = false; c.usedThisTurn = false; c.playedThisTurn = false; });
+  // Return attached DON to active pool
+  p.donActive += (p.leader.attachedDon || 0);
+  p.leader.attachedDon = 0;
+  p.field.forEach(c => {
+    c.rested = false; c.usedThisTurn = false; c.playedThisTurn = false;
+    p.donActive += (c.attachedDon || 0);
+    c.attachedDon = 0;
+  });
+  // Rested DON also becomes active
   p.donActive += p.donRested;
   p.donRested = 0;
   log(game, `Turn ${game.turn}: ${game.activePlayer.slice(0,6)} refreshes all cards.`);
@@ -804,7 +812,7 @@ function handleAction(roomId, playerId, action) {
       else target = p.field.find(c => c.uid === action.targetUid);
       if (!target) return;
       p.donActive--;
-      p.donRested++;
+      // DON goes onto the card, not into rested pool
       target.attachedDon = (target.attachedDon||0) + 1;
       log(game, `${playerId.slice(0,6)} attaches DON!! to ${target.name}. (+1000 power)`);
       break;
