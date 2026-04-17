@@ -945,10 +945,11 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <div id="scryOverlay" style="display:none;flex-direction:column;align-items:center;gap:4px;padding:6px;background:rgba(20,12,4,.85);border:1px solid rgba(180,140,50,.3);border-radius:6px;margin:2px 4px;flex-shrink:0;">
       <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);text-align:center;" id="scryTitle">Select order (1 = top)</div>
       <div id="scryCards" style="display:flex;gap:4px;justify-content:center;"></div>
-      <div style="display:flex;gap:6px;">
-        <button class="gb-pbtn gb-pbtn-sm" id="scryConfirm" onclick="confirmScry()" style="display:none;">Confirm Order</button>
-        <button class="gb-pbtn gb-pbtn-sm" id="scrySkip" onclick="skipScry()" style="display:none;">Skip</button>
+      <div id="scryConfirm" style="display:none;gap:6px;">
+        <button class="gb-pbtn gb-pbtn-sm" onclick="confirmScry('top')">Place at the top</button>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="confirmScry('bottom')">Place at the bottom</button>
       </div>
+      <button class="gb-pbtn gb-pbtn-sm" id="scrySkip" onclick="skipScry()" style="display:none;">Skip</button>
     </div>
     <div class="gb-self-hand" id="selfHand"></div>
   </div>
@@ -1733,13 +1734,13 @@ function updateScryDisplay() {
       el.appendChild(badge);
     }
   });
-  // Show confirm when all non-kept cards have been ordered
+  // Show placement buttons when all non-kept cards have been ordered
   const remaining = scryCards.length - scryKeep.length;
   document.getElementById('scryConfirm').style.display =
-    scryOrder.length === remaining ? 'block' : 'none';
+    scryOrder.length === remaining ? 'flex' : 'none';
 }
 
-function confirmScry() {
+function confirmScry(placement) {
   // Map scryOrder indices to the remaining (non-kept) card positions
   const remainingIndices = scryCards.map((_, i) => i).filter(i => !scryKeep.includes(i));
   const orderedRemaining = scryOrder.map(idx => remainingIndices.indexOf(idx));
@@ -1748,6 +1749,7 @@ function confirmScry() {
     type: 'SCRY_RESOLVE',
     keptIndices: scryKeep,
     order: orderedRemaining,
+    placement: placement === 'top' ? 'top' : 'bottom',
   });
   closeScry();
 }
@@ -1758,6 +1760,7 @@ function skipScry() {
     type: 'SCRY_RESOLVE',
     keptIndices: [],
     order: scryCards.map((_, i) => i),
+    placement: 'bottom',
   });
   closeScry();
 }

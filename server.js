@@ -919,6 +919,7 @@ function handleAction(roomId, playerId, action) {
       const sw = game.scryWindow;
       const kept = action.keptIndices || []; // indices of cards to keep in hand
       const order = action.order || []; // ordered indices for cards going back to deck
+      const placement = action.placement === 'top' ? 'top' : 'bottom';
 
       // Add kept cards to hand
       kept.forEach(idx => {
@@ -926,14 +927,15 @@ function handleAction(roomId, playerId, action) {
       });
       if (kept.length > 0) log(game, `${sw.cardName}: added ${kept.length} card(s) to hand.`);
 
-      // Put remaining cards back on top of deck in specified order
+      // Cards returning to the deck in the player's chosen order (first = top of that placement)
       const remaining = sw.cards.filter((_, idx) => !kept.includes(idx));
       const ordered = order.length > 0
         ? order.map(idx => remaining[idx]).filter(Boolean)
         : remaining;
-      // Place on top of deck in order (first in array = top of deck)
-      p.deck.unshift(...ordered);
-      log(game, `${sw.cardName}: returned ${ordered.length} card(s) to top of deck.`);
+      // deck[0] = top of deck; unshift places on top, push places on bottom
+      if (placement === 'top') p.deck.unshift(...ordered);
+      else p.deck.push(...ordered);
+      log(game, `${sw.cardName}: returned ${ordered.length} card(s) to ${placement} of deck.`);
 
       game.scryWindow = null;
       break;
