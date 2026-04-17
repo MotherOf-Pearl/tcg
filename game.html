@@ -939,46 +939,53 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   <!-- ═══ RIGHT 1/3 — LOG + BUTTONS ═══ -->
   <div class="gb-right-col">
     <div class="gb-right-top">
-      <button class="gb-pbtn" onclick="window.location.href='/index.html'">Back to Main</button>
+      <button class="gb-pbtn gb-pbtn-sm" onclick="window.location.href='/index.html'">Back to Main</button>
     </div>
+    <!-- Phase / DON info -->
     <div class="gb-info">
       <div class="gb-info-phase" id="phasePill">DON</div>
       <div class="gb-info-turn" id="turnText">Turn 1</div>
       <div class="gb-info-active" id="activeText"></div>
+      <div id="donInfo" style="font-size:.75rem;color:var(--gold);font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;"></div>
       <div id="midPhase" style="display:none;"></div>
     </div>
-    <!-- Game log — fills the middle -->
-    <div class="gb-log" id="logbar"><p>Welcome to OPTCGSim</p></div>
     <!-- Hidden compat elements -->
     <div id="selfLife" style="display:none;"></div>
     <div id="selfLifeCount" style="display:none;"></div>
     <span id="selfDonDeck" style="display:none;">10</span>
-    <!-- Buttons at bottom -->
+    <div id="logbar" style="display:none;"></div>
+    <!-- Contextual action area -->
     <div class="gb-right-bottom">
+      <!-- Mulligan -->
       <div id="mulliganBtns" style="display:flex;flex-direction:column;gap:6px;">
         <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(true)">Mulligan</button>
         <button class="gb-pbtn gb-pbtn-lg" onclick="doMulligan(false)">Keep</button>
       </div>
-      <p id="mulliganWait" style="display:none;color:#8a7860;font-size:0.8rem;text-align:center;">Waiting for opponent…</p>
-      <!-- Draw phase buttons -->
+      <p id="mulliganWait" style="display:none;color:#8a7860;font-size:.8rem;text-align:center;">Waiting for opponent…</p>
+      <!-- Draw phase -->
       <div id="drawBtns" style="display:none;flex-direction:column;gap:4px;">
         <button class="gb-pbtn gb-pbtn-lg" id="btnDrawCard" onclick="act({type:'DRAW_CARD'})">Draw Card</button>
         <button class="gb-pbtn gb-pbtn-lg" id="btnDrawDon" onclick="act({type:'DRAW_DON'})">Draw DON</button>
       </div>
-      <!-- Main phase buttons -->
+      <!-- Main phase default -->
       <div id="playBtns" style="display:none;flex-direction:column;gap:4px;">
         <button class="gb-pbtn gb-pbtn-lg" onclick="act({type:'END_TURN'})">End Turn</button>
-        <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
-        <button class="gb-pbtn gb-pbtn-sm" style="display:none;" id="btnCounter" onclick="passCounter()">Pass Counter</button>
       </div>
-      <!-- Battle buttons - shown during combat -->
+      <!-- Card selected from hand -->
+      <div id="handSelBtns" style="display:none;flex-direction:column;gap:4px;">
+        <button class="gb-pbtn gb-pbtn-lg" id="btnDeploy" onclick="deploySelected()">Deploy</button>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
+        <span id="deployHint" class="gb-hint"></span>
+      </div>
+      <!-- Field card selected -->
       <div id="battleBtns" style="display:none;flex-direction:column;gap:4px;">
         <button class="gb-pbtn gb-pbtn-lg" id="btnAttack" onclick="declareAttack()">Attack</button>
-        <button class="gb-pbtn gb-pbtn-sm" id="btnCancelSel" onclick="cancelSel()">Cancel</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
       </div>
-      <!-- Counter/Block buttons - shown to defender -->
+      <!-- Counter/Block -->
       <div id="counterBtns" style="display:none;flex-direction:column;gap:4px;">
-        <div id="battleInfo" style="font-size:0.75rem;color:var(--text);text-align:center;padding:4px;"></div>
+        <div id="battleInfo" style="font-size:.75rem;color:var(--text);text-align:center;padding:4px;"></div>
         <button class="gb-pbtn gb-pbtn-sm" id="btnBlock" style="display:none;" onclick="useBlocker()">Use Blocker</button>
         <button class="gb-pbtn gb-pbtn-lg" id="btnResolve" onclick="passCounter()">Resolve Attack</button>
       </div>
@@ -1378,36 +1385,26 @@ function renderGame() {
 
   renderLog();
 
+  // Update DON info display
+  document.getElementById('donInfo').textContent = `DON!! ${me.donActive}/${me.donActive + me.donRested}`;
+
   const hasCW = !!game.counterWindow;
   if (hasCW) {
     const cw = game.counterWindow;
-    document.getElementById('playBtns').style.display = 'none';
-    document.getElementById('drawBtns').style.display = 'none';
-    document.getElementById('battleBtns').style.display = 'none';
+    hideAllBtnGroups();
 
     if (cw.defenderId === myId) {
-      // Show counter/block UI to defender
       document.getElementById('counterBtns').style.display = 'flex';
       document.getElementById('battleInfo').innerHTML =
         `<b>⚔️ Attack: ${cw.attackPower}</b> vs <b>🛡️ Defense: ${cw.defendPower}</b>`;
-
-      // Check for blockers
-      const meForBlocker = myPlayer();
-      const hasBlockerCard = meForBlocker.field.some(c => !c.rested && c.ability && c.ability.includes('[Blocker]'));
+      const hasBlockerCard = me.field.some(c => !c.rested && c.ability && c.ability.includes('[Blocker]'));
       document.getElementById('btnBlock').style.display = hasBlockerCard ? 'block' : 'none';
-
       counterMode = true;
-      hint('Play counter cards from your hand or resolve the attack.');
+      hint('Play counter cards or resolve.');
     } else {
-      // Attacker waiting
-      document.getElementById('counterBtns').style.display = 'none';
       hint('Waiting for opponent to counter...');
     }
-  } else {
-    document.getElementById('counterBtns').style.display = 'none';
   }
-
-  document.getElementById('btnAttachDon').style.display = (sel && !hasCW && game.phase === 'MAIN') ? 'inline-block' : 'none';
 
   if (game.winner) {
     if (isSolo) {
@@ -1424,10 +1421,11 @@ function renderGame() {
   if (!hasCW) {
     counterMode = false;
     if (!isActive) hint("Opponent's turn…");
-    else if (game.phase === 'DRAW') hint('Draw a card from your deck.');
-    else if (game.phase === 'DON') hint('Draw DON to add to your cost area.');
-    else if (game.phase === 'MAIN') hint('Play cards, attach DON, or attack. End Turn when done.');
-    else hint('Waiting…');
+    else if (game.phase === 'DRAW') hint('Draw a card.');
+    else if (game.phase === 'DON') hint('Draw DON.');
+    else if (game.phase === 'MAIN' && !sel) hint('Select a card to play or attack.');
+    else if (game.phase === 'MAIN') {} // hint set by selectCard
+    else hint('');
   }
 }
 
@@ -1608,6 +1606,13 @@ function makeBrowserCard(card, onClick) {
 }
 
 // ─── SELECTION & ACTIONS ───
+function hideAllBtnGroups() {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns'].forEach(id => {
+    document.getElementById(id).style.display = 'none';
+  });
+  document.getElementById('mulliganWait').style.display = 'none';
+}
+
 function selectCard(uid, source) {
   if (!isMyTurn()) return;
   if (game.phase !== 'MAIN') return;
@@ -1618,10 +1623,10 @@ function selectCard(uid, source) {
     return;
   }
 
-  // Toggle selection
+  // Toggle selection off
   if (sel?.uid === uid) { cancelSel(); return; }
 
-  cancelSel(); // clear previous
+  cancelSel();
   sel = { uid, source };
   document.querySelector(`[data-uid="${uid}"]`)?.classList.add('selected');
 
@@ -1629,40 +1634,51 @@ function selectCard(uid, source) {
   const card = findCard(uid, me);
 
   if (source === 'hand' && card) {
-    // Hand card selected - show play option
-    hint(`${card.name} selected — click again to play (costs ${card.cost} DON!!)`);
-    document.getElementById('btnAttachDon').style.display = 'inline-block';
+    // Hand card — show Deploy or not enough DON
+    hideAllBtnGroups();
+    const deployHint = document.getElementById('deployHint');
+    if (me.donActive >= card.cost) {
+      document.getElementById('handSelBtns').style.display = 'flex';
+      deployHint.textContent = `${card.name} — Cost: ${card.cost} DON!!`;
+    } else {
+      document.getElementById('handSelBtns').style.display = 'flex';
+      document.getElementById('btnDeploy').style.display = 'none';
+      deployHint.textContent = `Not enough DON!! (need ${card.cost}, have ${me.donActive})`;
+    }
   } else if (source === 'field' || source === 'leader') {
-    // Field card or leader selected - check if can attack
-    const canAttack = !card.rested && (source === 'leader' || card.type !== 'STAGE');
-    // Check turn 1 restriction
+    // Field card or leader — show Attack if valid
+    hideAllBtnGroups();
     if (game.turn === 1) {
-      hint(`Cannot attack on turn 1.`);
+      hint('Cannot attack on turn 1.');
       return;
     }
-    // Check if character was just played (no Rush)
     if (source === 'field' && card.playedThisTurn && !(card.ability && card.ability.includes('[Rush]'))) {
       hint(`${card.name} cannot attack the turn it was played.`);
       return;
     }
-    if (canAttack) {
-      // Show Attack and Cancel buttons
-      document.getElementById('playBtns').style.display = 'none';
+    if (!card.rested && (source === 'leader' || card.type !== 'STAGE')) {
       document.getElementById('battleBtns').style.display = 'flex';
-      hint(`${card?.name || 'Leader'} selected — click Attack to declare.`);
+      hint(`${card?.name || 'Leader'} — Attack or Attach DON!!`);
     } else {
-      hint(`${card?.name || 'Card'} is rested and cannot attack.`);
+      hint(`${card?.name || 'Card'} is rested.`);
     }
-    document.getElementById('btnAttachDon').style.display = 'inline-block';
   }
 }
+
+function deploySelected() {
+  if (!sel) return;
+  act({ type: 'PLAY_CARD', cardUid: sel.uid });
+  cancelSel();
+}
+
 function declareAttack() {
   if (!sel) return;
   attackMode = true;
-  document.getElementById('battleBtns').style.display = 'none';
+  hideAllBtnGroups();
   hint('Select an enemy card to attack.');
   highlightTargets();
 }
+
 function highlightTargets() {
   const opp = oppPlayer();
   document.querySelector(`[data-uid="${opp.leader.uid}"]`)?.classList.add('targetable');
@@ -1672,38 +1688,39 @@ function highlightTargets() {
     }
   });
 }
+
 function selectTarget(defUid) {
   if (!sel) return;
   act({ type: 'ATTACK', attackerUid: sel.uid, defenderUid: defUid });
-  // Clear selection state but keep attackMode info for UI
   sel = null; attackMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
-  document.getElementById('battleBtns').style.display = 'none';
-  document.getElementById('btnAttachDon').style.display = 'none';
+  hideAllBtnGroups();
 }
+
 function useBlocker() {
-  // Find first available blocker
   const me = myPlayer();
   const blocker = me.field.find(c => !c.rested && c.ability && c.ability.includes('[Blocker]'));
   if (blocker) {
     act({ type: 'BLOCK', blockerUid: blocker.uid });
   }
 }
+
 function playCard(uid) { act({ type: 'PLAY_CARD', cardUid: uid }); cancelSel(); }
 function attachDon() { if (!sel) return; act({ type: 'ATTACH_DON', targetUid: sel.uid }); }
 function passCounter() {
   act({ type: 'PASS_COUNTER' }); counterMode = false;
-  document.getElementById('btnCounter').style.display = 'none';
-  document.getElementById('counterBtns').style.display = 'none';
+  hideAllBtnGroups();
 }
+
 function cancelSel() {
   sel = null; attackMode = false; counterMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
-  document.getElementById('btnAttachDon').style.display = 'none';
-  document.getElementById('battleBtns').style.display = 'none';
-  // Restore play buttons if in MAIN phase and active
-  if (game && game.phase === 'MAIN' && isMyTurn()) {
-    document.getElementById('playBtns').style.display = 'flex';
+  hideAllBtnGroups();
+  // Restore default buttons for current phase
+  if (game && isMyTurn()) {
+    if (game.phase === 'MAIN') document.getElementById('playBtns').style.display = 'flex';
+    else if (game.phase === 'DRAW') { document.getElementById('drawBtns').style.display = 'flex'; }
+    else if (game.phase === 'DON') { document.getElementById('drawBtns').style.display = 'flex'; }
   }
 }
 function isMyTurn()  { return game?.activePlayer === myId; }
