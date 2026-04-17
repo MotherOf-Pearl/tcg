@@ -579,21 +579,19 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   0%,100%{box-shadow:0 0 0 3px rgba(255,40,40,.9), 0 0 18px 6px rgba(255,80,80,.45);}
   50%    {box-shadow:0 0 0 3px rgba(255,40,40,1),  0 0 24px 10px rgba(255,100,100,.75);}
 }
+/* Power overlays live in a fixed-position container at document root
+   (#battleOverlays) so they're never clipped by .gcard's overflow:hidden
+   or any zone transform. JS positions them via getBoundingClientRect. */
 .power-overlay{
-  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-  font-family:'Cinzel',serif;font-size:2.4rem;font-weight:900;
-  color:#fff;text-shadow:0 2px 6px #000,0 0 12px #000,0 0 3px #000;
-  pointer-events:none;z-index:26;letter-spacing:1px;
+  position:fixed;transform:translate(-50%,-50%);
+  font-family:'Cinzel',serif;font-size:2.6rem;font-weight:900;
+  color:#fff;text-shadow:0 2px 6px #000,0 0 14px #000,0 0 3px #000;
+  pointer-events:none;letter-spacing:1px;white-space:nowrap;
 }
-/* Keep power numbers right-side up regardless of card/zone rotation. */
-/* Opponent zone applies rotate(180deg) — counter it. */
-.gb-zone-opp .power-overlay{transform:translate(-50%,-50%) rotate(180deg);}
-/* Rested cards are rotated 90deg (wrap or bare gcard) — counter it. */
-.gcard.rested .power-overlay,
-.gcard-wrap.rested .power-overlay{transform:translate(-50%,-50%) rotate(-90deg);}
-/* Opponent + rested stacks both rotations (180+90=270) — counter to readable. */
-.gb-zone-opp .gcard.rested .power-overlay,
-.gb-zone-opp .gcard-wrap.rested .power-overlay{transform:translate(-50%,-50%) rotate(90deg);}
+/* During battle, raise the attacker/target so rotated leaders don't
+   disappear under the adjacent .don-area (z-index:1). */
+.battle-active{z-index:50 !important;}
+.gcard.battle-active, .gcard-wrap.battle-active{z-index:50 !important;position:relative;}
 .scry-order{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   background:rgba(0,0,0,.8);color:var(--gold);
@@ -1102,6 +1100,9 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
 </div><!-- #game -->
 
+<!-- Phase 1 battle overlays: fixed-position container for power numbers (above the SVG arrow). -->
+<div id="battleOverlays" style="position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:35;"></div>
+
 <!-- Phase 1 battle arrow — fixed full-viewport SVG overlay drawn during BLOCK_STEP -->
 <svg id="battleArrow" style="position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:30;display:none;">
   <defs>
@@ -1508,9 +1509,10 @@ function renderGame() {
   document.getElementById('donInfo').textContent = `DON!! ${me.donActive}/${me.donActive + me.donRested}`;
 
   // ─── Phase 1 battle overlays ───
-  // Clear prior overlays/arrows on every re-render; they're re-applied below if still relevant.
+  // Clear prior overlays/arrows/battle-active on every re-render; they're re-applied below if still relevant.
   clearPowerOverlays();
   hideBattleArrow();
+  clearBattleActive();
   document.querySelectorAll('.targetable-attack').forEach(el => el.classList.remove('targetable-attack'));
 
   const bs = game.battleState;
@@ -1530,6 +1532,8 @@ function renderGame() {
     }
     // Show arrow + power overlays on both sides after the DOM settles (cards are just rendered).
     requestAnimationFrame(() => {
+      // Raise attacker/target above adjacent absolutely-positioned elements (like .don-area).
+      [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
       drawBattleArrow(bs.attackerUid, bs.targetUid);
       showPowerOverlay(bs.attackerUid, bs.attackerPower);
       showPowerOverlay(bs.targetUid, bs.targetPower);
@@ -1582,10 +1586,14 @@ function renderGame() {
   }
 }
 
-// Redraw the battle arrow on window resize so it stays anchored to card positions.
+// Redraw arrow + reposition power overlays on window resize (they're fixed-position, not card-anchored).
 window.addEventListener('resize', () => {
   if (game && game.battleState && game.phase === 'BLOCK_STEP') {
-    drawBattleArrow(game.battleState.attackerUid, game.battleState.targetUid);
+    const bs = game.battleState;
+    drawBattleArrow(bs.attackerUid, bs.targetUid);
+    clearPowerOverlays();
+    showPowerOverlay(bs.attackerUid, bs.attackerPower);
+    showPowerOverlay(bs.targetUid, bs.targetPower);
   }
 });
 
@@ -2217,17 +2225,24 @@ function hideBattleArrow() {
 
 function showPowerOverlay(uid, power) {
   const el = findCardEl(uid);
-  if (!el) return;
-  // Remove any prior overlay first
-  el.querySelectorAll('.power-overlay').forEach(p => p.remove());
+  const host = document.getElementById('battleOverlays');
+  if (!el || !host) return;
+  const r = el.getBoundingClientRect();
   const div = document.createElement('div');
   div.className = 'power-overlay';
+  div.dataset.uid = uid;
   div.textContent = (power || 0).toLocaleString();
-  el.appendChild(div);
+  div.style.left = (r.left + r.width  / 2) + 'px';
+  div.style.top  = (r.top  + r.height / 2) + 'px';
+  host.appendChild(div);
 }
 
 function clearPowerOverlays() {
-  document.querySelectorAll('.power-overlay').forEach(p => p.remove());
+  document.querySelectorAll('#battleOverlays .power-overlay').forEach(p => p.remove());
+}
+
+function clearBattleActive() {
+  document.querySelectorAll('.battle-active').forEach(el => el.classList.remove('battle-active'));
 }
 
 // ─── DECK EDITOR ───
