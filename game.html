@@ -534,31 +534,28 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   color:rgba(255,255,255,.10);pointer-events:none;white-space:nowrap;
 }
 
-/* DON stacks in cost area */
-.don-area{display:flex;gap:10px;align-items:center;z-index:1;}
-.don-stack{
-  position:relative;flex-shrink:0;
-  width:var(--card-w);height:var(--card-h);
+/* DON cards in cost area — single row, rested sideways behind active upright */
+.don-area{
+  display:flex;align-items:center;z-index:1;
+  position:relative;height:var(--card-h);
 }
-.don-stack-card{
-  position:absolute;top:0;left:0;
+.don-single{
+  position:absolute;
   width:var(--card-w);height:var(--card-h);border-radius:4px;
   border:1.5px solid var(--card-bb);
   background:url('don-card.png') center/cover no-repeat;
   box-shadow:1px 1px 4px rgba(0,0,0,.25);
 }
-.don-stack-rested{width:var(--card-h);height:var(--card-w);}
-.don-stack-rested .don-stack-card{
+.don-single.rested{
   transform:rotate(90deg);
-  transform-origin:top left;
-  top:var(--card-w);left:0;
+  transform-origin:center center;
 }
-.don-stack.don-glow{box-shadow:0 0 12px 4px rgba(212,180,50,.6);border-radius:6px;}
-.don-badge{
-  position:absolute;bottom:4px;right:4px;
+.don-area.don-glow{box-shadow:0 0 12px 4px rgba(212,180,50,.6);border-radius:6px;}
+.don-count-badge{
+  position:absolute;right:4px;bottom:4px;
   background:rgba(0,0,0,.75);color:var(--gold);
   font-family:'Barlow Condensed',sans-serif;font-size:.7rem;font-weight:700;
-  padding:2px 6px;border-radius:3px;z-index:5;letter-spacing:1px;
+  padding:2px 6px;border-radius:3px;z-index:20;letter-spacing:1px;
 }
 
 /* Card slots — inlaid mat cutouts */
@@ -1544,56 +1541,46 @@ function renderSoloOppHand(handId, hand) {
   });
 }
 
-function makeDonStack(count, isRested) {
-  const stack = document.createElement('div');
-  stack.className = 'don-stack' + (isRested ? ' don-stack-rested' : '');
-  const maxVisible = Math.min(count, 6);
-  for (let i = 0; i < maxVisible; i++) {
-    const card = document.createElement('div');
-    card.className = 'don-stack-card';
-    if (isRested) {
-      // Rested: cards rotated via CSS, offset horizontally using rotated width
-      card.style.left = (i * 12) + 'px';
-    } else {
-      card.style.top = '0';
-      card.style.left = (i * 12) + 'px';
-    }
-    card.style.zIndex = i;
-    card.innerHTML = `<img src="don-card.png" style="width:100%;height:100%;border-radius:4px;display:block;" onerror="this.style.display='none';this.parentElement.style.background='var(--card-back)';this.parentElement.innerHTML='';">`;
-    stack.appendChild(card);
-  }
-  if (count > 0) {
-    const badge = document.createElement('div');
-    badge.className = 'don-badge';
-    badge.textContent = 'x' + count;
-    stack.appendChild(badge);
-  }
-  if (isRested) {
-    stack.style.width = 'calc(var(--card-h) + ' + ((maxVisible - 1) * 12) + 'px)';
-    stack.style.height = 'var(--card-w)';
-  } else {
-    stack.style.width = 'calc(var(--card-w) + ' + ((maxVisible - 1) * 12) + 'px)';
-    stack.style.height = 'var(--card-h)';
-  }
-  return stack;
-}
-
 function renderDon(id, active, rested, total) {
   const el = document.getElementById(id);
   if (!el) return;
   el.innerHTML = '';
-  if (active > 0) {
-    const stack = makeDonStack(active, false);
-    // Make active DON clickable to enter attach mode
-    stack.style.cursor = 'pointer';
-    stack.addEventListener('click', e => {
-      e.stopPropagation();
-      if (!isMyTurn() || game.phase !== 'MAIN') return;
-      enterDonAttachMode();
-    });
-    el.appendChild(stack);
+  if (total === 0) return;
+
+  const spacing = 14;
+  // Rested cards go first (left, behind), then active cards on top (right, front)
+  // Rested sideways, active upright — all in one row
+  for (let i = 0; i < rested; i++) {
+    const card = document.createElement('div');
+    card.className = 'don-single rested';
+    card.style.left = (i * spacing) + 'px';
+    card.style.zIndex = i;
+    el.appendChild(card);
   }
-  if (rested > 0) el.appendChild(makeDonStack(rested, true));
+  for (let i = 0; i < active; i++) {
+    const card = document.createElement('div');
+    card.className = 'don-single';
+    card.style.left = ((rested + i) * spacing) + 'px';
+    card.style.zIndex = rested + i + 1;
+    el.appendChild(card);
+  }
+  // Count badge
+  const badge = document.createElement('div');
+  badge.className = 'don-count-badge';
+  badge.textContent = active + '/' + total;
+  badge.style.zIndex = 25;
+  el.appendChild(badge);
+
+  // Set container width to fit all cards
+  el.style.width = ((total - 1) * spacing + 98) + 'px';
+
+  // Make clickable for attach mode
+  el.style.cursor = 'pointer';
+  el.onclick = function(e) {
+    e.stopPropagation();
+    if (!isMyTurn() || game.phase !== 'MAIN' || active < 1) return;
+    enterDonAttachMode();
+  };
 }
 
 let donAttachMode = false;
@@ -1602,8 +1589,8 @@ function enterDonAttachMode() {
   donAttachMode = true;
   hideAllBtnGroups();
   hint('Select a character or leader to attach DON!! to.');
-  // Glow the active DON stack
-  document.querySelectorAll('.don-stack:not(.don-stack-rested)').forEach(s => s.classList.add('don-glow'));
+  // Glow the DON area
+  document.querySelectorAll('.don-area').forEach(s => s.classList.add('don-glow'));
   // Highlight all friendly leader + characters as valid targets
   const me = myPlayer();
   document.querySelector(`[data-uid="${me.leader.uid}"]`)?.classList.add('targetable');
@@ -1616,7 +1603,7 @@ function handleDonAttach(uid) {
   act({ type: 'ATTACH_DON', targetUid: uid });
   donAttachMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('targetable'));
-  document.querySelectorAll('.don-stack').forEach(s => s.classList.remove('don-glow'));
+  document.querySelectorAll('.don-area').forEach(s => s.classList.remove('don-glow'));
   // Restore default buttons
   if (game && game.phase === 'MAIN' && isMyTurn()) {
     document.getElementById('playBtns').style.display = 'flex';
@@ -1854,7 +1841,7 @@ function passCounter() {
 function cancelSel() {
   sel = null; attackMode = false; counterMode = false; donAttachMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
-  document.querySelectorAll('.don-stack').forEach(s => s.classList.remove('don-glow'));
+  document.querySelectorAll('.don-area').forEach(s => s.classList.remove('don-glow'));
   hideAllBtnGroups();
   // Restore default buttons for current phase
   if (game && isMyTurn()) {
