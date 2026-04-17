@@ -4,6 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
+// Use /app in Docker, __dirname locally
+const BASE_DIR = fs.existsSync('/app/server.js') ? '/app' : __dirname;
+
 const PAGES = {
   '/': 'index.html',
   '/index.html': 'index.html',
@@ -16,11 +19,11 @@ const server = http.createServer((req, res) => {
   const pathname = parsedUrl.pathname;
   const page = PAGES[pathname];
   if (page) {
-    const file = path.join(__dirname, page);
+    const file = path.join(BASE_DIR, page);
     res.writeHead(200, { 'Content-Type': 'text/html' });
     fs.createReadStream(file).pipe(res);
   } else if (pathname === '/card-back.png' || pathname === '/don-card.png') {
-    const file = path.join(__dirname, pathname.slice(1));
+    const file = path.join(BASE_DIR, pathname.slice(1));
     res.writeHead(200, { 'Content-Type': 'image/png' });
     fs.createReadStream(file).pipe(res);
   } else {
