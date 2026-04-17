@@ -432,7 +432,7 @@ const CARD_DB = [
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
 
   { id:'ST04-017', name:'Onigashima', type:'STAGE', color:'Purple', attribute:'',
-    power:0, cost:1, counter:0, image:IMG('ST04','ST04-017','png'),
+    power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'),
     ability:"[Activate: Main] You may rest this Stage: If you have 8 or more DON!! cards on your field, give up to 1 of your Characters +1000 power during this turn." },
 ];
 
