@@ -669,8 +669,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gcard-badge{display:none;}
 .gcard-don{display:none;}
 /* DON attached under cards — peeking out below */
-.gcard-wrap{position:relative;flex-shrink:0;overflow:visible;}
+.gcard-wrap{position:relative;flex-shrink:0;overflow:visible;transition:transform .18s;}
 .gcard-wrap .gcard{position:relative;z-index:3;}
+.gcard-wrap.rested{transform:rotate(90deg);margin:14px 4px;}
+.gcard-wrap.rested .gcard{transform:none;margin:0;}
 .don-under{
   position:absolute;
   width:calc(var(--card-w) - 8px);height:var(--card-h);
@@ -1667,11 +1669,17 @@ function makeGameCard(card, onClick, isOpp) {
   gcard.addEventListener('mouseenter', e => showTooltip(card, e));
   gcard.addEventListener('mouseleave', hideTooltip);
 
-  // If DON attached, wrap in container with DON cards peeking below
+  // If DON attached, wrap in container with DON cards behind
   const donCount = card.attachedDon || 0;
   if (donCount > 0) {
     const wrap = document.createElement('div');
     wrap.className = 'gcard-wrap';
+    // Move rested rotation to the wrapper so DON rotates with the card
+    if (card.rested) {
+      gcard.classList.remove('rested');
+      wrap.classList.add('rested');
+    }
+    wrap.dataset.uid = card.uid;
     wrap.appendChild(gcard);
     for (let i = 0; i < donCount; i++) {
       const don = document.createElement('div');
@@ -1681,7 +1689,6 @@ function makeGameCard(card, onClick, isOpp) {
       don.style.zIndex = -(i + 1);
       wrap.appendChild(don);
     }
-    // Extra margin so peeking DON aren't clipped
     wrap.style.marginBottom = (22 + (donCount - 1) * 8) + 'px';
     return wrap;
   }
