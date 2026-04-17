@@ -433,7 +433,7 @@ const CARD_DB = [
 
   { id:'ST04-017', name:'The Canals', type:'STAGE', color:'Purple', attribute:'',
     power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'),
-    ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Animal Kingdom Pirates} type, add up to 1 DON!! card from your DON!! deck and rest it." },
+    ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it." },
 ];
 
 // ─── PRESET DECKS ───
