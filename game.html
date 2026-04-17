@@ -658,15 +658,15 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gcard-power{display:none;}
 .gcard-badge{display:none;}
 .gcard-don{display:none;}
-/* DON attached under cards */
-.gcard-wrap{position:relative;flex-shrink:0;}
-.gcard-wrap .gcard{position:relative;z-index:2;}
+/* DON attached under cards — peeking out below */
+.gcard-wrap{position:relative;flex-shrink:0;overflow:visible;}
+.gcard-wrap .gcard{position:relative;z-index:3;}
 .don-under{
-  position:absolute;left:50%;transform:translateX(-50%);
-  width:var(--card-w);height:var(--card-h);border-radius:4px;
-  border:1.5px solid var(--card-bb);z-index:1;
+  position:absolute;
+  width:calc(var(--card-w) - 8px);height:var(--card-h);
+  border-radius:4px;border:1.5px solid rgba(140,120,50,.5);
   background:url('don-card.png') center/cover no-repeat;
-  box-shadow:0 1px 3px rgba(0,0,0,.25);
+  box-shadow:0 1px 3px rgba(0,0,0,.3);
 }
 .gcard-cost{display:none;}
 .card-back{
@@ -1543,8 +1543,38 @@ function renderDon(id, active, rested, total) {
   const el = document.getElementById(id);
   if (!el) return;
   el.innerHTML = '';
-  if (active > 0) el.appendChild(makeDonStack(active, false));
+  if (active > 0) {
+    const stack = makeDonStack(active, false);
+    // Make active DON clickable to enter attach mode
+    stack.style.cursor = 'pointer';
+    stack.addEventListener('click', e => {
+      e.stopPropagation();
+      if (!isMyTurn() || game.phase !== 'MAIN') return;
+      enterDonAttachMode();
+    });
+    el.appendChild(stack);
+  }
   if (rested > 0) el.appendChild(makeDonStack(rested, true));
+}
+
+let donAttachMode = false;
+function enterDonAttachMode() {
+  cancelSel();
+  donAttachMode = true;
+  hideAllBtnGroups();
+  hint('Select a card to attach DON!! to.');
+  // Highlight all friendly leader + characters
+  const me = myPlayer();
+  document.querySelector(`[data-uid="${me.leader.uid}"]`)?.classList.add('selected');
+  me.field.forEach(c => {
+    if (c.type !== 'STAGE') document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('selected');
+  });
+}
+
+function handleDonAttach(uid) {
+  act({ type: 'ATTACH_DON', targetUid: uid });
+  donAttachMode = false;
+  document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected'));
 }
 
 function renderLife(id, countId, max, remaining) {
@@ -1613,11 +1643,13 @@ function makeGameCard(card, onClick, isOpp) {
     for (let i = 0; i < donCount; i++) {
       const don = document.createElement('div');
       don.className = 'don-under';
-      don.style.bottom = (-20 - i * 8) + 'px';
+      don.style.bottom = -(22 + i * 8) + 'px';
+      don.style.left = (4 + i * 4) + 'px';
+      don.style.zIndex = -(i + 1);
       wrap.appendChild(don);
     }
-    // Set wrapper height to include peeking DON
-    wrap.style.marginBottom = (20 + (donCount - 1) * 8) + 'px';
+    // Extra margin so peeking DON aren't clipped
+    wrap.style.marginBottom = (22 + (donCount - 1) * 8) + 'px';
     return wrap;
   }
   return gcard;
@@ -1659,6 +1691,12 @@ function hideAllBtnGroups() {
 function selectCard(uid, source) {
   if (!isMyTurn()) return;
   if (game.phase !== 'MAIN') return;
+
+  // If in DON attach mode, attach to this card
+  if (donAttachMode && (source === 'field' || source === 'leader')) {
+    handleDonAttach(uid);
+    return;
+  }
 
   // If in attack mode and clicking an enemy, that's target selection
   if (attackMode && source !== 'hand') {
@@ -1756,7 +1794,7 @@ function passCounter() {
 }
 
 function cancelSel() {
-  sel = null; attackMode = false; counterMode = false;
+  sel = null; attackMode = false; counterMode = false; donAttachMode = false;
   document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
   hideAllBtnGroups();
   // Restore default buttons for current phase — End Turn always available
