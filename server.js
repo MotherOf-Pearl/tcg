@@ -557,6 +557,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     counterWindow: null,
     counterDone: { [p1id]: false, [p2id]: false },
     firstPlayer: p1id,
+    battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
   };
 }
 
@@ -884,6 +885,79 @@ function handleAction(roomId, playerId, action) {
       };
       game.counterDone = { [playerId]: true, [oppId]: false };
       log(game, `\uD83C\uDCF4 ${oppId.slice(0,6)} may play counter cards!`);
+      break;
+    }
+
+    // ─── Phase 1 attack flow (split from ATTACK) ───
+    case 'DECLARE_ATTACK': {
+      if (!isActive || game.phase !== 'MAIN') return;
+      let attacker = null;
+      if (action.attackerUid === p.leader.uid) attacker = p.leader;
+      else attacker = p.field.find(c => c.uid === action.attackerUid);
+      if (!attacker) { send(playerId, {type:'ERROR', msg:'Invalid attacker'}); return; }
+      if (attacker.rested) { send(playerId, {type:'ERROR', msg:'That card is rested'}); return; }
+      if (attacker.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Stages cannot attack'}); return; }
+      if (game.turn === 1 && game.activePlayer === game.firstPlayer) {
+        send(playerId, {type:'ERROR', msg:'Cannot attack on turn 1'}); return;
+      }
+      if (attacker.playedThisTurn && !(attacker.ability && attacker.ability.includes('[Rush]'))) {
+        send(playerId, {type:'ERROR', msg:'This character cannot attack this turn'}); return;
+      }
+      const attackerPower = (attacker.power || 0) + (attacker.attachedDon || 0) * 1000;
+      attacker.rested = true;
+      game.battleState = {
+        attackerUid: attacker.uid,
+        attackerId: playerId,
+        attackerName: attacker.name,
+        attackerPower,
+        targetUid: null,
+        targetName: null,
+        targetPower: 0,
+        targetIsLeader: false,
+        counterBonus: 0,
+      };
+      game.phase = 'ATTACKING';
+      log(game, `\u2694\uFE0F ${attacker.name} declares an attack — choose a target.`);
+      break;
+    }
+
+    case 'SELECT_TARGET': {
+      if (game.phase !== 'ATTACKING' || !game.battleState) return;
+      if (game.battleState.attackerId !== playerId) return;
+      let target = null;
+      let targetIsLeader = false;
+      if (action.targetUid === opp.leader.uid) {
+        target = opp.leader;
+        targetIsLeader = true;
+      } else {
+        target = opp.field.find(c => c.uid === action.targetUid);
+        if (target && target.type !== 'STAGE' && !target.rested) {
+          send(playerId, {type:'ERROR', msg:'Cannot attack an active character — target must be rested or be the leader.'});
+          return;
+        }
+      }
+      if (!target) { send(playerId, {type:'ERROR', msg:'Invalid target'}); return; }
+      if (target.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Cannot attack a stage'}); return; }
+      const targetPower = (target.power || 0) + (target.attachedDon || 0) * 1000;
+      game.battleState.targetUid = target.uid;
+      game.battleState.targetName = target.name;
+      game.battleState.targetPower = targetPower;
+      game.battleState.targetIsLeader = targetIsLeader;
+      game.phase = 'BLOCK_STEP';
+      log(game, `\uD83C\uDFAF ${game.battleState.attackerName} (${game.battleState.attackerPower}) \u2192 ${target.name} (${targetPower})`);
+      break;
+    }
+
+    case 'CANCEL_ATTACK': {
+      if (game.phase !== 'ATTACKING' || !game.battleState) return;
+      if (game.battleState.attackerId !== playerId) return;
+      let attacker = null;
+      if (game.battleState.attackerUid === p.leader.uid) attacker = p.leader;
+      else attacker = p.field.find(c => c.uid === game.battleState.attackerUid);
+      if (attacker) attacker.rested = false;
+      game.battleState = null;
+      game.phase = 'MAIN';
+      log(game, `Attack cancelled.`);
       break;
     }
 

@@ -569,6 +569,22 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gb-left.scry-active .gb-self-hand{flex:0 0 auto;}
 .gb-left.scry-active .gb-card-preview.has-card{flex:0 1 auto;}
 .gb-left.scry-active .gb-card-preview img{max-height:34vh;}
+/* Phase 1 battle system — attack target highlight + power overlay */
+.targetable-attack, .gcard.targetable-attack, .gcard-wrap.targetable-attack{
+  box-shadow:0 0 0 3px rgba(255,40,40,.9), 0 0 18px 6px rgba(255,80,80,.55) !important;
+  cursor:crosshair;
+  animation:attackPulse 1.2s ease-in-out infinite;
+}
+@keyframes attackPulse{
+  0%,100%{box-shadow:0 0 0 3px rgba(255,40,40,.9), 0 0 18px 6px rgba(255,80,80,.45);}
+  50%    {box-shadow:0 0 0 3px rgba(255,40,40,1),  0 0 24px 10px rgba(255,100,100,.75);}
+}
+.power-overlay{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  font-family:'Cinzel',serif;font-size:2.4rem;font-weight:900;
+  color:#fff;text-shadow:0 2px 6px #000,0 0 12px #000,0 0 3px #000;
+  pointer-events:none;z-index:26;letter-spacing:1px;
+}
 .scry-order{
   position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
   background:rgba(0,0,0,.8);color:var(--gold);
@@ -1055,6 +1071,15 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <button class="gb-pbtn gb-pbtn-sm" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
         <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
       </div>
+      <!-- Phase 1: attacking, waiting for target -->
+      <div id="attackingBtns" style="display:none;flex-direction:column;gap:4px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;">Select a target to attack</div>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="cancelAttack()">Cancel</button>
+      </div>
+      <!-- Phase 1: BLOCK_STEP info for the attacker (Phase 2 will add defender UI) -->
+      <div id="blockStepInfo" style="display:none;flex-direction:column;gap:4px;">
+        <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);text-align:center;line-height:1.35;" id="blockStepText"></div>
+      </div>
       <!-- Counter/Block -->
       <div id="counterBtns" style="display:none;flex-direction:column;gap:4px;">
         <div id="battleInfo" style="font-size:.75rem;color:var(--text);text-align:center;padding:4px;"></div>
@@ -1067,6 +1092,16 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   </div>
 
 </div><!-- #game -->
+
+<!-- Phase 1 battle arrow — fixed full-viewport SVG overlay drawn during BLOCK_STEP -->
+<svg id="battleArrow" style="position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:30;display:none;">
+  <defs>
+    <marker id="battleArrowhead" markerWidth="14" markerHeight="12" refX="12" refY="6" orient="auto">
+      <polygon points="0 0, 14 6, 0 12" fill="#ff2828"/>
+    </marker>
+  </defs>
+  <line id="battleArrowLine" x1="0" y1="0" x2="0" y2="0" stroke="#ff2828" stroke-width="5" marker-end="url(#battleArrowhead)" opacity="0.88" stroke-linecap="round"/>
+</svg>
 
 <!-- WIN MODAL -->
 <div class="modal-bg" id="winModal">
@@ -1463,6 +1498,35 @@ function renderGame() {
   // Update DON info display
   document.getElementById('donInfo').textContent = `DON!! ${me.donActive}/${me.donActive + me.donRested}`;
 
+  // ─── Phase 1 battle overlays ───
+  // Clear prior overlays/arrows on every re-render; they're re-applied below if still relevant.
+  clearPowerOverlays();
+  hideBattleArrow();
+  document.querySelectorAll('.targetable-attack').forEach(el => el.classList.remove('targetable-attack'));
+
+  const bs = game.battleState;
+  // Derive attackMode from server state so click handlers (selectTarget) still work.
+  attackMode = !!(bs && game.phase === 'ATTACKING' && bs.attackerId === myId);
+
+  if (bs && game.phase === 'ATTACKING' && bs.attackerId === myId) {
+    hideAllBtnGroups();
+    document.getElementById('attackingBtns').style.display = 'flex';
+    highlightTargets();
+  } else if (bs && game.phase === 'BLOCK_STEP') {
+    if (bs.attackerId === myId) {
+      hideAllBtnGroups();
+      document.getElementById('blockStepInfo').style.display = 'flex';
+      document.getElementById('blockStepText').textContent =
+        `Attacking: ${bs.attackerName} [${bs.attackerPower.toLocaleString()}] \u2192 ${bs.targetName} [${bs.targetPower.toLocaleString()}]`;
+    }
+    // Show arrow + power overlays on both sides after the DOM settles (cards are just rendered).
+    requestAnimationFrame(() => {
+      drawBattleArrow(bs.attackerUid, bs.targetUid);
+      showPowerOverlay(bs.attackerUid, bs.attackerPower);
+      showPowerOverlay(bs.targetUid, bs.targetPower);
+    });
+  }
+
   const hasCW = !!game.counterWindow;
   if (hasCW) {
     const cw = game.counterWindow;
@@ -1495,7 +1559,12 @@ function renderGame() {
 
   if (!hasCW) {
     counterMode = false;
-    if (!isActive) hint("Opponent's turn…");
+    // Battle-phase hints take priority so the defender knows what's happening too.
+    if (game.phase === 'ATTACKING' && bs?.attackerId === myId) hint('Select a target to attack.');
+    else if (game.phase === 'ATTACKING') hint('Opponent is declaring an attack...');
+    else if (game.phase === 'BLOCK_STEP' && bs?.attackerId === myId) hint('Attack declared — awaiting block step.');
+    else if (game.phase === 'BLOCK_STEP') hint('Opponent is attacking...');
+    else if (!isActive) hint("Opponent's turn…");
     else if (game.phase === 'DRAW') hint('Draw a card.');
     else if (game.phase === 'DON') hint('Draw DON.');
     else if (game.phase === 'MAIN' && !sel) hint('Select a card to play or attack.');
@@ -1503,6 +1572,13 @@ function renderGame() {
     else hint('');
   }
 }
+
+// Redraw the battle arrow on window resize so it stays anchored to card positions.
+window.addEventListener('resize', () => {
+  if (game && game.battleState && game.phase === 'BLOCK_STEP') {
+    drawBattleArrow(game.battleState.attackerUid, game.battleState.targetUid);
+  }
+});
 
 function renderLeader(slotId, leader, isSelf) {
   const el = document.getElementById(slotId);
@@ -1900,7 +1976,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -1984,28 +2060,30 @@ function deploySelected() {
 
 function declareAttack() {
   if (!sel) return;
-  attackMode = true;
+  act({ type: 'DECLARE_ATTACK', attackerUid: sel.uid });
+  // Server will rest the attacker, set phase=ATTACKING and battleState; renderGame handles the rest.
+  sel = null;
   hideAllBtnGroups();
-  hint('Select an enemy card to attack.');
-  highlightTargets();
 }
 
 function highlightTargets() {
+  // Phase 1: only opponent leader + RESTED characters are valid targets
   const opp = oppPlayer();
-  document.querySelector(`[data-uid="${opp.leader.uid}"]`)?.classList.add('targetable');
+  document.querySelector(`[data-uid="${opp.leader.uid}"]`)?.classList.add('targetable-attack');
   opp.field.forEach(c => {
-    if (c.type !== 'STAGE') {
-      document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('targetable');
+    if (c.type !== 'STAGE' && c.rested) {
+      document.querySelector(`[data-uid="${c.uid}"]`)?.classList.add('targetable-attack');
     }
   });
 }
 
 function selectTarget(defUid) {
-  if (!sel) return;
-  act({ type: 'ATTACK', attackerUid: sel.uid, defenderUid: defUid });
-  sel = null; attackMode = false;
-  document.querySelectorAll('.gcard').forEach(el => el.classList.remove('selected','targetable'));
-  hideAllBtnGroups();
+  if (!game?.battleState || game.battleState.attackerId !== myId) return;
+  act({ type: 'SELECT_TARGET', targetUid: defUid });
+}
+
+function cancelAttack() {
+  act({ type: 'CANCEL_ATTACK' });
 }
 
 function useBlocker() {
@@ -2095,6 +2173,52 @@ function hideTooltip() {
   document.getElementById('tooltip').classList.remove('show');
   const preview = document.getElementById('cardPreview');
   if (preview) { preview.innerHTML = ''; preview.classList.remove('has-card'); }
+}
+
+// ─── Phase 1 battle visuals: arrow + power overlays ───
+function findCardEl(uid) {
+  // Prefer the outer gcard-wrap (so coordinates are correct even when DON is attached), then the gcard itself.
+  return document.querySelector(`.gcard-wrap[data-uid="${uid}"]`) ||
+         document.querySelector(`.gcard[data-uid="${uid}"]`);
+}
+
+function drawBattleArrow(attackerUid, targetUid) {
+  const a = findCardEl(attackerUid);
+  const t = findCardEl(targetUid);
+  const svg = document.getElementById('battleArrow');
+  const line = document.getElementById('battleArrowLine');
+  if (!a || !t || !svg || !line) { if (svg) svg.style.display = 'none'; return; }
+  const ar = a.getBoundingClientRect();
+  const tr = t.getBoundingClientRect();
+  const x1 = ar.left + ar.width / 2;
+  const y1 = ar.top  + ar.height / 2;
+  const x2 = tr.left + tr.width / 2;
+  const y2 = tr.top  + tr.height / 2;
+  line.setAttribute('x1', x1);
+  line.setAttribute('y1', y1);
+  line.setAttribute('x2', x2);
+  line.setAttribute('y2', y2);
+  svg.style.display = 'block';
+}
+
+function hideBattleArrow() {
+  const svg = document.getElementById('battleArrow');
+  if (svg) svg.style.display = 'none';
+}
+
+function showPowerOverlay(uid, power) {
+  const el = findCardEl(uid);
+  if (!el) return;
+  // Remove any prior overlay first
+  el.querySelectorAll('.power-overlay').forEach(p => p.remove());
+  const div = document.createElement('div');
+  div.className = 'power-overlay';
+  div.textContent = (power || 0).toLocaleString();
+  el.appendChild(div);
+}
+
+function clearPowerOverlays() {
+  document.querySelectorAll('.power-overlay').forEach(p => p.remove());
 }
 
 // ─── DECK EDITOR ───
