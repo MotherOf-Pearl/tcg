@@ -362,7 +362,7 @@ const CARD_DB = [
 
   { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'',
     power:0, cost:1, counter:0, image:IMG('OP01','OP01-090','png'),
-    ability:"[Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+    ability:"[Activate: Main] You may place this card and 1 card from your hand at the bottom of your deck in any order: Draw 2 cards." },
 
   // ══════════════════════════════
   // KAIDO RAMP DECK (Purple)
