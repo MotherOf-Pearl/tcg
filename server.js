@@ -771,9 +771,11 @@ function handleAction(roomId, playerId, action) {
       const idx = p.hand.findIndex(c => c.uid === action.cardUid);
       if (idx === -1) return;
       const card = p.hand[idx];
+      console.log('PLAY_CARD:', { name: card.name, type: card.type, cost: card.cost, donActive: p.donActive, donRested: p.donRested });
       if (p.donActive < card.cost) { send(playerId, {type:'ERROR', msg:'Not enough DON!!'}); return; }
       p.donActive -= card.cost;
       p.donRested += card.cost;
+      console.log('PLAY_CARD after:', { donActive: p.donActive, donRested: p.donRested });
       p.hand.splice(idx, 1);
       if (card.type === 'CHARACTER') {
         card.rested = false;

@@ -517,8 +517,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* Cost area — inline between leader and stage, fills available width */
 .gb-cost-bar{
   flex:1;display:flex;align-items:center;gap:4px;padding:2px 8px;
-  overflow-x:auto;position:relative;min-width:80px;
-  scrollbar-width:thin;scrollbar-color:rgba(180,140,50,.3) transparent;
+  overflow:hidden;position:relative;min-width:80px;
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
     linear-gradient(180deg,#3a3a14 0%,#2e2e0e 100%);
@@ -548,8 +547,8 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   background:url('don-card.png') center/cover no-repeat;
   box-shadow:1px 1px 4px rgba(0,0,0,.25);
 }
-.don-stack-rested .don-stack-card{transform:rotate(90deg);}
-.don-stack-rested{opacity:.7;}
+.don-stack-rested .don-stack-card{opacity:.5;filter:grayscale(.3);}
+.don-stack-rested{}
 .don-stack.don-glow{box-shadow:0 0 12px 4px rgba(212,180,50,.6);border-radius:6px;}
 .don-badge{
   position:absolute;bottom:4px;right:4px;
@@ -1534,7 +1533,7 @@ function makeDonStack(count, isRested) {
   for (let i = 0; i < maxVisible; i++) {
     const card = document.createElement('div');
     card.className = 'don-stack-card';
-    card.style.top = (i * 12) + 'px';
+    card.style.top = '0';
     card.style.left = (i * 12) + 'px';
     card.style.zIndex = i;
     // Fallback if DON image fails
@@ -1549,8 +1548,8 @@ function makeDonStack(count, isRested) {
     stack.appendChild(badge);
   }
   // Adjust stack size for offset
-  stack.style.width = 'calc(var(--card-w) + ' + (maxVisible * 12) + 'px)';
-  stack.style.height = 'calc(var(--card-h) + ' + (maxVisible * 12) + 'px)';
+  stack.style.width = 'calc(var(--card-w) + ' + ((maxVisible - 1) * 12) + 'px)';
+  stack.style.height = 'var(--card-h)';
   return stack;
 }
 
