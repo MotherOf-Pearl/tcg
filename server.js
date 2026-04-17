@@ -898,10 +898,16 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'END_TURN': {
-      console.log('END_TURN received, processing...', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn, counterWindow: !!game.counterWindow });
+      console.log('END_TURN received', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn, counterWindow: !!game.counterWindow });
       if (!isActive) { console.log('END_TURN rejected: not active player'); return; }
-      if (game.phase !== 'MAIN') { console.log('END_TURN rejected: phase is', game.phase); send(playerId, {type:'ERROR', msg:'Must complete draw and DON phases first'}); return; }
-      if (game.counterWindow) { console.log('END_TURN rejected: counterWindow active'); send(playerId, {type:'ERROR', msg:'Cannot end turn during combat'}); return; }
+      // Auto-resolve counter window if active
+      if (game.counterWindow) {
+        console.log('END_TURN: auto-resolving counter window');
+        game.counterDone[playerId] = true;
+        if (Object.values(game.counterDone).every(v => v)) {
+          resolveCounter(roomId);
+        }
+      }
       doEnd(game);
       console.log('END_TURN complete, new activePlayer:', game.activePlayer.slice(0,6), 'turn:', game.turn, 'phase:', game.phase);
       break;
