@@ -695,7 +695,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .gcard-badge{display:none;}
 .gcard-don{display:none;}
 /* DON attached under cards — peeking out below */
-.gcard-wrap{position:relative;flex-shrink:0;overflow:visible;transition:transform .18s;}
+.gcard-wrap{position:relative;flex-shrink:0;overflow:visible;transition:transform .18s;isolation:isolate;z-index:0;}
 .gcard-wrap .gcard{position:relative;z-index:3;}
 .gcard-wrap.rested{transform:rotate(90deg);margin:14px 4px;}
 .gcard-wrap.rested .gcard{transform:none;margin:0;}
@@ -2016,7 +2016,23 @@ function useBlocker() {
   }
 }
 
-function playCard(uid) { act({ type: 'PLAY_CARD', cardUid: uid }); cancelSel(); }
+function playCard(uid) {
+  const me = game ? game.players[myId] : null;
+  const cardInMyHand = me ? me.hand.find(c => c.uid === uid) : null;
+  console.log('playCard (client):', {
+    myId: myId?.slice(0,6),
+    activePlayer: game?.activePlayer?.slice(0,6),
+    isSolo,
+    soloId0: soloIds[0]?.slice(0,6),
+    soloId1: soloIds[1]?.slice(0,6),
+    cardUid: uid,
+    cardName: cardInMyHand?.name,
+    cardCost: cardInMyHand?.cost,
+    foundInMyHand: !!cardInMyHand,
+  });
+  act({ type: 'PLAY_CARD', cardUid: uid });
+  cancelSel();
+}
 function attachDon() { if (!sel) return; act({ type: 'ATTACH_DON', targetUid: sel.uid }); }
 function passCounter() {
   act({ type: 'PASS_COUNTER' }); counterMode = false;

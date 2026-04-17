@@ -777,20 +777,21 @@ function handleAction(roomId, playerId, action) {
     case 'PLAY_CARD': {
       if (!isActive || game.phase !== 'MAIN') return;
       // Locate the card in the active player's hand by uid — never read cost from anywhere else.
-      const idx = p.hand.findIndex(c => c.uid === action.cardUid);
+      const cardUid = action.cardUid;
+      const idx = p.hand.findIndex(c => c.uid === cardUid);
+      const card = idx !== -1 ? p.hand[idx] : null;
+      console.log('PLAY_CARD:', {
+        playerId,
+        activePlayer: game.activePlayer,
+        match: playerId === game.activePlayer,
+        cardUid,
+        foundInHand: game.players[playerId].hand.some(c => c.uid === cardUid),
+        cardCost: card?.cost,
+        donActive: game.players[playerId].donActive,
+      });
       if (idx === -1) return;
-      const card = p.hand[idx];
       const cardCost = Number(card.cost) || 0;
       const activeDonCount = p.donActive;
-      console.log('PLAY_CARD:', {
-        playerId: playerId.slice(0,6),
-        activePlayer: game.activePlayer.slice(0,6),
-        cardUid: action.cardUid,
-        cardName: card.name,
-        cardCost,
-        activeDonCount,
-        donRested: p.donRested,
-      });
       if (activeDonCount < cardCost) { send(playerId, {type:'ERROR', msg:'Not enough DON!!'}); return; }
       // Deduct EXACTLY card.cost from the active player (playerId is the sender and must equal game.activePlayer here).
       p.donActive = activeDonCount - cardCost;
