@@ -993,6 +993,78 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // ─── Phase 3 counter step ───
+    case 'USE_COUNTER': {
+      if (game.phase !== 'COUNTER_STEP' || !game.battleState) return;
+      const defenderId = Object.keys(game.players).find(id => id !== game.battleState.attackerId);
+      if (playerId !== defenderId) return;
+      const defender = game.players[defenderId];
+      const idx = defender.hand.findIndex(c => c.uid === action.cardUid);
+      if (idx === -1) return;
+      const card = defender.hand[idx];
+      const cv = counterValueOf(card);
+      if (cv <= 0) { send(playerId, {type:'ERROR', msg:'That card has no counter value'}); return; }
+      defender.hand.splice(idx, 1);
+      defender.trash.push(card);
+      game.battleState.counterBonus = (game.battleState.counterBonus || 0) + cv;
+      log(game, `\uD83D\uDEE1\uFE0F ${card.name} +${cv} (counter bonus: ${game.battleState.counterBonus})`);
+      break;
+    }
+
+    // ─── Phase 4 resolution ───
+    case 'RESOLVE_ATTACK': {
+      if (game.phase !== 'COUNTER_STEP' || !game.battleState) return;
+      const bs = game.battleState;
+      const defenderId = Object.keys(game.players).find(id => id !== bs.attackerId);
+      // Defender drives resolution (they decide when to stop countering).
+      if (playerId !== defenderId) return;
+
+      const attackerPlayer = game.players[bs.attackerId];
+      const defender = game.players[defenderId];
+
+      let attackerCard = null;
+      if (attackerPlayer.leader.uid === bs.attackerUid) attackerCard = attackerPlayer.leader;
+      else attackerCard = attackerPlayer.field.find(c => c.uid === bs.attackerUid);
+
+      const totalDefense = bs.targetPower + (bs.counterBonus || 0);
+      // OPTCG tie rules: leader → defender wins ties (>); character → attacker wins ties (>=).
+      const attackerWins = bs.targetIsLeader
+        ? bs.attackerPower >  totalDefense
+        : bs.attackerPower >= totalDefense;
+
+      if (attackerWins) {
+        if (bs.targetIsLeader) {
+          // Hit the leader. If defender has 0 life left, they lose.
+          if (defender.life.length === 0) {
+            game.winner = bs.attackerId;
+            log(game, `\uD83C\uDFC6 ${bs.attackerName} hits the leader with no life left — ${bs.attackerId.slice(0,6)} WINS!`);
+          } else {
+            const lifeCard = defender.life.pop();
+            defender.hand.push(lifeCard);
+            log(game, `\uD83D\uDCA5 ${bs.attackerName} hits the leader! Life card ${lifeCard.name} \u2192 hand. ${defender.life.length} life remaining.`);
+            applyTriggerEffect(game, defenderId, lifeCard);
+          }
+        } else {
+          // Hit a character (the original target or the chosen blocker) — KO it.
+          const target = defender.field.find(c => c.uid === bs.targetUid);
+          if (target) {
+            defender.field = defender.field.filter(c => c.uid !== bs.targetUid);
+            defender.trash.push(target);
+            log(game, `\uD83D\uDC80 ${target.name} K.O.'d! (${bs.attackerPower} vs ${totalDefense})`);
+            triggerOnKO(game, defenderId, target, bs.attackerId);
+          }
+        }
+      } else {
+        log(game, `\uD83D\uDEE1\uFE0F ${bs.targetName} survives the attack (${bs.attackerPower} vs ${totalDefense}).`);
+        // Blocker that wins stays on board, but remains rested (already rested by USE_BLOCKER).
+      }
+
+      // Attacker stays rested (already rested by DECLARE_ATTACK).
+      game.battleState = null;
+      game.phase = 'MAIN';
+      break;
+    }
+
     case 'COUNTER': {
       if (!game.counterWindow || game.counterWindow.defenderId !== playerId) return;
       const idx = p.hand.findIndex(c => c.uid === action.cardUid);
@@ -1223,6 +1295,17 @@ function hasBanish(card) {
 // Helper: check if card has [Rush]
 function hasRush(card) {
   return card.ability && card.ability.includes('[Rush]');
+}
+
+// Helper: numeric counter value of a card. Characters use card.counter; events
+// with [Counter] in their ability text get the +N power found in the effect.
+function counterValueOf(card) {
+  if (card.counter && card.counter > 0) return card.counter;
+  if (card.ability && card.ability.includes('[Counter]')) {
+    const m = card.ability.match(/\+(\d+)\s*power/i);
+    if (m) return parseInt(m[1], 10);
+  }
+  return 0;
 }
 
 // Helper: extract effect text after a timing keyword
