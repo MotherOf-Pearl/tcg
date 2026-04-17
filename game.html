@@ -1642,6 +1642,7 @@ let scryKeep = [];
 let scryCards = [];
 
 function renderScry() {
+  console.log('renderScry:', { hasScry: !!game?.scryWindow, scryPlayer: game?.scryWindow?.playerId?.slice(0,6), myId: myId?.slice(0,6) });
   if (!game || !game.scryWindow || game.scryWindow.playerId !== myId) {
     document.getElementById('scryOverlay').style.display = 'none';
     return;

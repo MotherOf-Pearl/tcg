@@ -1264,6 +1264,7 @@ function parseAndApply(timing, game, playerId, card, opp) {
 
     // Look at X cards from top of deck — open scry window
     const lookMatch = effect.match(/[Ll]ook at.*?(\d+) cards? from the top/i);
+    console.log('SCRY CHECK:', { cardName: card.name, lookMatch: !!lookMatch, drawMatch: !!drawMatch, deckLen: p.deck.length, effect: effect.substring(0, 60) });
     if (lookMatch && !drawMatch) {
       const lookCount = Math.min(parseInt(lookMatch[1]), p.deck.length);
       if (lookCount > 0) {
@@ -1275,6 +1276,7 @@ function parseAndApply(timing, game, playerId, card, opp) {
           keepCount,
           cardName: card.name,
         };
+        console.log('SCRY WINDOW OPENED:', { cardName: card.name, lookCount, keepCount, cardsInScry: game.scryWindow.cards.length });
         log(game, `${card.name}: looking at top ${lookCount} cards...`);
       }
     }
