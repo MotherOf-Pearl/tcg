@@ -547,8 +547,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   background:url('don-card.png') center/cover no-repeat;
   box-shadow:1px 1px 4px rgba(0,0,0,.25);
 }
-.don-stack-rested .don-stack-card{opacity:.5;filter:grayscale(.3);}
-.don-stack-rested{}
+.don-stack-rested{width:var(--card-h);height:var(--card-w);}
+.don-stack-rested .don-stack-card{
+  transform:rotate(90deg);
+  transform-origin:top left;
+  top:var(--card-w);left:0;
+}
 .don-stack.don-glow{box-shadow:0 0 12px 4px rgba(212,180,50,.6);border-radius:6px;}
 .don-badge{
   position:absolute;bottom:4px;right:4px;
@@ -1543,28 +1547,34 @@ function renderSoloOppHand(handId, hand) {
 function makeDonStack(count, isRested) {
   const stack = document.createElement('div');
   stack.className = 'don-stack' + (isRested ? ' don-stack-rested' : '');
-  // Layer cards with slight offset
   const maxVisible = Math.min(count, 6);
   for (let i = 0; i < maxVisible; i++) {
     const card = document.createElement('div');
     card.className = 'don-stack-card';
-    card.style.top = '0';
-    card.style.left = (i * 12) + 'px';
+    if (isRested) {
+      // Rested: cards rotated via CSS, offset horizontally using rotated width
+      card.style.left = (i * 12) + 'px';
+    } else {
+      card.style.top = '0';
+      card.style.left = (i * 12) + 'px';
+    }
     card.style.zIndex = i;
-    // Fallback if DON image fails
-    card.innerHTML = `<img src="don-card.png" style="width:100%;height:100%;border-radius:4px;display:block;" onerror="this.style.display='none';this.parentElement.style.background='var(--card-back)';this.parentElement.style.display='flex';this.parentElement.style.alignItems='center';this.parentElement.style.justifyContent='center';this.parentElement.innerHTML='<span style=\\'font-family:Cinzel,serif;font-size:.35rem;color:#b09010;text-align:center;line-height:1.3\\'>DON!!<br>+1000</span>';">`;
+    card.innerHTML = `<img src="don-card.png" style="width:100%;height:100%;border-radius:4px;display:block;" onerror="this.style.display='none';this.parentElement.style.background='var(--card-back)';this.parentElement.innerHTML='';">`;
     stack.appendChild(card);
   }
-  // Count badge
   if (count > 0) {
     const badge = document.createElement('div');
     badge.className = 'don-badge';
     badge.textContent = 'x' + count;
     stack.appendChild(badge);
   }
-  // Adjust stack size for offset
-  stack.style.width = 'calc(var(--card-w) + ' + ((maxVisible - 1) * 12) + 'px)';
-  stack.style.height = 'var(--card-h)';
+  if (isRested) {
+    stack.style.width = 'calc(var(--card-h) + ' + ((maxVisible - 1) * 12) + 'px)';
+    stack.style.height = 'var(--card-w)';
+  } else {
+    stack.style.width = 'calc(var(--card-w) + ' + ((maxVisible - 1) * 12) + 'px)';
+    stack.style.height = 'var(--card-h)';
+  }
   return stack;
 }
 
