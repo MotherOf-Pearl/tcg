@@ -900,6 +900,8 @@ function handleAction(roomId, playerId, action) {
     case 'END_TURN': {
       console.log('END_TURN:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn });
       if (!isActive) return;
+      if (game.phase !== 'MAIN') { send(playerId, {type:'ERROR', msg:'Must complete draw and DON phases first'}); return; }
+      if (game.counterWindow) { send(playerId, {type:'ERROR', msg:'Cannot end turn during combat'}); return; }
       doEnd(game);
       break;
     }
