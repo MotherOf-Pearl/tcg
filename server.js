@@ -914,6 +914,31 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    case 'SCRY_RESOLVE': {
+      if (!game.scryWindow || game.scryWindow.playerId !== playerId) return;
+      const sw = game.scryWindow;
+      const kept = action.keptIndices || []; // indices of cards to keep in hand
+      const order = action.order || []; // ordered indices for cards going back to deck
+
+      // Add kept cards to hand
+      kept.forEach(idx => {
+        if (sw.cards[idx]) p.hand.push(sw.cards[idx]);
+      });
+      if (kept.length > 0) log(game, `${sw.cardName}: added ${kept.length} card(s) to hand.`);
+
+      // Put remaining cards back on top of deck in specified order
+      const remaining = sw.cards.filter((_, idx) => !kept.includes(idx));
+      const ordered = order.length > 0
+        ? order.map(idx => remaining[idx]).filter(Boolean)
+        : remaining;
+      // Place on top of deck in order (first in array = top of deck)
+      p.deck.unshift(...ordered);
+      log(game, `${sw.cardName}: returned ${ordered.length} card(s) to top of deck.`);
+
+      game.scryWindow = null;
+      break;
+    }
+
     case 'END_TURN': {
       console.log('END_TURN received', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn, counterWindow: !!game.counterWindow });
       if (!isActive) { console.log('END_TURN rejected: not active player'); return; }
@@ -1237,11 +1262,20 @@ function parseAndApply(timing, game, playerId, card, opp) {
       bounceByPower(opp, parseInt(bouncePowerMatch[1]), game, card.name);
     }
 
-    // Look at X cards (simplified: draw 1)
-    if (/[Ll]ook at.*?(\d+) cards? from the top/i.test(effect) && !drawMatch) {
-      if (p.deck.length > 0) {
-        p.hand.push(p.deck.shift());
-        log(game, `${card.name}: searched top of deck (simplified).`);
+    // Look at X cards from top of deck — open scry window
+    const lookMatch = effect.match(/[Ll]ook at.*?(\d+) cards? from the top/i);
+    if (lookMatch && !drawMatch) {
+      const lookCount = Math.min(parseInt(lookMatch[1]), p.deck.length);
+      if (lookCount > 0) {
+        const revealAndKeep = /reveal up to (\d+).*add.*hand/i.test(effect);
+        const keepCount = revealAndKeep ? parseInt(effect.match(/reveal up to (\d+)/i)[1]) : 0;
+        game.scryWindow = {
+          playerId,
+          cards: p.deck.splice(0, lookCount),
+          keepCount,
+          cardName: card.name,
+        };
+        log(game, `${card.name}: looking at top ${lookCount} cards...`);
       }
     }
 
