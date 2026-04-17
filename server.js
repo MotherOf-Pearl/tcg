@@ -743,7 +743,7 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'DRAW_CARD': {
-      console.log('DRAW_CARD:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase });
+      console.log('DRAW_CARD:', { playerId, activePlayer: game.activePlayer, isActive, phase: game.phase });
       if (!isActive || game.phase !== 'DRAW') return;
       if (p.deck.length > 0) {
         p.hand.push(p.deck.shift());
@@ -754,7 +754,7 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'DRAW_DON': {
-      console.log('DRAW_DON:', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn, isFirstPlayer: playerId === game.firstPlayer });
+      console.log('DRAW_DON:', { playerId, activePlayer: game.activePlayer, isActive, phase: game.phase, turn: game.turn, isFirstPlayer: playerId === game.firstPlayer });
       if (!isActive || game.phase !== 'DON') return;
       // P1 turn 1 gets 1 DON, everyone else gets 2
       const amount = (game.turn === 1 && playerId === game.firstPlayer) ? 1 : 2;
@@ -797,7 +797,7 @@ function handleAction(roomId, playerId, action) {
       p.donActive = activeDonCount - cardCost;
       p.donRested += cardCost;
       console.log('PLAY_CARD after:', {
-        playerId: playerId.slice(0,6),
+        playerId,
         cardCost,
         donActive: p.donActive,
         donRested: p.donRested,
@@ -961,7 +961,7 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'END_TURN': {
-      console.log('END_TURN received', { playerId: playerId.slice(0,6), activePlayer: game.activePlayer.slice(0,6), isActive, phase: game.phase, turn: game.turn, counterWindow: !!game.counterWindow });
+      console.log('END_TURN received', { playerId, activePlayer: game.activePlayer, isActive, phase: game.phase, turn: game.turn, counterWindow: !!game.counterWindow });
       if (!isActive) { console.log('END_TURN rejected: not active player'); return; }
       // Auto-resolve counter window if active
       if (game.counterWindow) {
@@ -972,7 +972,7 @@ function handleAction(roomId, playerId, action) {
         }
       }
       doEnd(game);
-      console.log('END_TURN complete, new activePlayer:', game.activePlayer.slice(0,6), 'turn:', game.turn, 'phase:', game.phase);
+      console.log('END_TURN complete, new activePlayer:', game.activePlayer, 'turn:', game.turn, 'phase:', game.phase);
       break;
     }
   }

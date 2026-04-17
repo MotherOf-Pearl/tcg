@@ -1277,7 +1277,7 @@ function send2(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
 function act(action) {
   if (isSolo) {
     const idx = myId === soloIds[0] ? 0 : 1;
-    console.log('act():', action.type, { myId: myId?.slice(0,6), soloId0: soloIds[0]?.slice(0,6), soloId1: soloIds[1]?.slice(0,6), wsIdx: idx, activePlayer: game?.activePlayer?.slice(0,6) });
+    console.log('act():', action.type, { myId, soloId0: soloIds[0], soloId1: soloIds[1], wsIdx: idx, activePlayer: game?.activePlayer });
     const sws = soloWs[idx];
     if (sws?.readyState === 1) sws.send(JSON.stringify({ type: 'ACTION', action }));
   } else {
@@ -2020,11 +2020,11 @@ function playCard(uid) {
   const me = game ? game.players[myId] : null;
   const cardInMyHand = me ? me.hand.find(c => c.uid === uid) : null;
   console.log('playCard (client):', {
-    myId: myId?.slice(0,6),
-    activePlayer: game?.activePlayer?.slice(0,6),
+    myId,
+    activePlayer: game?.activePlayer,
     isSolo,
-    soloId0: soloIds[0]?.slice(0,6),
-    soloId1: soloIds[1]?.slice(0,6),
+    soloId0: soloIds[0],
+    soloId1: soloIds[1],
     cardUid: uid,
     cardName: cardInMyHand?.name,
     cardCost: cardInMyHand?.cost,
