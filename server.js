@@ -587,7 +587,7 @@ function doRefresh(game) {
   const p = game.players[game.activePlayer];
   p.leader.rested = false;
   p.leader.usedThisTurn = false;
-  p.field.forEach(c => { c.rested = false; c.usedThisTurn = false; });
+  p.field.forEach(c => { c.rested = false; c.usedThisTurn = false; c.playedThisTurn = false; });
   p.donActive += p.donRested;
   p.donRested = 0;
   log(game, `Turn ${game.turn}: ${game.activePlayer.slice(0,6)} refreshes all cards.`);
@@ -772,6 +772,7 @@ function handleAction(roomId, playerId, action) {
         card.rested = false;
         card.attachedDon = 0;
         p.field.push(card);
+        card.playedThisTurn = true;
         log(game, `${playerId.slice(0,6)} plays ${card.name} (${card.power} power).`);
         parseAndApply('onPlay', game, playerId, card, opp);
       } else if (card.type === 'STAGE') {
@@ -806,6 +807,16 @@ function handleAction(roomId, playerId, action) {
       if (action.attackerUid === p.leader.uid) attacker = p.leader;
       else attacker = p.field.find(c => c.uid === action.attackerUid);
       if (!attacker || attacker.rested) { send(playerId, {type:'ERROR', msg:'That card is rested or invalid'}); return; }
+      // Cannot attack on turn 1
+      if (game.turn === 1 && game.activePlayer === game.firstPlayer) {
+        send(playerId, {type:'ERROR', msg:'Cannot attack on turn 1'});
+        return;
+      }
+      // Characters cannot attack the turn they are played (unless Rush)
+      if (attacker.playedThisTurn && !(attacker.ability && attacker.ability.includes('[Rush]'))) {
+        send(playerId, {type:'ERROR', msg:'This character cannot attack this turn'});
+        return;
+      }
       if (attacker.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Stages cannot attack'}); return; }
 
       const attackPower = (attacker.power||5000) + (attacker.attachedDon||0)*1000;
@@ -856,6 +867,22 @@ function handleAction(roomId, playerId, action) {
         const counterOpp = game.players[counterOppId];
         parseAndApply('counter', game, playerId, card, counterOpp);
       }
+      break;
+    }
+
+    case 'BLOCK': {
+      if (!game.counterWindow || game.counterWindow.defenderId !== playerId) return;
+      const blocker = p.field.find(c => c.uid === action.blockerUid && !c.rested);
+      if (!blocker || !blocker.ability || !blocker.ability.includes('[Blocker]')) {
+        send(playerId, {type:'ERROR', msg:'Invalid blocker'});
+        return;
+      }
+      blocker.rested = true;
+      // Redirect attack to blocker
+      game.counterWindow.defenderUid = blocker.uid;
+      game.counterWindow.defenderIsLeader = false;
+      game.counterWindow.defendPower = (blocker.power||0) + (blocker.attachedDon||0)*1000;
+      log(game, `🛡️ ${blocker.name} blocks the attack! (${game.counterWindow.defendPower} power)`);
       break;
     }
 
