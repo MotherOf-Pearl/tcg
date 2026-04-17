@@ -4,8 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
-// Use /app in Docker, __dirname locally
-const BASE_DIR = fs.existsSync('/app/server.js') ? '/app' : __dirname;
+// Detect base directory: check common Docker paths, then __dirname, then cwd
+const BASE_DIR = ['/app', '/mnt/user/appdata/onepiece-game', __dirname, process.cwd()]
+  .find(d => fs.existsSync(path.join(d, 'server.js'))) || __dirname;
+console.log('BASE_DIR:', BASE_DIR);
 
 const PAGES = {
   '/': 'index.html',
@@ -20,11 +22,13 @@ const server = http.createServer((req, res) => {
   const page = PAGES[pathname];
   if (page) {
     const file = path.join(BASE_DIR, page);
+    if (!fs.existsSync(file)) { console.log('File not found:', file); res.writeHead(404); res.end('File not found: ' + file); return; }
     res.writeHead(200, { 'Content-Type': 'text/html' });
     fs.createReadStream(file).pipe(res);
-  } else if (pathname === '/card-back.png' || pathname === '/don-card.png') {
+  } else if (pathname.match(/\.(png|jpg|jpeg)$/)) {
     const file = path.join(BASE_DIR, pathname.slice(1));
-    res.writeHead(200, { 'Content-Type': 'image/png' });
+    if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'image/' + (pathname.endsWith('.png') ? 'png' : 'jpeg') });
     fs.createReadStream(file).pipe(res);
   } else {
     res.writeHead(404); res.end();
