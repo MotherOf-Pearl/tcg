@@ -993,7 +993,10 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       </div>
       <!-- Card selected from hand -->
       <div id="handSelBtns" style="display:none;flex-direction:column;gap:4px;">
+        <div id="selCardName" style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);text-align:center;"></div>
+        <div id="selCardAbility" style="font-size:.65rem;color:var(--text);line-height:1.4;max-height:80px;overflow-y:auto;padding:4px;background:rgba(0,0,0,.15);border-radius:3px;display:none;"></div>
         <button class="gb-pbtn gb-pbtn-lg" id="btnDeploy" onclick="deploySelected()">Deploy</button>
+        <button class="gb-pbtn gb-pbtn-lg" id="btnPlayEvent" onclick="deploySelected()" style="display:none;">Play Event</button>
         <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
         <span id="deployHint" class="gb-hint"></span>
       </div>
@@ -1715,15 +1718,27 @@ function selectCard(uid, source) {
   const card = findCard(uid, me);
 
   if (source === 'hand' && card) {
-    // Hand card — show Deploy or not enough DON
     hideAllBtnGroups();
     const deployHint = document.getElementById('deployHint');
-    if (me.donActive >= card.cost) {
-      document.getElementById('handSelBtns').style.display = 'flex';
-      deployHint.textContent = `${card.name} — Cost: ${card.cost} DON!!`;
+    const isEvent = card.type === 'EVENT';
+
+    document.getElementById('selCardName').textContent = card.name;
+    document.getElementById('handSelBtns').style.display = 'flex';
+
+    if (isEvent && card.ability) {
+      document.getElementById('selCardAbility').textContent = card.ability;
+      document.getElementById('selCardAbility').style.display = 'block';
     } else {
-      document.getElementById('handSelBtns').style.display = 'flex';
+      document.getElementById('selCardAbility').style.display = 'none';
+    }
+
+    if (me.donActive >= card.cost) {
+      document.getElementById('btnDeploy').style.display = isEvent ? 'none' : 'block';
+      document.getElementById('btnPlayEvent').style.display = isEvent ? 'block' : 'none';
+      deployHint.textContent = `Cost: ${card.cost} DON!!`;
+    } else {
       document.getElementById('btnDeploy').style.display = 'none';
+      document.getElementById('btnPlayEvent').style.display = 'none';
       deployHint.textContent = `Not enough DON!! (need ${card.cost}, have ${me.donActive})`;
     }
   } else if (source === 'field' || source === 'leader') {
