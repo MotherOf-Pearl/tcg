@@ -367,71 +367,71 @@ const CARD_DB = [
   // ══════════════════════════════
   // KAIDO RAMP DECK (Purple)
   // ══════════════════════════════
-  { id:'ST04-001', name:'Kaido', type:'LEADER', color:'Purple', attribute:'Strike',
+  { id:'ST04-001', name:'Constable Jack', type:'LEADER', color:'Purple', attribute:'Strike',
     power:5000, life:5, cost:0, counter:0, image:IMG('ST04','ST04-001','png'),
-    ability:"[Activate: Main] [Once Per Turn] You may trash 1 of your Characters: Add up to 1 DON!! card from your DON!! deck and rest it." },
+    ability:"[Activate: Main] [Once Per Turn] DON!! -7: Trash up to 1 of your opponent's Life cards." },
 
-  { id:'OP01-100', name:'Kurozumi Higurashi', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
-    power:0, cost:1, counter:2000, image:IMG('OP01','OP01-100','png'),
-    ability:"[On Play] Add up to 1 DON!! from your DON!! deck and rest it." },
+  { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
+    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-100','png'),
+    ability:"[Blocker]" },
 
-  { id:'ST04-010', name:"Who's Who", type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:3000, cost:3, counter:2000, image:IMG('ST04','ST04-010','png'),
+  { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:3000, cost:3, counter:0, image:IMG('ST04','ST04-010','png'),
+    ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 3 or less. [Trigger] Play this card." },
+
+  { id:'OP01-101', name:'Shawn the Whimsical', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-101','png'),
+    ability:"[DON!! x1] [When Attacking] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and rest it." },
+
+  { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:4000, cost:3, counter:1000, image:IMG('ST04','ST04-008','png'),
+    ability:"[On Play] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and set it as active." },
+
+  { id:'ST04-002', name:'Dabby the Domeless', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:5000, cost:4, counter:2000, image:IMG('ST04','ST04-002','png'),
+    ability:"[On Play] DON!! -1: Play up to 1 [Toad Wizzy] card with a cost of 4 or less from your hand." },
+
+  { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:6000, cost:4, counter:1000, image:IMG('ST04','ST04-012','png'),
     ability:"" },
 
-  { id:'OP01-101', name:'Sasaki', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:4000, cost:3, counter:1000, image:IMG('OP01','OP01-101','png'),
-    ability:"" },
+  { id:'ST04-005', name:'Sam the Tall', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
+    power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-005','png'),
+    ability:"[Blocker] [On Play] DON!! -1: Draw 2 cards and trash 1 card from your hand." },
 
-  { id:'ST04-008', name:'Jack', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-008','png'),
-    ability:"" },
+  { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:7000, cost:6, counter:0, image:IMG('ST04','ST04-004','png'),
+    ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 4 or less." },
 
-  { id:'ST04-002', name:'Ulti', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:2000, cost:2, counter:1000, image:IMG('ST04','ST04-002','png'),
-    ability:"" },
+  { id:'OP01-096', name:'Commander Sam', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:7000, cost:7, counter:0, image:IMG('OP01','OP01-096','png'),
+    ability:"[On Play] DON!! -2: K.O. up to 1 of your opponent's Characters with a cost of 3 or less and up to 1 of your opponent's Characters with a cost of 2 or less." },
 
-  { id:'ST04-012', name:'Page One', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:3000, cost:2, counter:1000, image:IMG('ST04','ST04-012','png'),
-    ability:"" },
+  { id:'ST04-003', name:'Gee, Infernal Hound-Shlawg', type:'CHARACTER', color:'Purple', attribute:'Strike',
+    power:10000, cost:9, counter:0, image:IMG('ST04','ST04-003','png'),
+    ability:"[On Play] DON!! -5: K.O. up to 1 of your opponent's Characters with a cost of 6 or less. This Character gains [Rush] during this turn." },
 
-  { id:'ST04-005', name:'Queen', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
-    power:5000, cost:4, counter:1000, image:IMG('ST04','ST04-005','png'),
-    ability:"" },
-
-  { id:'ST04-004', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:6000, cost:5, counter:0, image:IMG('ST04','ST04-004','png'),
-    ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
-
-  { id:'OP01-096', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:7000, cost:6, counter:0, image:IMG('OP01','OP01-096','png'),
-    ability:"[DON!! x1] [When Attacking] K.O. up to 1 of your opponent's Characters with 2000 power or less." },
-
-  { id:'ST04-003', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:8000, cost:7, counter:0, image:IMG('ST04','ST04-003','png'),
-    ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
-
-  { id:'OP01-094', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'OP01-094', name:'Jack, Master of Gee', type:'CHARACTER', color:'Purple', attribute:'Strike',
     power:12000, cost:10, counter:0, image:IMG('OP01','OP01-094','png'),
-    ability:"[Rush] [On Play] K.O. up to 1 of your opponent's Characters." },
+    ability:"[On Play] DON!! -6: If your Leader has the {Holy Roman Empire} type, K.O. all Characters other than this Character." },
 
-  { id:'ST04-016', name:'Blast Breath', type:'EVENT', color:'Purple',
+  { id:'ST04-016', name:'Off to the Market', type:'EVENT', color:'Purple',
     power:0, cost:1, counter:0, image:IMG('ST04','ST04-016','png'),
-    ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+    ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
-  { id:'OP01-117', name:"Sheep's Horn", type:'EVENT', color:'Purple',
-    power:0, cost:4, counter:0, image:IMG('OP01','OP01-117','png'),
-    ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+  { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple',
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'),
+    ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
 
-  { id:'OP01-119', name:'Thunder Bagua', type:'EVENT', color:'Purple',
-    power:0, cost:1, counter:0, image:IMG('OP01','OP01-119','png'),
-    ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+  { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple',
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-119','png'),
+    ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, if you have 2 or less Life cards, add up to 1 DON!! card from your DON!! deck and rest it. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
-  { id:'ST04-015', name:'Brachio Bomber', type:'EVENT', color:'Purple',
-    power:0, cost:4, counter:0, image:IMG('ST04','ST04-015','png'),
-    ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
+  { id:'ST04-015', name:'Blessed Thy Men', type:'EVENT', color:'Purple',
+    power:0, cost:6, counter:0, image:IMG('ST04','ST04-015','png'),
+    ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 6 or less, then add up to 1 DON!! card from your DON!! deck and set it as active. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
-  { id:'ST04-017', name:'The Canals', type:'STAGE', color:'Purple', attribute:'',
+  { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:'',
     power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'),
     ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it." },
 ];
