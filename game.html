@@ -595,6 +595,8 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
    disappear under the adjacent .don-area (z-index:1). */
 .battle-active{z-index:50 !important;}
 .gcard.battle-active, .gcard-wrap.battle-active{z-index:50 !important;position:relative;}
+/* Leader slots always render above the cost area, even when rested (rotated 90°). */
+#selfLeader, #oppLeader{position:relative;z-index:10;overflow:visible;}
 /* Phase 3: defender's counter-eligible hand cards pulse gold + show +N badge. */
 .counter-eligible{
   border-color:#d4a020 !important;
@@ -664,8 +666,20 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
   display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;
   cursor:pointer;font-family:'Cinzel',serif;font-size:.45rem;
   color:rgba(180,140,50,.25);letter-spacing:1px;text-transform:uppercase;
+  position:relative;overflow:hidden;
 }
 .gb-trash-slot:hover{border-color:var(--gold);color:var(--gold);}
+.gb-trash-slot.has-card{color:transparent;}
+.gb-trash-slot .trash-top{
+  position:absolute;inset:0;background-size:cover;background-position:center;
+  border-radius:3px;
+}
+.gb-trash-slot .trash-count{
+  position:absolute;right:3px;bottom:3px;
+  background:rgba(0,0,0,.78);color:var(--gold);
+  font-family:'Barlow Condensed',sans-serif;font-size:.7rem;font-weight:700;
+  padding:1px 5px;border-radius:3px;z-index:2;letter-spacing:.5px;
+}
 /* Life cards — face-down card backs, tightly overlapping vertically */
 .gb-life{display:flex;flex-direction:column;align-items:center;flex-shrink:0;padding-bottom:12px;}
 .life-stack{display:flex;flex-direction:column;align-items:center;}
@@ -1537,6 +1551,8 @@ function renderGame() {
   document.getElementById('oppDeckN').textContent   = opp.deck.length;
   document.getElementById('oppTrashN').textContent  = opp.trash.length;
   document.getElementById('oppHandCount').textContent = opp.hand.length;
+  renderTrashSlot('self', me.trash);
+  renderTrashSlot('opp',  opp.trash);
 
   renderDon('selfDon', me.donActive,  me.donRested,  me.donActive  + me.donRested);
   renderDon('oppDon',  opp.donActive, opp.donRested, opp.donActive + opp.donRested);
@@ -1559,6 +1575,15 @@ function renderGame() {
   document.querySelectorAll('.targetable-attack').forEach(el => el.classList.remove('targetable-attack'));
 
   const bs = game.battleState;
+  // If we are NOT in a battle phase, hide every battle-step panel — otherwise leftover
+  // panels (like Resolve Attack) stick around after the phase transitions back to MAIN.
+  const inBattlePhase = bs && (game.phase === 'ATTACKING' || game.phase === 'BLOCK_STEP' || game.phase === 'COUNTER_STEP');
+  if (!inBattlePhase) {
+    ['attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.style.display = 'none';
+    });
+  }
   // Derive attackMode from server state so click handlers (selectTarget) still work.
   attackMode = !!(bs && game.phase === 'ATTACKING' && bs.attackerId === myId);
 
@@ -1715,6 +1740,35 @@ function renderStage(slotId, stageCard, isSelf) {
   el.appendChild(makeGameCard(stageCard,
     isSelf ? () => selectCard(stageCard.uid, 'field') : null,
     !isSelf));
+}
+
+function renderTrashSlot(side, trash) {
+  // The trash slot HTML lives next to its count span — find by the count's parent.
+  const countSpan = document.getElementById(side + 'TrashN');
+  if (!countSpan) return;
+  const slot = countSpan.closest('.gb-trash-slot');
+  if (!slot) return;
+  // Wipe everything except the click handler / structural fallback text.
+  slot.innerHTML = '';
+  slot.classList.toggle('has-card', trash.length > 0);
+  if (trash.length > 0) {
+    const top = trash[trash.length - 1];
+    if (top.image) {
+      const img = document.createElement('div');
+      img.className = 'trash-top';
+      img.style.backgroundImage = `url("${top.image}")`;
+      slot.appendChild(img);
+    }
+  } else {
+    slot.appendChild(document.createTextNode('TRASH'));
+    slot.appendChild(document.createElement('br'));
+  }
+  // Always (re)create the count badge.
+  const badge = document.createElement('span');
+  badge.className = 'trash-count';
+  badge.id = side + 'TrashN';
+  badge.textContent = trash.length;
+  slot.appendChild(badge);
 }
 
 function renderHand(handId, hand, isSelf) {
