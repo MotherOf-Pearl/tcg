@@ -399,7 +399,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* Opponent hand — top */
 .gb-opp-hand{
   display:flex;flex-wrap:nowrap;align-items:flex-start;
-  gap:4px;padding:6px;overflow-x:auto;min-height:160px;
+  gap:4px;padding:6px;overflow:hidden;min-height:160px;
   scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
 /* Card preview — center */
@@ -418,7 +418,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 /* Player hand — bottom */
 .gb-self-hand{
   display:flex;flex-wrap:nowrap;align-items:flex-end;
-  gap:4px;padding:6px;overflow-x:auto;min-height:160px;
+  gap:4px;padding:6px;overflow:hidden;min-height:160px;
   border-top:1px solid rgba(212,160,32,.12);
   scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
 }
@@ -1721,6 +1721,11 @@ function renderGame() {
 
 // Redraw arrow + reposition power overlays on window resize (they're fixed-position, not card-anchored).
 window.addEventListener('resize', () => {
+  // Recompute hand overlaps so cards re-pack into the new available width.
+  ['selfHand','oppHand'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) applyHandOverlap(el);
+  });
   if (game && game.battleState && (game.phase === 'BLOCK_STEP' || game.phase === 'COUNTER_STEP')) {
     const bs = game.battleState;
     drawBattleArrow(bs.attackerUid, bs.targetUid);
@@ -1799,6 +1804,36 @@ function renderTrashSlot(side, trash) {
   slot.appendChild(badge);
 }
 
+// Dynamically overlap hand cards so they always fit in one row — no scrollbars.
+// Each card gets a negative margin-right; last card gets 0. Every card stays at
+// least 20 px visible (overlap capped at cardWidth - 20). With .gb-*-hand set
+// to overflow:hidden, anything past the cap is clipped rather than scrolled.
+function applyHandOverlap(containerEl) {
+  if (!containerEl) return;
+  const cards = Array.from(containerEl.children);
+  if (cards.length === 0) return;
+  // Reset any inline margin from a prior render so offsetWidth is the true card width.
+  cards.forEach(c => { c.style.marginRight = ''; });
+  const cardWidth = cards[0].offsetWidth || 105;
+  const style = getComputedStyle(containerEl);
+  const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0);
+  const gap = parseFloat(style.columnGap || style.gap) || 0;
+  const available = containerEl.clientWidth - padX;
+  const count = cards.length;
+  const naturalTotal = cardWidth * count + gap * Math.max(0, count - 1);
+
+  let marginRight = 0; // default: no extra negative margin; the container's gap handles spacing
+  if (naturalTotal > available && count > 1) {
+    let overlap = (naturalTotal - available) / (count - 1);
+    const maxOverlap = Math.max(0, cardWidth - 20); // keep at least 20px of each card visible
+    if (overlap > maxOverlap) overlap = maxOverlap;
+    marginRight = -overlap;
+  }
+  cards.forEach((c, i) => {
+    c.style.marginRight = (i === count - 1 ? 0 : marginRight) + 'px';
+  });
+}
+
 function renderHand(handId, hand, isSelf) {
   const el = document.getElementById(handId);
   el.innerHTML = '';
@@ -1831,6 +1866,7 @@ function renderHand(handId, hand, isSelf) {
     }
     el.appendChild(cardEl);
   });
+  applyHandOverlap(el);
 }
 
 function renderOppHand(handId, count) {
@@ -1842,6 +1878,7 @@ function renderOppHand(handId, count) {
     c.textContent = '✦';
     el.appendChild(c);
   }
+  applyHandOverlap(el);
 }
 
 function renderSoloOppHand(handId, hand) {
@@ -1850,6 +1887,7 @@ function renderSoloOppHand(handId, hand) {
   hand.forEach(card => {
     el.appendChild(makeGameCard(card, null, false));
   });
+  applyHandOverlap(el);
 }
 
 function renderDon(id, active, rested, total) {
