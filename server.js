@@ -1027,10 +1027,8 @@ function handleAction(roomId, playerId, action) {
       else attackerCard = attackerPlayer.field.find(c => c.uid === bs.attackerUid);
 
       const totalDefense = bs.targetPower + (bs.counterBonus || 0);
-      // OPTCG tie rules: leader → defender wins ties (>); character → attacker wins ties (>=).
-      const attackerWins = bs.targetIsLeader
-        ? bs.attackerPower >  totalDefense
-        : bs.attackerPower >= totalDefense;
+      // House rule: ties go to the attacker for BOTH leader and character attacks.
+      const attackerWins = bs.attackerPower >= totalDefense;
 
       if (attackerWins) {
         if (bs.targetIsLeader) {
