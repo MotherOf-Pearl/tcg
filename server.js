@@ -438,41 +438,6 @@ const CARD_DB = [
 
 // ─── PRESET DECKS ───
 const PRESET_DECKS = {
-  'Doflamingo': {
-    leaderId: 'OP14-060',
-    cards: [
-      {id:'OP10-065',count:4},{id:'OP14-067',count:4},{id:'ST18-001',count:3},
-      {id:'OP10-076',count:2},{id:'OP14-072',count:4},{id:'OP14-063',count:2},
-      {id:'OP14-061',count:4},{id:'OP14-074',count:4},{id:'OP10-072',count:4},
-      {id:'OP14-068',count:2},{id:'OP10-071',count:4},{id:'OP11-067',count:1},
-      {id:'OP14-069',count:4},{id:'OP13-076',count:4},{id:'OP10-078',count:1},
-      {id:'OP07-076',count:4},{id:'OP14-078',count:2},{id:'OP10-079',count:1},
-    ]
-  },
-  'Shanks': {
-    leaderId: 'OP09-001',
-    cards: [
-      {id:'OP09-002',count:4},{id:'OP01-006',count:4},{id:'OP09-008',count:2},
-      {id:'OP09-011',count:4},{id:'OP09-014',count:2},{id:'OP12-008',count:4},
-      {id:'OP09-015',count:3},{id:'OP10-011',count:1},{id:'PRB02-003',count:1},
-      {id:'OP03-013',count:2},{id:'OP09-013',count:2},{id:'ST15-005',count:1},
-      {id:'ST23-001',count:3},{id:'PRB02-002',count:1},{id:'OP09-009',count:4},
-      {id:'ST15-002',count:1},{id:'OP08-118',count:4},{id:'ST23-002',count:1},
-      {id:'OP06-007',count:3},{id:'OP09-004',count:2},{id:'OP09-021',count:1},
-      {id:'OP04-016',count:1},{id:'OP10-019',count:2},{id:'OP09-020',count:1},
-      {id:'OP01-026',count:1},{id:'OP10-018',count:1},{id:'ST21-017',count:1},
-    ]
-  },
-  'Blackbeard': {
-    leaderId: 'OP09-081',
-    cards: [
-      {id:'OP05-086',count:4},{id:'OP09-095',count:4},{id:'OP11-083',count:4},
-      {id:'OP09-089',count:3},{id:'OP09-088',count:4},{id:'OP09-086',count:4},
-      {id:'PRB02-015',count:1},{id:'OP10-082',count:4},{id:'OP09-084',count:1},
-      {id:'ST27-003',count:4},{id:'OP09-093',count:4},{id:'OP09-096',count:4},
-      {id:'OP09-097',count:1},{id:'OP09-098',count:4},{id:'OP09-099',count:4},
-    ]
-  },
   'Anna of Brittany': {
     leaderId: 'ST03-001',
     cards: [
@@ -483,7 +448,7 @@ const PRESET_DECKS = {
       {id:'OP01-090',count:4},
     ]
   },
-  'Kaido Ramp': {
+  'Constable Jack': {
     leaderId: 'ST04-001',
     cards: [
       {id:'OP01-100',count:4},{id:'ST04-010',count:4},{id:'OP01-101',count:4},
@@ -500,7 +465,7 @@ function getCard(id) { return CARD_DB.find(c => c.id === id); }
 
 function buildCustomDeck(leaderId, cardList) {
   const leader = CARD_DB.find(c => c.id === leaderId);
-  if (!leader) return buildCustomDeck('OP14-060', PRESET_DECKS['Doflamingo'].cards);
+  if (!leader) return buildCustomDeck('ST03-001', PRESET_DECKS['Anna of Brittany'].cards);
   const deck = [];
   cardList.forEach(({id, count}) => {
     const card = CARD_DB.find(c => c.id === id);
@@ -513,7 +478,7 @@ function buildCustomDeck(leaderId, cardList) {
 }
 
 function buildDeckByName(name) {
-  const preset = PRESET_DECKS[name] || PRESET_DECKS['Doflamingo'];
+  const preset = PRESET_DECKS[name] || PRESET_DECKS['Anna of Brittany'];
   return buildCustomDeck(preset.leaderId, preset.cards);
 }
 
@@ -529,7 +494,7 @@ function shuffle(arr) {
 function createPlayerState(leaderId, deckList) {
   const { leader, deck } = deckList
     ? buildCustomDeck(leaderId, deckList)
-    : buildDeckByName('Doflamingo');
+    : buildDeckByName('Anna of Brittany');
   const hand = deck.splice(0, 5);
   const life = deck.splice(0, leader.life);
   return {
@@ -542,8 +507,8 @@ function createPlayerState(leaderId, deckList) {
 
 function createGame(p1id, p2id, p1deck, p2deck) {
   const players = {
-    [p1id]: createPlayerState(p1deck?.leaderId || 'OP14-060', p1deck?.cards || PRESET_DECKS['Doflamingo'].cards),
-    [p2id]: createPlayerState(p2deck?.leaderId || 'OP09-001', p2deck?.cards || PRESET_DECKS['Shanks'].cards),
+    [p1id]: createPlayerState(p1deck?.leaderId || 'ST03-001', p1deck?.cards || PRESET_DECKS['Anna of Brittany'].cards),
+    [p2id]: createPlayerState(p2deck?.leaderId || 'ST04-001', p2deck?.cards || PRESET_DECKS['Constable Jack'].cards),
   };
   return {
     id: uuidv4(),

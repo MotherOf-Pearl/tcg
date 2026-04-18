@@ -848,10 +848,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div class="mp-form-label">Choose Deck</div>
         <div class="deck-row">
           <button class="mbtn" id="cDeckBtn_Anna of Brittany" onclick="pickDeck('Anna of Brittany')">Anna of Brittany</button>
-          <button class="mbtn" id="cDeckBtn_Kaido Ramp"       onclick="pickDeck('Kaido Ramp')">Kaido Ramp</button>
-          <button class="mbtn" id="cDeckBtn_Doflamingo"        onclick="pickDeck('Doflamingo')">Doflamingo</button>
-          <button class="mbtn" id="cDeckBtn_Shanks"            onclick="pickDeck('Shanks')">Shanks</button>
-          <button class="mbtn" id="cDeckBtn_Blackbeard"        onclick="pickDeck('Blackbeard')">Blackbeard</button>
+          <button class="mbtn" id="cDeckBtn_Constable Jack"   onclick="pickDeck('Constable Jack')">Constable Jack</button>
         </div>
         <button class="mbtn mp-submit" onclick="createRoom()">Create Game</button>
         <button class="mp-back-btn" onclick="closeMPForm()">← Back</button>
@@ -866,10 +863,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div class="mp-form-label">Choose Deck</div>
         <div class="deck-row">
           <button class="mbtn" id="jDeckBtn_Anna of Brittany" onclick="pickDeck('Anna of Brittany')">Anna of Brittany</button>
-          <button class="mbtn" id="jDeckBtn_Kaido Ramp"       onclick="pickDeck('Kaido Ramp')">Kaido Ramp</button>
-          <button class="mbtn" id="jDeckBtn_Doflamingo"        onclick="pickDeck('Doflamingo')">Doflamingo</button>
-          <button class="mbtn" id="jDeckBtn_Shanks"            onclick="pickDeck('Shanks')">Shanks</button>
-          <button class="mbtn" id="jDeckBtn_Blackbeard"        onclick="pickDeck('Blackbeard')">Blackbeard</button>
+          <button class="mbtn" id="jDeckBtn_Constable Jack"   onclick="pickDeck('Constable Jack')">Constable Jack</button>
         </div>
         <button class="mbtn mp-submit" onclick="joinRoom()">Join Game</button>
         <button class="mp-back-btn" onclick="closeMPForm()">← Back</button>
@@ -970,10 +964,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       <span class="solo-label">P1</span>
       <select class="solo-select" id="soloDeck1" onchange="pickSoloDeck(0, this.value)">
         <option value="Anna of Brittany">Anna of Brittany</option>
-        <option value="Kaido Ramp">Kaido Ramp</option>
-        <option value="Doflamingo">Doflamingo</option>
-        <option value="Shanks">Shanks</option>
-        <option value="Blackbeard">Blackbeard</option>
+        <option value="Constable Jack">Constable Jack</option>
       </select>
     </div>
 
@@ -982,11 +973,8 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
     <div class="solo-pick-row">
       <span class="solo-label">P2</span>
       <select class="solo-select" id="soloDeck2" onchange="pickSoloDeck(1, this.value)">
-        <option value="Kaido Ramp">Kaido Ramp</option>
+        <option value="Constable Jack">Constable Jack</option>
         <option value="Anna of Brittany">Anna of Brittany</option>
-        <option value="Doflamingo">Doflamingo</option>
-        <option value="Shanks">Shanks</option>
-        <option value="Blackbeard">Blackbeard</option>
       </select>
     </div>
 
@@ -1202,41 +1190,6 @@ const WS_URL = 'wss://game.boohawtcg.com';
 
 // ─── PRESET DECKS ───
 const PRESET_DECKS = {
-  'Doflamingo': {
-    leaderId: 'OP14-060',
-    cards: [
-      {id:'OP10-065',count:4},{id:'OP14-067',count:4},{id:'ST18-001',count:3},
-      {id:'OP10-076',count:2},{id:'OP14-072',count:4},{id:'OP14-063',count:2},
-      {id:'OP14-061',count:4},{id:'OP14-074',count:4},{id:'OP10-072',count:4},
-      {id:'OP14-068',count:2},{id:'OP10-071',count:4},{id:'OP11-067',count:1},
-      {id:'OP14-069',count:4},{id:'OP13-076',count:4},{id:'OP10-078',count:1},
-      {id:'OP07-076',count:4},{id:'OP14-078',count:2},{id:'OP10-079',count:1},
-    ]
-  },
-  'Shanks': {
-    leaderId: 'OP09-001',
-    cards: [
-      {id:'OP09-002',count:4},{id:'OP01-006',count:4},{id:'OP09-008',count:2},
-      {id:'OP09-011',count:4},{id:'OP09-014',count:2},{id:'OP12-008',count:4},
-      {id:'OP09-015',count:3},{id:'OP10-011',count:1},{id:'PRB02-003',count:1},
-      {id:'OP03-013',count:2},{id:'OP09-013',count:2},{id:'ST15-005',count:1},
-      {id:'ST23-001',count:3},{id:'PRB02-002',count:1},{id:'OP09-009',count:4},
-      {id:'ST15-002',count:1},{id:'OP08-118',count:4},{id:'ST23-002',count:1},
-      {id:'OP06-007',count:3},{id:'OP09-004',count:2},{id:'OP09-021',count:1},
-      {id:'OP04-016',count:1},{id:'OP10-019',count:2},{id:'OP09-020',count:1},
-      {id:'OP01-026',count:1},{id:'OP10-018',count:1},{id:'ST21-017',count:1},
-    ]
-  },
-  'Blackbeard': {
-    leaderId: 'OP09-081',
-    cards: [
-      {id:'OP05-086',count:4},{id:'OP09-095',count:4},{id:'OP11-083',count:4},
-      {id:'OP09-089',count:3},{id:'OP09-088',count:4},{id:'OP09-086',count:4},
-      {id:'PRB02-015',count:1},{id:'OP10-082',count:4},{id:'OP09-084',count:1},
-      {id:'ST27-003',count:4},{id:'OP09-093',count:4},{id:'OP09-096',count:4},
-      {id:'OP09-097',count:1},{id:'OP09-098',count:4},{id:'OP09-099',count:4},
-    ]
-  },
   'Anna of Brittany': {
     leaderId: 'ST03-001',
     cards: [
@@ -1247,7 +1200,7 @@ const PRESET_DECKS = {
       {id:'OP01-090',count:4},
     ]
   },
-  'Kaido Ramp': {
+  'Constable Jack': {
     leaderId: 'ST04-001',
     cards: [
       {id:'OP01-100',count:4},{id:'ST04-010',count:4},{id:'OP01-101',count:4},
@@ -1284,14 +1237,14 @@ let ws = null, myId = null, roomId = null, game = null;
 let cardDb = [];
 let myDeck = { leaderId: 'OP14-060', cards: [] };
 let selectedDeck = JSON.parse(localStorage.getItem('boohawk_deck') || 'null');
-if (!selectedDeck) pickDeck('Doflamingo');
+if (!selectedDeck) pickDeck('Anna of Brittany');
 let sel = null, attackMode = false, counterMode = false, blockerMode = false;
 
 // ─── SOLO MODE ───
 const isSolo = new URLSearchParams(window.location.search).get('solo') === 'true';
 let soloWs = [null, null];
 let soloIds = [null, null];
-let soloDecks = [PRESET_DECKS['Anna of Brittany'], PRESET_DECKS['Kaido Ramp']];
+let soloDecks = [PRESET_DECKS['Anna of Brittany'], PRESET_DECKS['Constable Jack']];
 
 function pickSoloDeck(side, name) {
   soloDecks[side] = PRESET_DECKS[name];
