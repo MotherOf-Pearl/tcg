@@ -1519,8 +1519,14 @@ function renderGame() {
   renderTrashSlot('self', me.trash);
   renderTrashSlot('opp',  opp.trash);
 
-  renderDon('selfDon', me.donActive,  me.donRested,  me.donActive  + me.donRested);
-  renderDon('oppDon',  opp.donActive, opp.donRested, opp.donActive + opp.donRested);
+  // DON badge denominator must include attached DON and remaining DON in the deck so
+  // it stays constant when DON is attached to a card (only `donActive` decreases).
+  const sumAttachedDon = (pl) => (pl.leader.attachedDon || 0)
+    + pl.field.reduce((s, c) => s + (c.attachedDon || 0), 0);
+  const meDonTotal  = me.donDeck  + me.donActive  + me.donRested  + sumAttachedDon(me);
+  const oppDonTotal = opp.donDeck + opp.donActive + opp.donRested + sumAttachedDon(opp);
+  renderDon('selfDon', me.donActive,  me.donRested,  me.donActive  + me.donRested,  meDonTotal);
+  renderDon('oppDon',  opp.donActive, opp.donRested, opp.donActive + opp.donRested, oppDonTotal);
 
   renderLife('selfLife', 'selfLifeCount', me.leader.life,  me.life.length);
   renderLife('selfLifeStack', null, me.leader.life, me.life.length);
@@ -1530,7 +1536,7 @@ function renderGame() {
   renderScry();
 
   // Update DON info display
-  document.getElementById('donInfo').textContent = `DON!! ${me.donActive}/${me.donActive + me.donRested}`;
+  document.getElementById('donInfo').textContent = `DON!! ${me.donActive}/${meDonTotal}`;
 
   // ─── Phase 1 battle overlays ───
   // Clear prior overlays/arrows/battle-active on every re-render; they're re-applied below if still relevant.
@@ -1611,9 +1617,10 @@ function renderGame() {
 
   // Task #1 [Trigger] window — defender chose to activate or skip the trigger.
   const tw = game.triggerWindow;
+  const triggerPanel = document.getElementById('triggerWindowBtns');
   if (tw && tw.playerId === myId) {
     hideAllBtnGroups();
-    document.getElementById('triggerWindowBtns').style.display = 'flex';
+    triggerPanel.style.display = 'flex';
     document.getElementById('triggerCardName').textContent = tw.card.name || '';
     const eff = (tw.card.ability || '');
     const idx = eff.indexOf('[Trigger]');
@@ -1621,8 +1628,11 @@ function renderGame() {
     const img = document.getElementById('triggerCardImg');
     if (tw.card.image) { img.src = tw.card.image; img.style.display = 'block'; }
     else { img.style.display = 'none'; }
-  } else if (tw) {
-    hint('Opponent is resolving a trigger…');
+  } else {
+    // No trigger pending (or it's the opponent's) — make sure the panel from a previous
+    // render is gone, otherwise [Activate]/[Skip] buttons stay visible after the action.
+    triggerPanel.style.display = 'none';
+    if (tw) hint('Opponent is resolving a trigger…');
   }
 
   const hasCW = !!game.counterWindow;
@@ -1843,11 +1853,15 @@ function renderSoloOppHand(handId, hand) {
   applyHandOverlap(el);
 }
 
-function renderDon(id, active, rested, total) {
+function renderDon(id, active, rested, total, badgeTotal) {
   const el = document.getElementById(id);
   if (!el) return;
   el.innerHTML = '';
   if (total === 0) { el.style.width = '0px'; return; }
+  // `total` controls how many cards appear in the cost area (active + rested).
+  // `badgeTotal` (optional) controls the "active/N" denominator and stays constant
+  // when DON is attached to a card (so it includes attachedDon + donDeck).
+  if (badgeTotal == null) badgeTotal = total;
 
   const css = getComputedStyle(document.documentElement);
   const CW = parseInt(css.getPropertyValue('--card-w')) || 98;
@@ -1870,14 +1884,15 @@ function renderDon(id, active, rested, total) {
     card.style.zIndex = rested + i + 1;
     el.appendChild(card);
   }
-  // Count badge
+  // Count badge — "active / badgeTotal" so the denominator never drops on attach.
   const badge = document.createElement('div');
   badge.className = 'don-count-badge';
-  badge.textContent = active + '/' + total;
+  badge.textContent = active + '/' + badgeTotal;
   badge.style.zIndex = 25;
   el.appendChild(badge);
 
-  // Container width: last card's rightmost edge. Rested cards (rotated) visually span CH, active span CW.
+  // Container width: last card's rightmost edge. Width is based on cost-area
+  // cards only (`total`), NOT badgeTotal — so attached DON doesn't bloat the slot.
   const lastLeft = (total - 1) * spacing;
   const lastIsActive = active > 0;
   const lastSpan = lastIsActive ? CW : CH;
@@ -2329,6 +2344,9 @@ function resolveAttack() {
 // ─── Task #1 [Trigger] interactive window ───
 function resolveTrigger(activate) {
   if (!game?.triggerWindow) return;
+  // Hide the panel immediately so the user sees instant feedback;
+  // the next GAME_STATE will reconfirm via renderGame.
+  document.getElementById('triggerWindowBtns').style.display = 'none';
   act({ type: 'TRIGGER_RESOLVE', activate: !!activate });
 }
 
