@@ -1141,6 +1141,15 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div id="counterStepAtkPower" style="font-family:'Barlow Condensed',sans-serif;font-size:.78rem;color:var(--text);text-align:center;line-height:1.35;"></div>
         <div style="font-size:.62rem;color:var(--muted);text-align:center;">Defender may play counters…</div>
       </div>
+      <!-- Task #1 [Trigger] interactive window — defender chooses to activate or skip -->
+      <div id="triggerWindowBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);text-align:center;">[Trigger]</div>
+        <img id="triggerCardImg" alt="" style="width:90px;height:auto;border-radius:4px;align-self:center;display:none;border:1px solid var(--gold-dim);">
+        <div id="triggerCardName" style="font-family:'Cinzel',serif;font-size:.72rem;text-align:center;color:var(--text);"></div>
+        <div id="triggerCardEffect" style="font-size:.6rem;color:var(--text);padding:5px;background:rgba(0,0,0,.18);border-radius:3px;line-height:1.4;max-height:140px;overflow-y:auto;"></div>
+        <button class="gb-pbtn gb-pbtn-lg" onclick="resolveTrigger(true)">Activate</button>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="resolveTrigger(false)">Skip</button>
+      </div>
       <!-- Counter/Block -->
       <div id="counterBtns" style="display:none;flex-direction:column;gap:4px;">
         <div id="battleInfo" style="font-size:.75rem;color:var(--text);text-align:center;padding:4px;"></div>
@@ -1489,9 +1498,12 @@ function doMulligan(mulligan) {
 function renderGame() {
   if (!game || !myId) return;
 
-  // In solo mode, auto-switch to the active player (or defender during counter / block step / counter step)
+  // In solo mode, auto-switch to the active player (or defender during counter / block step / counter step / trigger)
   if (isSolo) {
-    if (game.counterWindow && !game.counterDone[game.counterWindow.defenderId]) {
+    if (game.triggerWindow) {
+      // Whoever revealed the life card decides the trigger.
+      myId = game.triggerWindow.playerId;
+    } else if (game.counterWindow && !game.counterDone[game.counterWindow.defenderId]) {
       myId = game.counterWindow.defenderId;
     } else if (game.battleState && (game.phase === 'BLOCK_STEP' || game.phase === 'COUNTER_STEP')) {
       // Defender acts during block/counter steps — switch viewport to them.
@@ -1642,6 +1654,22 @@ function renderGame() {
       // Defender power overlay reflects counter bonus in real time.
       showPowerOverlay(bs.targetUid, totalDef);
     });
+  }
+
+  // Task #1 [Trigger] window — defender chose to activate or skip the trigger.
+  const tw = game.triggerWindow;
+  if (tw && tw.playerId === myId) {
+    hideAllBtnGroups();
+    document.getElementById('triggerWindowBtns').style.display = 'flex';
+    document.getElementById('triggerCardName').textContent = tw.card.name || '';
+    const eff = (tw.card.ability || '');
+    const idx = eff.indexOf('[Trigger]');
+    document.getElementById('triggerCardEffect').textContent = idx >= 0 ? eff.substring(idx).trim() : eff;
+    const img = document.getElementById('triggerCardImg');
+    if (tw.card.image) { img.src = tw.card.image; img.style.display = 'block'; }
+    else { img.style.display = 'none'; }
+  } else if (tw) {
+    hint('Opponent is resolving a trigger…');
   }
 
   const hasCW = !!game.counterWindow;
@@ -2143,7 +2171,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -2305,6 +2333,12 @@ function useCounter(uid) {
 function resolveAttack() {
   if (!game?.battleState || game.phase !== 'COUNTER_STEP') return;
   act({ type: 'RESOLVE_ATTACK' });
+}
+
+// ─── Task #1 [Trigger] interactive window ───
+function resolveTrigger(activate) {
+  if (!game?.triggerWindow) return;
+  act({ type: 'TRIGGER_RESOLVE', activate: !!activate });
 }
 
 function useBlocker() {

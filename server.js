@@ -558,6 +558,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     counterDone: { [p1id]: false, [p2id]: false },
     firstPlayer: p1id,
     battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
+    triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
   };
 }
 
@@ -1153,6 +1154,22 @@ function handleAction(roomId, playerId, action) {
       console.log('END_TURN complete, new activePlayer:', game.activePlayer, 'turn:', game.turn, 'phase:', game.phase);
       break;
     }
+
+    // ─── Task #1: [Trigger] interactive resolution ───
+    case 'TRIGGER_RESOLVE': {
+      if (!game.triggerWindow) return;
+      if (game.triggerWindow.playerId !== playerId) return;
+      const tw = game.triggerWindow;
+      if (action.activate) {
+        const oppOfTrigger = game.players[Object.keys(game.players).find(id => id !== playerId)];
+        log(game, `[Trigger] ${tw.card.name} activated!`);
+        parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
+      } else {
+        log(game, `[Trigger] ${tw.card.name} skipped.`);
+      }
+      game.triggerWindow = null;
+      break;
+    }
   }
 
   checkWin(game);
@@ -1740,6 +1757,25 @@ function parseAndApply(timing, game, playerId, card, opp) {
     if (/[Aa]ctivate this card's \[Main\] effect/i.test(effect)) {
       parseEventMain(game, playerId, card, opp);
     }
+
+    // Activate Counter effect (forwards to the existing 'counter' timing parser).
+    // Note: many [Counter] effects are "+N power during this battle" — when fired off life
+    // outside an active battle, those have no effect today. Action-style counters
+    // (bounce/play-from-hand/K.O.) still resolve.
+    if (/[Aa]ctivate this card's \[Counter\] effect/i.test(effect)) {
+      parseAndApply('counter', game, playerId, card, opp);
+    }
+
+    // Positive buff to own card — TODO: needs per-card temp +N tracking.
+    const buffMatch = effect.match(/(?:gets?|gains?)\s*\+(\d+000)\s*(?:power|during)/i);
+    if (buffMatch && !/-(\d+000)/.test(effect)) {
+      log(game, `${card.name}: +${buffMatch[1]} buff (TODO — per-card temp buffs not yet wired).`);
+    }
+
+    // Effect negation — TODO: needs per-card "effects negated this turn" flag.
+    if (/[Nn]egate the effect|[Nn]ullify the effects?/.test(effect)) {
+      log(game, `${card.name}: opponent effect negation (TODO — flag not yet wired).`);
+    }
   }
 
   // ── Event [Main] effects (for PLAY_CARD EVENT) ──
@@ -1834,10 +1870,9 @@ function triggerOnKO(game, ownerId, card, killerId) {
 // Check and apply [Trigger] when a life card is flipped
 function applyTriggerEffect(game, playerId, card) {
   if (!card.ability || !card.ability.includes('[Trigger]')) return;
-  const oppId = Object.keys(game.players).find(id => id !== playerId);
-  const opp = game.players[oppId];
-  log(game, `[Trigger] ${card.name} trigger activated!`);
-  parseAndApply('trigger', game, playerId, card, opp);
+  // Task#1: don't auto-fire — open a window so the player can choose Activate/Skip.
+  game.triggerWindow = { playerId, card };
+  log(game, `[Trigger] ${card.name} revealed off life — defender may activate.`);
 }
 
 // ─── WEBSOCKET ───
