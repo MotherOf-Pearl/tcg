@@ -541,6 +541,16 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
     donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
     koTargetWindow: null,     // KO target picker: {playerId, candidateUids, remaining, optional, sourceCardName, resumeTiming, resumeCardUid, filterKind, filterValue}
+    // Bug 5 — TRASH_FROM_HAND_COST: parsed from "You may trash N card(s) from your hand: <effect>".
+    // Resume re-runs parseAndApply with opts.trashCostPaid so the post-colon effect fires.
+    trashFromHandWindow: null, // {playerId, count, optional, sourceCardName, filterType, filterPowerMin, resumeTiming, resumeCardUid}
+    // Bug 6 — BOUNCE_TARGET: parsed from "Return up to N Character with cost/power N or less".
+    // Highlights valid field characters; clicked card returns to its OWNER's hand.
+    bounceTargetWindow: null,  // {playerId, candidateUids, filterKind, filterValue, optional, sourceCardName, resumeTiming, resumeCardUid}
+    // Bug 8 — temporary power buffs from triggers/effects.
+    // Each entry: {targetUid, amount, expiresAtTurn, kind: 'turn'|'battle', source}
+    // Cleanup: doEnd prunes by turn; RESOLVE_ATTACK prunes kind:'battle'.
+    tempPowerEffects: [],
     effectQueue: [],     // Pending interactive steps for chained effects (one window at a time today; full queue is reserved for future multi-window cards).
   };
 }
@@ -609,6 +619,16 @@ function doEnd(game) {
   game.turn++;
   game.phase = 'DRAW';
   log(game, `--- Turn ${game.turn} begins ---`);
+  // Bug 8 — drop any expired temp power buffs. "thisTurn" buffs expire at end
+  // of the turn that just ended (expiresAtTurn = old turn = game.turn - 1, now
+  // strictly less than current turn). "opponentNextTurn" buffs persist one more
+  // turn (expiresAtTurn = old turn + 1 = current turn).
+  if (game.tempPowerEffects && game.tempPowerEffects.length) {
+    game.tempPowerEffects = game.tempPowerEffects.filter(e => {
+      if (e.kind === 'battle') return true; // cleared in RESOLVE_ATTACK, not here
+      return (e.expiresAtTurn == null) || (e.expiresAtTurn >= game.turn);
+    });
+  }
   doRefresh(game);
 }
 
@@ -801,9 +821,14 @@ function handleAction(roomId, playerId, action) {
         p.field.push(card);
         log(game, `${playerId.slice(0,6)} plays stage ${card.name}.`);
       } else if (card.type === 'EVENT') {
-        p.trash.push(card);
+        // Bug 1 — fire the [Main] effect BEFORE moving to trash so any interactive
+        // window (DON return / trash-from-hand / bounce / KO picker) opens against
+        // an in-flight event. Push to trash unconditionally afterward — the event's
+        // own card object is already off the player's hand and held by reference,
+        // so any pending resume window keeps a valid `card`.
         log(game, `${playerId.slice(0,6)} plays event ${card.name}.`);
         parseAndApply('eventMain', game, playerId, card, opp);
+        p.trash.push(card);
       }
       break;
     }
@@ -918,7 +943,7 @@ function handleAction(roomId, playerId, action) {
       if (attacker.playedThisTurn && !(attacker.ability && attacker.ability.includes('[Rush]'))) {
         send(playerId, {type:'ERROR', msg:'This character cannot attack this turn'}); return;
       }
-      const attackerPower = (attacker.power || 0) + (attacker.attachedDon || 0) * 1000;
+      const attackerPower = effectivePowerOf(attacker, game);
       attacker.rested = true;
       game.battleState = {
         attackerUid: attacker.uid,
@@ -933,6 +958,12 @@ function handleAction(roomId, playerId, action) {
       };
       game.phase = 'ATTACKING';
       log(game, `\u2694\uFE0F ${attacker.name} declares an attack — choose a target.`);
+      // Bug 9 — fire [When Attacking] effects through the central parser. The
+      // parser checks any [DON!! xN] gate and may open trash-from-hand / DON-cost
+      // / KO target windows. If the effect modifies attacker power (e.g. +N self
+      // boost), refresh battleState.attackerPower so the overlay/arrow reflect it.
+      parseAndApply('whenAttacking', game, playerId, attacker, opp);
+      game.battleState.attackerPower = effectivePowerOf(attacker, game);
       break;
     }
 
@@ -953,7 +984,7 @@ function handleAction(roomId, playerId, action) {
       }
       if (!target) { send(playerId, {type:'ERROR', msg:'Invalid target'}); return; }
       if (target.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Cannot attack a stage'}); return; }
-      const targetPower = (target.power || 0) + (target.attachedDon || 0) * 1000;
+      const targetPower = effectivePowerOf(target, game);
       game.battleState.targetUid = target.uid;
       game.battleState.targetName = target.name;
       game.battleState.targetPower = targetPower;
@@ -977,6 +1008,12 @@ function handleAction(roomId, playerId, action) {
     }
 
     // ─── Phase 2 block step ───
+    // Bug 7 — scalable USE_BLOCKER: must rest blocker, fully replace battleState
+    // target fields, force phase = COUNTER_STEP. Power uses effectivePowerOf so
+    // any temp buff (Bug 8) on the blocker is reflected in the defending power
+    // immediately. The surrounding handleAction call to sendState broadcasts the
+    // new state — the client redraws the SVG arrow and shows the counter step
+    // panel from the COUNTER_STEP branch in renderGame.
     case 'USE_BLOCKER': {
       if (game.phase !== 'BLOCK_STEP' || !game.battleState) return;
       const defenderId = Object.keys(game.players).find(id => id !== game.battleState.attackerId);
@@ -988,14 +1025,15 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'That card has no [Blocker]'}); return;
       }
       if (blocker.rested) { send(playerId, {type:'ERROR', msg:'Blocker is rested'}); return; }
-      // Rest the blocker and redirect the battle target onto it.
       blocker.rested = true;
-      game.battleState.targetUid = blocker.uid;
-      game.battleState.targetName = blocker.name;
-      game.battleState.targetPower = (blocker.power || 0) + (blocker.attachedDon || 0) * 1000;
+      game.battleState.targetUid     = blocker.uid;
+      game.battleState.targetName    = blocker.name;
+      game.battleState.targetPower   = effectivePowerOf(blocker, game);
       game.battleState.targetIsLeader = false;
+      // Reset any prior counter bonus — counters are paid AFTER the block step.
+      game.battleState.counterBonus = 0;
       game.phase = 'COUNTER_STEP';
-      log(game, `\uD83D\uDEE1\uFE0F ${blocker.name} blocks the attack!`);
+      log(game, `\uD83D\uDEE1\uFE0F ${blocker.name} blocks the attack! (power: ${game.battleState.targetPower})`);
       break;
     }
 
@@ -1080,6 +1118,7 @@ function handleAction(roomId, playerId, action) {
           if (target) {
             defender.field = defender.field.filter(c => c.uid !== bs.targetUid);
             defender.trash.push(target);
+            dropTempEffectsFor(game, target.uid);
             log(game, `\uD83D\uDC80 ${target.name} K.O.'d! (${bs.attackerPower} vs ${totalDefense})`);
             triggerOnKO(game, defenderId, target, bs.attackerId);
           }
@@ -1090,6 +1129,10 @@ function handleAction(roomId, playerId, action) {
       }
 
       // Attacker stays rested (already rested by DECLARE_ATTACK).
+      // Bug 8 — drop "during this battle" temp power buffs now that the battle is over.
+      if (game.tempPowerEffects && game.tempPowerEffects.length) {
+        game.tempPowerEffects = game.tempPowerEffects.filter(e => e.kind !== 'battle');
+      }
       game.battleState = null;
       game.phase = 'MAIN';
       break;
@@ -1237,6 +1280,7 @@ function handleAction(roomId, playerId, action) {
       }
       oppOfActor.field = oppOfActor.field.filter(c => c.uid !== action.targetUid);
       oppOfActor.trash.push(target);
+      dropTempEffectsFor(game, target.uid);
       log(game, `\uD83D\uDC80 ${target.name} K.O.'d!`);
       triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), target, playerId);
 
@@ -1367,6 +1411,106 @@ function handleAction(roomId, playerId, action) {
       parseAndApply('onPlay', game, playerId, picked, opp2);
       break;
     }
+
+    // Bug 5 — resolve "You may trash N card(s) from your hand:" cost. Player either
+    // confirms a selection (cards trashed → resume effect) or skips (no effect fires).
+    case 'TRASH_FROM_HAND_RESOLVE': {
+      if (!game.trashFromHandWindow || game.trashFromHandWindow.playerId !== playerId) return;
+      const w = game.trashFromHandWindow;
+      const owner = game.players[playerId];
+      const finishWindow = (paid) => {
+        const resumeTiming = w.resumeTiming;
+        const resumeCardUid = w.resumeCardUid;
+        const sourceName = w.sourceCardName;
+        game.trashFromHandWindow = null;
+        if (paid && resumeTiming && resumeCardUid) {
+          const src = findSourceCard(owner, resumeCardUid);
+          if (src) {
+            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
+            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { trashCostPaid: true });
+          } else {
+            log(game, `${sourceName}: source card no longer accessible — effect aborted.`);
+          }
+        }
+      };
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must trash cards to fire this effect.'}); return; }
+        log(game, `${w.sourceCardName}: trash cost declined — effect skipped.`);
+        finishWindow(false);
+        break;
+      }
+      const sel = Array.isArray(action.cardUids) ? action.cardUids : [];
+      if (sel.length !== w.count) { send(playerId, {type:'ERROR', msg:`Must trash exactly ${w.count} card(s).`}); return; }
+      // Validate each card: must be in hand AND match filters.
+      const picked = [];
+      for (const uid of sel) {
+        const idx = owner.hand.findIndex(c => c.uid === uid);
+        if (idx === -1) { send(playerId, {type:'ERROR', msg:'Card not in hand.'}); return; }
+        const c = owner.hand[idx];
+        if (w.filterType && c.type !== w.filterType) { send(playerId, {type:'ERROR', msg:`Must trash ${w.filterType.toLowerCase()} cards.`}); return; }
+        if (w.filterPowerMin != null && (c.power || 0) < w.filterPowerMin) {
+          send(playerId, {type:'ERROR', msg:`Card power below ${w.filterPowerMin}.`}); return;
+        }
+        picked.push({ idx, card: c });
+      }
+      // Move from hand to trash. Sort indices descending so splice doesn't shift earlier picks.
+      picked.sort((a, b) => b.idx - a.idx);
+      for (const { idx, card } of picked) {
+        owner.hand.splice(idx, 1);
+        owner.trash.push(card);
+      }
+      log(game, `${w.sourceCardName}: trashed ${picked.length} card(s) — ${picked.map(p => p.card.name).join(', ')}.`);
+      finishWindow(true);
+      break;
+    }
+
+    // Bug 6 — resolve bounce target selection. Returns the chosen Character to
+    // its OWNER's hand (not the actor's), strips its attached DON, and removes
+    // any temp power buffs targeting that uid.
+    case 'BOUNCE_TARGET_SELECTED': {
+      if (!game.bounceTargetWindow || game.bounceTargetWindow.playerId !== playerId) return;
+      const w = game.bounceTargetWindow;
+      const finishWindow = () => {
+        const resumeTiming = w.resumeTiming;
+        const resumeCardUid = w.resumeCardUid;
+        game.bounceTargetWindow = null;
+        if (resumeTiming && resumeCardUid) {
+          const owner = game.players[playerId];
+          const src = findSourceCard(owner, resumeCardUid);
+          if (src) {
+            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
+            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { bounceResolved: true });
+          }
+        }
+      };
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target to bounce.'}); return; }
+        log(game, `${w.sourceCardName}: bounce skipped.`);
+        finishWindow();
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid bounce target.'});
+        return;
+      }
+      // Find which side owns the target — either player's field is fair game.
+      let ownerOfTarget = null;
+      for (const pid of Object.keys(game.players)) {
+        const pl = game.players[pid];
+        if (pl.field.some(c => c.uid === action.targetUid)) { ownerOfTarget = pl; break; }
+      }
+      if (!ownerOfTarget) { send(playerId, {type:'ERROR', msg:'Target no longer on field.'}); return; }
+      const target = ownerOfTarget.field.find(c => c.uid === action.targetUid);
+      ownerOfTarget.field = ownerOfTarget.field.filter(c => c.uid !== action.targetUid);
+      target.attachedDon = 0;
+      target.rested = false;
+      target.playedThisTurn = false;
+      dropTempEffectsFor(game, action.targetUid);
+      ownerOfTarget.hand.push(target);
+      log(game, `${w.sourceCardName}: returned ${target.name} to hand.`);
+      finishWindow();
+      break;
+    }
   }
 
   checkWin(game);
@@ -1388,10 +1532,11 @@ function drawCards(p, count, game, cardName) {
 
 // Helper: KO opponent character with power <= threshold
 function koByPower(opp, threshold, game, cardName) {
-  const target = opp.field.find(c => c.type === 'CHARACTER' && (c.power + (c.attachedDon || 0) * 1000) <= threshold);
+  const target = opp.field.find(c => c.type === 'CHARACTER' && (c.power + (c.attachedDon || 0) * 1000 + tempPowerSum(game, c.uid)) <= threshold);
   if (target) {
     opp.field = opp.field.filter(c => c.uid !== target.uid);
     opp.trash.push(target);
+    dropTempEffectsFor(game, target.uid);
     log(game, `${cardName}: K.O.'d ${target.name} (power <= ${threshold})!`);
     return target;
   }
@@ -1404,11 +1549,13 @@ function koByCost(opp, threshold, game, cardName) {
   if (target) {
     opp.field = opp.field.filter(c => c.uid !== target.uid);
     opp.trash.push(target);
+    dropTempEffectsFor(game, target.uid);
     log(game, `${cardName}: K.O.'d ${target.name} (cost <= ${threshold})!`);
     return target;
   }
   return null;
 }
+
 
 // Helper: add DON from DON deck
 function addDonFromDeck(p, count, rested, game, cardName) {
@@ -1704,6 +1851,168 @@ function extractNameFilter(text) {
   return candidate;
 }
 
+// ─── Bug 5/6/8 helpers ────────────────────────────────────────────────────
+
+// Effective power = printed power + 1000 per attached DON + sum of any
+// game.tempPowerEffects targeting this card. Used everywhere battle math
+// happens on the server (DECLARE_ATTACK, USE_BLOCKER, RESOLVE_ATTACK).
+function effectivePowerOf(card, game) {
+  if (!card) return 0;
+  let p = (card.power || 0) + (card.attachedDon || 0) * 1000;
+  const effs = (game && game.tempPowerEffects) || [];
+  for (const e of effs) if (e.targetUid === card.uid) p += (e.amount || 0);
+  return Math.max(0, p);
+}
+
+// Strip any temp power effects targeting a card that just left the field
+// (KO'd, bounced). Without this, a future card reusing the same uid (rare,
+// but possible after shuffle) would inherit stale buffs.
+function dropTempEffectsFor(game, uid) {
+  if (!game || !game.tempPowerEffects) return;
+  game.tempPowerEffects = game.tempPowerEffects.filter(e => e.targetUid !== uid);
+}
+
+// Apply a temp power buff. `expiresOn` keys:
+//   'thisTurn'        → expires at end of CURRENT turn
+//   'opponentNextTurn'→ expires at end of opponent's next turn (game.turn+1)
+//   'thisBattle'      → expires when current battle resolves (RESOLVE_ATTACK)
+function applyTempPower(game, targetUid, amount, expiresOn, sourceCardName) {
+  if (!targetUid || !amount) return;
+  if (!game.tempPowerEffects) game.tempPowerEffects = [];
+  const entry = { targetUid, amount, source: sourceCardName || '' };
+  if (expiresOn === 'thisBattle') entry.kind = 'battle';
+  else if (expiresOn === 'opponentNextTurn') { entry.kind = 'turn'; entry.expiresAtTurn = (game.turn || 1) + 1; }
+  else { entry.kind = 'turn'; entry.expiresAtTurn = (game.turn || 1); }
+  game.tempPowerEffects.push(entry);
+  log(game, `${sourceCardName}: applied ${amount > 0 ? '+' : ''}${amount} power buff (${expiresOn}).`);
+}
+
+// Detects "You may trash N card(s)/event card/Character card... from your hand:"
+// at the START of an effect text. Returns {count, filterType, filterPowerMin,
+// rest} or null. `rest` is the effect AFTER the colon (what runs once the cost
+// is paid). The "card(s)" / "event card" / "Character card with a power of N or
+// more" variants are all collapsed into a single normalized shape.
+function parseTrashFromHandCost(effect) {
+  if (!effect) return null;
+  // Try the most specific patterns first.
+  // "You may trash N Character card(s) with a power of M or more from your hand:"
+  let m = effect.match(/^[\s•·-]*You may (?:trash|discard) (\d+) Character cards? with a power of (\d+) or more from your hand:\s*/i);
+  if (m) return { count: parseInt(m[1]), filterType: 'CHARACTER', filterPowerMin: parseInt(m[2]), rest: effect.substring(m[0].length).trim() };
+  // "You may trash N event card(s) from your hand:"
+  m = effect.match(/^[\s•·-]*You may (?:trash|discard) (\d+) [Ee]vent cards? from your hand:\s*/i);
+  if (m) return { count: parseInt(m[1]), filterType: 'EVENT', filterPowerMin: null, rest: effect.substring(m[0].length).trim() };
+  // Generic "You may trash N card(s) from your hand:" (also covers "discard").
+  m = effect.match(/^[\s•·-]*You may (?:trash|discard) (\d+) cards? from your hand:\s*/i);
+  if (m) return { count: parseInt(m[1]), filterType: null, filterPowerMin: null, rest: effect.substring(m[0].length).trim() };
+  return null;
+}
+
+// Detect bounce target patterns:
+//   "Return up to N Character with a cost of M or less to the owner's hand"
+//   "Return up to N Character with M power or less to the owner's hand"
+// Returns { count, filterKind: 'cost'|'power', filterValue } or null.
+function parseBounceTarget(effect) {
+  if (!effect) return null;
+  let m = effect.match(/[Rr]eturn up to (\d+) Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i);
+  if (m) return { count: parseInt(m[1]), filterKind: 'cost', filterValue: parseInt(m[2]) };
+  m = effect.match(/[Rr]eturn up to (\d+) Character.*?(\d+)\s*power or less.*?(?:owner'?s? )?hand/i);
+  if (m) return { count: parseInt(m[1]), filterKind: 'power', filterValue: parseInt(m[2]) };
+  return null;
+}
+
+// Detect "gains/has +N power until end of opponent's next turn" / "during this turn"
+// / "during this battle" / "until end of opponent's next end phase" patterns.
+// Returns { amount, expiresOn, target: 'leader'|'character'|'leaderOrCharacter' } or null.
+function parseTempPowerBuff(effect) {
+  if (!effect) return null;
+  // "Up to one of your leader[s]" / "your leader" → target leader
+  // "Up to 1 of your leader or character cards" → leaderOrCharacter
+  // "this Character" / "this character" → self
+  const m = effect.match(/(?:[Gg]ains?|[Hh]as|[Gg]ets?)\s*\+(\d+)\s*power\s+(until (?:the )?end of (?:your )?opponent'?s? next (?:turn|end phase)|during this turn|during this battle|for this turn|for this battle)/i);
+  if (!m) return null;
+  const amount = parseInt(m[1]);
+  const when = m[2].toLowerCase();
+  let expiresOn = 'thisTurn';
+  if (when.includes("opponent")) expiresOn = 'opponentNextTurn';
+  else if (when.includes('battle')) expiresOn = 'thisBattle';
+  // Decide target shape from the leading clause.
+  const lead = effect.substring(0, m.index).toLowerCase();
+  let target = 'leaderOrCharacter';
+  if (/this character|this leader/.test(lead)) target = 'self';
+  else if (/your leader/.test(lead) && !/character/.test(lead)) target = 'leader';
+  else if (/leader or character/.test(lead)) target = 'leaderOrCharacter';
+  return { amount, expiresOn, target };
+}
+
+// Open the trash-from-hand-cost interactive resolver. Returns true if a window
+// was opened (caller must `return`), false if the player has no eligible cards
+// AND the cost is required (effect aborts), or false if `count` is 0.
+function openTrashFromHand(game, playerId, opts) {
+  const p = game.players[playerId];
+  const { count, optional = true, filterType = null, filterPowerMin = null,
+          sourceCardName = '', resumeTiming = null, resumeCardUid = null } = opts || {};
+  if (!count || count <= 0) return false;
+  // Eligibility: card must match filterType + filterPowerMin.
+  const isEligible = (c) => {
+    if (filterType && c.type !== filterType) return false;
+    if (filterPowerMin != null && (c.power || 0) < filterPowerMin) return false;
+    return true;
+  };
+  const candidates = (p.hand || []).filter(isEligible);
+  if (candidates.length < count) {
+    // Not enough cards to pay. If optional, the effect simply doesn't fire (no resume).
+    log(game, `${sourceCardName}: not enough eligible hand cards to trash (need ${count}, have ${candidates.length}). Effect skipped.`);
+    return false;
+  }
+  game.trashFromHandWindow = {
+    playerId, count, optional, sourceCardName,
+    filterType, filterPowerMin,
+    resumeTiming, resumeCardUid,
+    candidateUids: candidates.map(c => c.uid),
+  };
+  log(game, `${sourceCardName}: trash ${count} ${filterType ? filterType.toLowerCase() + ' ' : ''}card${count===1?'':'s'} from hand to fire effect.`);
+  return true;
+}
+
+// Open the bounce-target picker. Targets are CHARACTERS (own + opponent) on the
+// field that match the cost/power filter. Returns true if window opened.
+function openBounceTarget(game, playerId, opts) {
+  const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
+  const me  = game.players[playerId];
+  const { filterKind, filterValue, optional = true, sourceCardName = '',
+          resumeTiming = null, resumeCardUid = null } = opts || {};
+  const matches = (c) => {
+    if (c.type !== 'CHARACTER') return false;
+    if (filterKind === 'cost') return (c.cost || 0) <= filterValue;
+    if (filterKind === 'power') return ((c.power || 0) + (c.attachedDon || 0) * 1000) <= filterValue;
+    return true;
+  };
+  const candidates = [...me.field.filter(matches), ...opp.field.filter(matches)];
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName}: no valid bounce targets.`);
+    return false;
+  }
+  game.bounceTargetWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    filterKind, filterValue, optional, sourceCardName,
+    resumeTiming, resumeCardUid,
+  };
+  log(game, `${sourceCardName}: choose a Character to return (${candidates.length} option(s)).`);
+  return true;
+}
+
+// Locate the source card by uid across leader/field/trash for the given player.
+// Used by resume-handlers: an event's source card is in trash; an [On Play] /
+// [When Attacking] source is on the field.
+function findSourceCard(player, uid) {
+  if (!player) return null;
+  if (player.leader && player.leader.uid === uid) return player.leader;
+  return (player.field || []).find(c => c.uid === uid)
+      || (player.trash || []).find(c => c.uid === uid)
+      || null;
+}
+
 // ─── CENTRAL EFFECT PARSER ───
 
 function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
@@ -1728,7 +2037,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
 
   // ── [On Play] effects ──
   if (timing === 'onPlay' && ab.includes('[On Play]')) {
-    const effect = extractEffect(ab, '[On Play]');
+    let effect = extractEffect(ab, '[On Play]');
     if (!effect) return;
 
     // Check DON!! requirement before [On Play] (e.g. "[On Play] DON!! -1:")
@@ -1740,6 +2049,46 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       const donCost = parseInt(donCostMatch[1]);
       if (!openDonReturn(game, playerId, card, donCost, 'onPlay')) return;
       return; // pause until RETURN_DON resolves
+    }
+    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
+
+    // Bug 5 — "You may trash N card(s) from your hand: <effect>" cost. Open the
+    // interactive picker; on resume re-enters here with opts.trashCostPaid=true and
+    // we strip the cost prefix so the parser sees only the post-colon effect.
+    const trashCost = parseTrashFromHandCost(effect);
+    if (trashCost && !opts.trashCostPaid) {
+      if (openTrashFromHand(game, playerId, {
+        count: trashCost.count, optional: true,
+        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: 'onPlay', resumeCardUid: card.uid,
+      })) return;
+      // Couldn't open (no eligible cards) — effect aborts.
+      return;
+    }
+    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
+
+    // Bug 8 — temp power buff at On Play (e.g. Yasopp: "Up to one of your leaders
+    // gains +1000 power until the end of your opponent's next turn").
+    const buff = parseTempPowerBuff(effect);
+    if (buff && !opts.tempBuffApplied) {
+      // Auto-pick: leader → own leader; self → this card; leaderOrCharacter → own leader.
+      let targetUid = null;
+      if (buff.target === 'self') targetUid = card.uid;
+      else targetUid = p.leader.uid;
+      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
+      // Mark applied; if there are sibling effects after (rare), they still process below.
+      opts.tempBuffApplied = true;
+    }
+
+    // Bug 6 — bounce target picker.
+    const bounce = parseBounceTarget(effect);
+    if (bounce && !opts.bounceResolved) {
+      if (openBounceTarget(game, playerId, {
+        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
+        optional: true, sourceCardName: card.name,
+        resumeTiming: 'onPlay', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Draw N cards
@@ -1853,7 +2202,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
 
   // ── [On K.O.] effects ──
   if (timing === 'onKO' && ab.includes('[On K.O.]')) {
-    const effect = extractEffect(ab, '[On K.O.]');
+    let effect = extractEffect(ab, '[On K.O.]');
     if (!effect) return;
 
     // Check DON!! cost for On K.O.
@@ -1862,6 +2211,38 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       const donCost = parseInt(donCostMatch[1]);
       if (!openDonReturn(game, playerId, card, donCost, 'onKO')) return;
       return;
+    }
+    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
+
+    // Bug 5 — trash-from-hand cost on [On K.O.] effects.
+    const trashCost = parseTrashFromHandCost(effect);
+    if (trashCost && !opts.trashCostPaid) {
+      if (openTrashFromHand(game, playerId, {
+        count: trashCost.count, optional: true,
+        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: 'onKO', resumeCardUid: card.uid,
+      })) return;
+      return;
+    }
+    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
+
+    // Bug 6 — bounce target on [On K.O.] effects.
+    const bounce = parseBounceTarget(effect);
+    if (bounce && !opts.bounceResolved) {
+      if (openBounceTarget(game, playerId, {
+        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
+        optional: true, sourceCardName: card.name,
+        resumeTiming: 'onKO', resumeCardUid: card.uid,
+      })) return;
+    }
+
+    // Bug 8 — temp power buff at [On K.O.].
+    const buff = parseTempPowerBuff(effect);
+    if (buff && !opts.tempBuffApplied) {
+      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
+      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
+      opts.tempBuffApplied = true;
     }
 
     // Draw N cards
@@ -1963,14 +2344,19 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
 
   // ── [When Attacking] effects ──
   if (timing === 'whenAttacking' && ab.includes('[When Attacking]')) {
-    // Check DON!! requirement
-    const donReqMatch = ab.match(/\[DON!!\s*x(\d+)\]\s*\[When Attacking\]/);
+    // Bug 9 — [DON!! xN] [When Attacking] gate. Effect ONLY fires if attached DON!! ≥ N.
+    // Pattern matches both orderings just in case (the deck always uses [DON!! xN] first).
+    const donReqMatch = ab.match(/\[DON!!\s*x(\d+)\]\s*\[When Attacking\]/)
+                     || ab.match(/\[When Attacking\]\s*\[DON!!\s*x(\d+)\]/);
     if (donReqMatch) {
       const required = parseInt(donReqMatch[1]);
-      if ((card.attachedDon || 0) < required) return;
+      if ((card.attachedDon || 0) < required) {
+        log(game, `${card.name}: [When Attacking] requires ${required} attached DON!! (have ${card.attachedDon || 0}).`);
+        return;
+      }
     }
 
-    const effect = extractEffect(ab, '[When Attacking]');
+    let effect = extractEffect(ab, '[When Attacking]');
     if (!effect) return;
 
     // Check DON!! cost to activate
@@ -1980,6 +2366,20 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       if (!openDonReturn(game, playerId, card, donCost, 'whenAttacking')) return;
       return;
     }
+    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
+
+    // Bug 5 + 9 — "You may trash N cards from your hand: <effect>" cost.
+    const trashCost = parseTrashFromHandCost(effect);
+    if (trashCost && !opts.trashCostPaid) {
+      if (openTrashFromHand(game, playerId, {
+        count: trashCost.count, optional: true,
+        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: 'whenAttacking', resumeCardUid: card.uid,
+      })) return;
+      return;
+    }
+    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
 
     // Power reduction to opponent's character
     const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
@@ -2017,23 +2417,62 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
 
   // ── [Counter] effects for EVENTs ──
   if (timing === 'counter') {
-    // Check for counter effects beyond the base counter value
-    const counterEffect = extractEffect(ab, '[Counter]');
+    let counterEffect = extractEffect(ab, '[Counter]');
     if (!counterEffect) return;
 
-    // Power boost (already handled by counter value, but parse for additional effects)
-    const boostMatch = counterEffect.match(/gains?\s*\+(\d+000)\s*power/i);
+    // DON!! -N cost on a [Counter] effect (e.g. NoroNoro Beam Sword: "[Counter] DON!! -1: ...").
+    const donCostMatch = counterEffect.match(/^DON!!\s*-(\d+)\s*:/);
+    if (donCostMatch && !opts.donCostPaid) {
+      const donCost = parseInt(donCostMatch[1]);
+      if (!openDonReturn(game, playerId, card, donCost, 'counter')) return;
+      return;
+    }
+    if (donCostMatch && opts.donCostPaid) counterEffect = counterEffect.substring(donCostMatch[0].length).trim();
+
+    // Bug 5 — trash-from-hand cost on [Counter] effects (e.g. Divine Departure OP13-076).
+    const trashCost = parseTrashFromHandCost(counterEffect);
+    if (trashCost && !opts.trashCostPaid) {
+      if (openTrashFromHand(game, playerId, {
+        count: trashCost.count, optional: true,
+        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: 'counter', resumeCardUid: card.uid,
+      })) return;
+      return;
+    }
+    if (trashCost && opts.trashCostPaid) counterEffect = trashCost.rest;
+
+    // Bug 8 — temp power buff (e.g. "Up to 1 of your Leader gains +3000 power during this battle").
+    const buff = parseTempPowerBuff(counterEffect);
+    if (buff && !opts.tempBuffApplied) {
+      // Counter buffs are auto-applied to the OWN leader (the most common target);
+      // for action-style counters during a battle, this stacks on bs.counterBonus
+      // when the defender's effective power is recomputed.
+      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
+      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
+      // For "during this battle" buffs from counters by the defender, also add to
+      // counterBonus so the immediate battle math reflects the buff.
+      if (buff.expiresOn === 'thisBattle' && game.battleState
+          && game.battleState.targetUid === targetUid) {
+        game.battleState.counterBonus = (game.battleState.counterBonus || 0) + buff.amount;
+      }
+      opts.tempBuffApplied = true;
+    }
+
+    // Bug 6 — bounce target picker.
+    const bounce = parseBounceTarget(counterEffect);
+    if (bounce && !opts.bounceResolved) {
+      if (openBounceTarget(game, playerId, {
+        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
+        optional: true, sourceCardName: card.name,
+        resumeTiming: 'counter', resumeCardUid: card.uid,
+      })) return;
+    }
 
     // Draw cards from counter effect
     const drawMatch = counterEffect.match(/[Dd]raw (\d+) card/);
     if (drawMatch) {
       drawCards(p, parseInt(drawMatch[1]), game, card.name);
-    }
-
-    // Bounce by cost
-    const bounceCostMatch = counterEffect.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less.*?hand/i);
-    if (bounceCostMatch) {
-      bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
     }
 
     // Rest opponent character
@@ -2105,10 +2544,14 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
     }
 
-    // Bounce by cost
-    const bounceCostMatch = effect.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less/i);
-    if (bounceCostMatch) {
-      bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
+    // Bug 6 — interactive bounce target picker for [Trigger] bounces.
+    const bounce = parseBounceTarget(effect);
+    if (bounce && !opts.bounceResolved) {
+      if (openBounceTarget(game, playerId, {
+        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
+        optional: true, sourceCardName: card.name,
+        resumeTiming: 'trigger', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Activate Main effect (for triggers that say "Activate this card's [Main] effect")
@@ -2124,10 +2567,13 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       parseAndApply('counter', game, playerId, card, opp);
     }
 
-    // Positive buff to own card — TODO: needs per-card temp +N tracking.
-    const buffMatch = effect.match(/(?:gets?|gains?)\s*\+(\d+000)\s*(?:power|during)/i);
-    if (buffMatch && !/-(\d+000)/.test(effect)) {
-      log(game, `${card.name}: +${buffMatch[1]} buff (TODO — per-card temp buffs not yet wired).`);
+    // Bug 8 — temp power buff from [Trigger] (e.g. "Choose up to 1 of your leader
+    // or character, it gets +1000 during this turn"). Auto-target the leader.
+    const buff = parseTempPowerBuff(effect);
+    if (buff && !opts.tempBuffApplied) {
+      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
+      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
+      opts.tempBuffApplied = true;
     }
 
     // Effect negation — TODO: needs per-card "effects negated this turn" flag.
@@ -2138,12 +2584,12 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
 
   // ── Event [Main] effects (for PLAY_CARD EVENT) ──
   if (timing === 'eventMain') {
-    parseEventMain(game, playerId, card, opp);
+    parseEventMain(game, playerId, card, opp, opts);
   }
 
   // ── [Activate: Main] effects (for ACTIVATE_MAIN action) ──
   if (timing === 'activateMain' && ab.includes('[Activate: Main]')) {
-    const effect = extractEffect(ab, '[Activate: Main]');
+    let effect = extractEffect(ab, '[Activate: Main]');
     if (!effect) return;
 
     // DON!! -N cost (interactive: open the return-DON window)
@@ -2155,6 +2601,38 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
         return;
       }
       return;
+    }
+    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
+
+    // Bug 5 — trash-from-hand cost on [Activate: Main] effects.
+    const trashCost = parseTrashFromHandCost(effect);
+    if (trashCost && !opts.trashCostPaid) {
+      if (openTrashFromHand(game, playerId, {
+        count: trashCost.count, optional: true,
+        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: 'activateMain', resumeCardUid: card.uid,
+      })) return;
+      return;
+    }
+    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
+
+    // Bug 6 — bounce target picker.
+    const bounce = parseBounceTarget(effect);
+    if (bounce && !opts.bounceResolved) {
+      if (openBounceTarget(game, playerId, {
+        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
+        optional: true, sourceCardName: card.name,
+        resumeTiming: 'activateMain', resumeCardUid: card.uid,
+      })) return;
+    }
+
+    // Bug 8 — temp power buff.
+    const buff = parseTempPowerBuff(effect);
+    if (buff && !opts.tempBuffApplied) {
+      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
+      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
+      opts.tempBuffApplied = true;
     }
 
     // Draw N cards
@@ -2212,57 +2690,112 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
   }
 }
 
-// Separate parser for Event [Main] effects
-function parseEventMain(game, playerId, card, opp) {
+// Separate parser for Event [Main] effects.
+// Routed through `opts` like parseAndApply so trash-cost / DON-cost / bounce / KO
+// resolvers can pause + resume. The resume path (TRASH_FROM_HAND_RESOLVE,
+// RETURN_DON, etc.) calls back into this function via parseAndApply('eventMain').
+function parseEventMain(game, playerId, card, opp, opts = {}) {
   const ab = card.ability || '';
   const p = game.players[playerId];
-
   if (!ab.includes('[Main]')) return;
 
-  // Extract the [Main] portion only
+  // Extract just the [Main] block (cut at [Counter] / [Trigger]).
   const mainIdx = ab.indexOf('[Main]');
   let mainText = ab.substring(mainIdx + 6).trim();
-  // Cut at [Counter] or [Trigger]
   for (const stop of ['[Counter]', '[Trigger]']) {
     const si = mainText.indexOf(stop);
     if (si > 0) mainText = mainText.substring(0, si).trim();
   }
 
-  // Check DON!! rest cost (e.g. "You may rest 5 of your DON!! cards:")
-  const restDonMatch = mainText.match(/rest (\d+).*?DON!!/i);
-  if (restDonMatch) {
+  // DON!! -N: cost (active+rested+attached DON returns to deck).
+  const donCostMatch = mainText.match(/^DON!!\s*-(\d+)\s*:/);
+  if (donCostMatch && !opts.donCostPaid) {
+    const donCost = parseInt(donCostMatch[1]);
+    if (!openDonReturn(game, playerId, card, donCost, 'eventMain')) return;
+    return;
+  }
+  if (donCostMatch && opts.donCostPaid) mainText = mainText.substring(donCostMatch[0].length).trim();
+
+  // "You may rest N of your DON!! cards:" cost — pay or abort.
+  const restDonMatch = mainText.match(/^You may rest (\d+)(?:\s*of your)?\s*DON!!.*?:/i);
+  if (restDonMatch && !opts.restDonCostPaid) {
     const restCost = parseInt(restDonMatch[1]);
     if (p.donActive < restCost) {
-      log(game, `${card.name}: not enough active DON!! (need ${restCost}).`);
+      log(game, `${card.name}: not enough active DON!! to rest (need ${restCost}, have ${p.donActive}).`);
       return;
     }
     p.donActive -= restCost;
     p.donRested += restCost;
+    log(game, `${card.name}: rested ${restCost} DON!!.`);
+    mainText = mainText.substring(restDonMatch[0].length).trim();
+    opts.restDonCostPaid = true;
+  } else if (restDonMatch && opts.restDonCostPaid) {
+    mainText = mainText.substring(restDonMatch[0].length).trim();
+  }
+
+  // Bug 5 — trash-from-hand cost on [Main] events.
+  const trashCost = parseTrashFromHandCost(mainText);
+  if (trashCost && !opts.trashCostPaid) {
+    if (openTrashFromHand(game, playerId, {
+      count: trashCost.count, optional: true,
+      filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
+      sourceCardName: card.name,
+      resumeTiming: 'eventMain', resumeCardUid: card.uid,
+    })) return;
+    return;
+  }
+  if (trashCost && opts.trashCostPaid) mainText = trashCost.rest;
+
+  // Bug 6 — bounce target picker for "Return up to N character" event mains
+  // (e.g. Cig Break: "[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand").
+  const bounce = parseBounceTarget(mainText);
+  if (bounce && !opts.bounceResolved) {
+    if (openBounceTarget(game, playerId, {
+      filterKind: bounce.filterKind, filterValue: bounce.filterValue,
+      optional: true, sourceCardName: card.name,
+      resumeTiming: 'eventMain', resumeCardUid: card.uid,
+    })) return;
+  }
+
+  // Bug 8 — temp power buff from [Main] event.
+  const buff = parseTempPowerBuff(mainText);
+  if (buff && !opts.tempBuffApplied) {
+    const targetUid = p.leader.uid;
+    applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
+    opts.tempBuffApplied = true;
   }
 
   // K.O. by power — interactive
   const koPowerMatch = mainText.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
-  if (koPowerMatch && !mainText.includes('cost of')) {
+  if (koPowerMatch && !mainText.includes('cost of') && !opts.koResolved) {
     const count = parseInt(koPowerMatch[1]);
     const threshold = parseInt(koPowerMatch[2]);
     if (openKoTargetWindow(game, playerId, {
-      filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+      filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 + tempPowerSum(game, c.uid) <= threshold,
       sourceCardName: card.name, count, optional: true,
       filterKind: 'power', filterValue: threshold,
-      // Event main effects are one-shot — no resume callback needed (the event is in trash by now).
+      resumeTiming: 'eventMain', resumeCardUid: card.uid,
     })) return;
   }
 
   // K.O. by cost — interactive
   const koCostMatch = mainText.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
-  if (koCostMatch) {
+  if (koCostMatch && !opts.koResolved) {
     const count = parseInt(koCostMatch[1]);
     const threshold = parseInt(koCostMatch[2]);
     if (openKoTargetWindow(game, playerId, {
       filter: c => (c.cost || 0) <= threshold,
       sourceCardName: card.name, count, optional: true,
       filterKind: 'cost', filterValue: threshold,
+      resumeTiming: 'eventMain', resumeCardUid: card.uid,
     })) return;
+  }
+
+  // Rest opponent character (with optional cost threshold)
+  if (/rest up to 1.*opponent/i.test(mainText)) {
+    const costMatch = mainText.match(/cost of (\d+) or less/);
+    if (costMatch) restOpponentCharacter(opp, game, card.name, parseInt(costMatch[1]));
+    else restOpponentCharacter(opp, game, card.name);
   }
 
   // Power reduction
@@ -2285,16 +2818,23 @@ function parseEventMain(game, playerId, card, opp) {
     }
   }
 
-  // Return/bounce by cost
-  const bounceCostMatch = mainText.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less.*?hand/i);
-  if (bounceCostMatch) {
-    bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
+  // Add DON active / rested
+  if (/[Aa]dd up to (\d+) (?:Active )?DON!!.*(?:set it as active|active)/i.test(mainText)) {
+    const m = mainText.match(/[Aa]dd up to (\d+) (?:Active )?DON!!/i);
+    addDonFromDeck(p, m ? parseInt(m[1]) : 1, false, game, card.name);
+  } else if (/[Aa]dd up to (\d+) DON!!.*rest/i.test(mainText)) {
+    const m = mainText.match(/[Aa]dd up to (\d+) DON!!/i);
+    addDonFromDeck(p, m ? parseInt(m[1]) : 1, true, game, card.name);
   }
+}
 
-  // Add DON active
-  if (/[Aa]dd up to 1.*?[Aa]ctive DON!!/i.test(mainText) || /[Aa]dd up to 1 DON!!.*active/i.test(mainText)) {
-    addDonFromDeck(p, 1, false, game, card.name);
-  }
+// Sum of temp power effects on a given uid (used by K.O. eligibility filters
+// so a buffed character isn't K.O.'d when the threshold says otherwise).
+function tempPowerSum(game, uid) {
+  if (!game || !game.tempPowerEffects) return 0;
+  let s = 0;
+  for (const e of game.tempPowerEffects) if (e.targetUid === uid) s += (e.amount || 0);
+  return s;
 }
 
 // Trigger [On K.O.] for a KO'd character

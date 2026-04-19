@@ -98,13 +98,13 @@
     btn.id = 'musicToggleBtn';
     btn.type = 'button';
     btn.setAttribute('aria-label', 'Toggle background music');
-    // game.html: bottom-right (top-right is occupied by Back to Main button).
-    // Other pages: top-right.
-    const posTop    = isGamePage ? 'bottom:16px'  : 'top:10px';
-    const posRight  = isGamePage ? 'right:16px'   : 'right:10px';
-    const zIndex    = isGamePage ? 'z-index:1000' : 'z-index:99999';
+    // Top-right corner on every page. On game.html the Back to Main button sits
+    // at the top of the right column — we shift it down so the music button
+    // never overlaps it. The shift uses a CSS rule rather than a JS layout hack
+    // so a future redesign can override it cleanly.
     btn.style.cssText = [
-      'position:fixed', posTop, posRight, zIndex,
+      'position:fixed', 'top:8px', 'right:8px',
+      'z-index:99999',
       'width:40px', 'height:40px',
       'border-radius:50%',
       'border:1px solid rgba(180,140,50,.55)',
@@ -129,6 +129,15 @@
       tryPlay();
     });
     document.body.appendChild(btn);
+
+    // On game.html, push the right-column content down so the fixed music
+    // button (top:8px, 40px tall) never overlaps Back to Main.
+    if (isGamePage) {
+      const style = document.createElement('style');
+      style.id = 'musicBtnGameSpacer';
+      style.textContent = '.gb-right-col .gb-right-top { margin-top: 52px !important; }';
+      document.head.appendChild(style);
+    }
   };
 
   if (document.body) setup();
@@ -137,7 +146,7 @@
   // ─── Universal button click sound (excludes card / non-button clicks) ───
   // Spawn a brand-new Audio per click so it never shares state with the music
   // instance above. Nothing here touches the `audio` (music) variable.
-  const CLICK_URL = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking.wav';
+  const CLICK_URL = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking1.wav';
   const wireClick = () => {
     document.addEventListener('click', (e) => {
       const t = e.target;

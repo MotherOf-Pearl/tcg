@@ -1173,6 +1173,20 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div id="playFromHandHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
         <button class="gb-pbtn gb-pbtn-sm" onclick="skipPlayFromHand()">Skip</button>
       </div>
+      <!-- Bug 5 — TRASH_FROM_HAND_COST resolver: pick N cards from hand to trash -->
+      <div id="trashFromHandBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="trashFromHandTitle">Trash cards from hand</div>
+        <div id="trashFromHandHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <div id="trashFromHandCounter" style="text-align:center;font-size:.7rem;color:var(--gold);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;">0 / 0</div>
+        <button class="gb-pbtn gb-pbtn-lg" id="trashFromHandConfirm" onclick="confirmTrashFromHand()" disabled>Confirm</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="trashFromHandSkip" onclick="skipTrashFromHand()">Skip</button>
+      </div>
+      <!-- Bug 6 — BOUNCE_TARGET resolver: pick a Character on the field to return to its owner's hand -->
+      <div id="bounceTargetBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="bounceTargetTitle">Choose a Character to return</div>
+        <div id="bounceTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <button class="gb-pbtn gb-pbtn-sm" id="bounceTargetSkip" onclick="skipBounceTarget()">Skip</button>
+      </div>
       <!-- Task #1 [Trigger] interactive window — defender chooses to activate or skip -->
       <div id="triggerWindowBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);text-align:center;">[Trigger]</div>
@@ -1541,7 +1555,11 @@ function renderGame() {
 
   // In solo mode, auto-switch to whoever currently needs to act.
   if (isSolo) {
-    if (game.koTargetWindow) {
+    if (game.trashFromHandWindow) {
+      myId = game.trashFromHandWindow.playerId;
+    } else if (game.bounceTargetWindow) {
+      myId = game.bounceTargetWindow.playerId;
+    } else if (game.koTargetWindow) {
       myId = game.koTargetWindow.playerId;
     } else if (game.donReturnWindow) {
       myId = game.donReturnWindow.playerId;
@@ -1754,6 +1772,55 @@ function renderGame() {
     if (ktw) hint('Opponent is choosing a K.O. target…');
   }
 
+  // Bug 5 — TRASH_FROM_HAND_COST resolver. Highlights only the eligible hand
+  // cards (filtered by filterType / filterPowerMin); player toggles a selection,
+  // counter shows N/M, Confirm enabled at exact match. Optional → Skip allowed.
+  const tfhw = game.trashFromHandWindow;
+  const tfhwPanel = document.getElementById('trashFromHandBtns');
+  if (tfhw && tfhw.playerId === myId) {
+    hideAllBtnGroups();
+    tfhwPanel.style.display = 'flex';
+    let filterDesc = 'card';
+    if (tfhw.filterType === 'EVENT') filterDesc = 'event card';
+    else if (tfhw.filterType === 'CHARACTER') {
+      filterDesc = 'Character card';
+      if (tfhw.filterPowerMin) filterDesc += ` with ${tfhw.filterPowerMin}+ power`;
+    }
+    document.getElementById('trashFromHandTitle').textContent =
+      `${tfhw.sourceCardName} — trash ${tfhw.count} ${filterDesc}${tfhw.count===1?'':'s'}`;
+    document.getElementById('trashFromHandHint').textContent =
+      `Click eligible cards in your hand to select / deselect them, then Confirm.`;
+    document.getElementById('trashFromHandSkip').style.display = tfhw.optional ? 'block' : 'none';
+    updateTrashFromHandCounter();
+  } else {
+    tfhwPanel.style.display = 'none';
+    if (tfhw) hint('Opponent is selecting cards to trash…');
+    if (!tfhw) trashFromHandSelected = []; // reset any stale local selection
+  }
+
+  // Bug 6 — BOUNCE_TARGET resolver. Highlights every valid Character on either
+  // side of the field. The handler in renderField/renderLeader checks the active
+  // window and dispatches BOUNCE_TARGET_SELECTED on click.
+  const btw = game.bounceTargetWindow;
+  const btwPanel = document.getElementById('bounceTargetBtns');
+  if (btw && btw.playerId === myId) {
+    hideAllBtnGroups();
+    btwPanel.style.display = 'flex';
+    document.getElementById('bounceTargetTitle').textContent =
+      `${btw.sourceCardName} — return a Character`;
+    let hintBits = 'Click a highlighted Character';
+    if (btw.filterKind === 'cost') hintBits += ` (≤ ${btw.filterValue} cost)`;
+    else if (btw.filterKind === 'power') hintBits += ` (≤ ${btw.filterValue} power)`;
+    document.getElementById('bounceTargetHint').textContent = hintBits + '. Returns to its OWNER\'s hand.';
+    document.getElementById('bounceTargetSkip').style.display = btw.optional ? 'block' : 'none';
+    requestAnimationFrame(() => {
+      btw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    btwPanel.style.display = 'none';
+    if (btw) hint('Opponent is choosing a bounce target…');
+  }
+
   // DON!! return-to-deck picker (interactive cost). Renders the source breakdown
   // with +/- buttons next to each bucket; Confirm enabled only when total === required.
   const drw = game.donReturnWindow;
@@ -1889,18 +1956,34 @@ window.addEventListener('resize', () => {
   }
 });
 
+// Bug 6 — try every active interactive window before falling through to the
+// normal click semantics for a card on the board. Returns true if the click was
+// consumed by a window (caller must early-return).
+function _tryConsumeWindowClick(uid) {
+  if (game?.bounceTargetWindow?.playerId === myId
+      && game.bounceTargetWindow.candidateUids.includes(uid)) {
+    act({ type: 'BOUNCE_TARGET_SELECTED', targetUid: uid });
+    return true;
+  }
+  if (game?.koTargetWindow?.playerId === myId
+      && game.koTargetWindow.candidateUids.includes(uid)) {
+    act({ type: 'KO_TARGET_SELECTED', targetUid: uid });
+    return true;
+  }
+  return false;
+}
+
 function renderLeader(slotId, leader, isSelf) {
   const el = document.getElementById(slotId);
   el.innerHTML = '';
   el.appendChild(makeGameCard(leader,
     isSelf
-      ? () => selectCard(leader.uid, 'leader')
+      ? () => {
+          if (_tryConsumeWindowClick(leader.uid)) return;
+          selectCard(leader.uid, 'leader');
+        }
       : () => {
-          if (game?.koTargetWindow?.playerId === myId
-              && game.koTargetWindow.candidateUids.includes(leader.uid)) {
-            act({ type: 'KO_TARGET_SELECTED', targetUid: leader.uid });
-            return;
-          }
+          if (_tryConsumeWindowClick(leader.uid)) return;
           if (attackMode) selectTarget(leader.uid);
         },
     !isSelf));
@@ -1913,13 +1996,12 @@ function renderField(fieldId, field, isSelf) {
   field.forEach(card => {
     el.appendChild(makeGameCard(card,
       isSelf
-        ? () => selectCard(card.uid, 'field')
+        ? () => {
+            if (_tryConsumeWindowClick(card.uid)) return;
+            selectCard(card.uid, 'field');
+          }
         : () => {
-            if (game?.koTargetWindow?.playerId === myId
-                && game.koTargetWindow.candidateUids.includes(card.uid)) {
-              act({ type: 'KO_TARGET_SELECTED', targetUid: card.uid });
-              return;
-            }
+            if (_tryConsumeWindowClick(card.uid)) return;
             if (attackMode) selectTarget(card.uid);
           },
       !isSelf));
@@ -2013,26 +2095,33 @@ function renderHand(handId, hand, isSelf) {
   const pfw = (isSelf && game?.playFromHandWindow && game.playFromHandWindow.playerId === myId)
     ? game.playFromHandWindow : null;
   const pfwSet = pfw ? new Set(pfw.candidateUids) : null;
+  // Bug 5 — TRASH_FROM_HAND window: highlight only candidate cards. Click to
+  // toggle selection (up to count). Same priority as PFW (preempts other modes).
+  const tfhw = (isSelf && game?.trashFromHandWindow && game.trashFromHandWindow.playerId === myId)
+    ? game.trashFromHandWindow : null;
+  const tfhwSet = tfhw ? new Set(tfhw.candidateUids) : null;
+  const tfhwSelected = tfhw ? new Set(trashFromHandSelected) : null;
   // Phase 3: I'm the defender during COUNTER_STEP — flag counter-eligible cards.
-  // Disabled while a PFW window is open.
-  const inCounterStep = !pfw && isSelf && game?.battleState && game.phase === 'COUNTER_STEP'
+  // Disabled while a PFW or TFHW window is open.
+  const inCounterStep = !pfw && !tfhw && isSelf && game?.battleState && game.phase === 'COUNTER_STEP'
     && game.battleState.attackerId !== myId;
   hand.forEach(card => {
     const cv = inCounterStep ? counterValueOf(card) : 0;
-    // Eligible for the counter step if it adds power OR has any [Counter] action effect.
     const counterEligibleNow = inCounterStep && isCounterEligible(card);
     const isPfwCandidate = pfwSet && pfwSet.has(card.uid);
+    const isTfhwCandidate = tfhwSet && tfhwSet.has(card.uid);
+    const isTfhwSelected = tfhwSelected && tfhwSelected.has(card.uid);
     const handler = () => {
       if (attackMode) { cancelSel(); return; }
-      // PFW window: only candidate cards are clickable, everything else is inert.
+      if (tfhw) {
+        if (isTfhwCandidate) toggleTrashFromHandSelection(card.uid);
+        return;
+      }
       if (pfw) {
         if (isPfwCandidate) act({ type: 'PLAY_FROM_HAND_RESOLVE', cardUid: card.uid });
         return;
       }
-      if (counterEligibleNow) {
-        useCounter(card.uid);
-        return;
-      }
+      if (counterEligibleNow) { useCounter(card.uid); return; }
       if (counterMode && game.counterWindow?.defenderId === myId) {
         act({ type: 'COUNTER', cardUid: card.uid });
       } else {
@@ -2046,16 +2135,27 @@ function renderHand(handId, hand, isSelf) {
       cardEl.classList.add('counter-eligible');
       const badge = document.createElement('div');
       badge.className = 'counter-badge';
-      // Show "+N" for power counters, or just "C" for action-only counters.
       badge.textContent = cv > 0 ? `+${cv}` : 'C';
       cardEl.appendChild(badge);
     }
-    if (isPfwCandidate) {
-      // Reuse the gold pulse style used for counter-eligible cards.
+    if (isTfhwCandidate) {
+      cardEl.classList.add('counter-eligible');
+      if (isTfhwSelected) {
+        // Stronger visual for already-selected: use the targetable-attack pulse.
+        cardEl.classList.add('targetable-attack');
+        const badge = document.createElement('div');
+        badge.className = 'counter-badge';
+        badge.style.background = 'rgba(190,30,30,.95)';
+        badge.style.color = '#fff';
+        badge.textContent = 'TRASH';
+        cardEl.appendChild(badge);
+      }
+    } else if (tfhw) {
+      cardEl.style.opacity = '0.45';
+      cardEl.style.cursor = 'not-allowed';
+    } else if (isPfwCandidate) {
       cardEl.classList.add('counter-eligible');
     } else if (pfw) {
-      // PFW open + this card is NOT eligible — visually dim it so the user
-      // sees it isn't a valid pick.
       cardEl.style.opacity = '0.45';
       cardEl.style.cursor = 'not-allowed';
     }
@@ -2462,7 +2562,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','trashFromHandBtns','bounceTargetBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -2515,7 +2615,18 @@ function selectCard(uid, source) {
       document.getElementById('selCardAbility').style.display = 'none';
     }
 
-    if (me.donActive >= card.cost) {
+    // Bug 2 — counter-only events ([Counter] without [Main]) cannot be played
+    // during the active player's Main Phase. Detected purely from ability text
+    // so every current/future counter-only event is blocked automatically.
+    const isCounterOnlyEvent = isEvent
+      && !!card.ability
+      && card.ability.includes('[Counter]')
+      && !card.ability.includes('[Main]');
+    if (isCounterOnlyEvent) {
+      document.getElementById('btnDeploy').style.display = 'none';
+      document.getElementById('btnPlayEvent').style.display = 'none';
+      deployHint.textContent = "Counter events can only be used during opponent's attack";
+    } else if (me.donActive >= card.cost) {
       document.getElementById('btnDeploy').style.display = isEvent ? 'none' : 'block';
       document.getElementById('btnPlayEvent').style.display = isEvent ? 'block' : 'none';
       deployHint.textContent = `Cost: ${card.cost} DON!!`;
@@ -2800,6 +2911,55 @@ function skipPlayFromHand() {
   act({ type: 'PLAY_FROM_HAND_RESOLVE', skip: true });
 }
 
+// ─── Bug 5 — TRASH_FROM_HAND_COST resolver (client) ──────────────────────
+// Local selection state tracked separately from `game.trashFromHandWindow` so
+// the player can pick / unpick before clicking Confirm. Reset to [] whenever
+// the window closes (in renderGame's else branch).
+let trashFromHandSelected = [];
+
+function toggleTrashFromHandSelection(uid) {
+  const w = game?.trashFromHandWindow;
+  if (!w) return;
+  const i = trashFromHandSelected.indexOf(uid);
+  if (i >= 0) trashFromHandSelected.splice(i, 1);
+  else if (trashFromHandSelected.length < w.count) trashFromHandSelected.push(uid);
+  // Re-render hand + counter so the new selection state is visible.
+  const me = game.players[myId];
+  if (me) renderHand('selfHand', me.hand, true);
+  updateTrashFromHandCounter();
+}
+
+function updateTrashFromHandCounter() {
+  const w = game?.trashFromHandWindow;
+  if (!w) return;
+  const cur = trashFromHandSelected.length;
+  document.getElementById('trashFromHandCounter').textContent = `${cur} / ${w.count}`;
+  document.getElementById('trashFromHandConfirm').disabled = cur !== w.count;
+}
+
+function confirmTrashFromHand() {
+  const w = game?.trashFromHandWindow;
+  if (!w || trashFromHandSelected.length !== w.count) return;
+  const cardUids = trashFromHandSelected.slice();
+  trashFromHandSelected = [];
+  document.getElementById('trashFromHandBtns').style.display = 'none';
+  act({ type: 'TRASH_FROM_HAND_RESOLVE', cardUids });
+}
+
+function skipTrashFromHand() {
+  if (!game?.trashFromHandWindow) return;
+  trashFromHandSelected = [];
+  document.getElementById('trashFromHandBtns').style.display = 'none';
+  act({ type: 'TRASH_FROM_HAND_RESOLVE', skip: true });
+}
+
+// ─── Bug 6 — BOUNCE_TARGET resolver (client) ─────────────────────────────
+function skipBounceTarget() {
+  if (!game?.bounceTargetWindow) return;
+  document.getElementById('bounceTargetBtns').style.display = 'none';
+  act({ type: 'BOUNCE_TARGET_SELECTED', skip: true });
+}
+
 // ─── Task #1 [Trigger] interactive window ───
 function resolveTrigger(activate) {
   if (!game?.triggerWindow) return;
@@ -2869,14 +3029,36 @@ function viewTrash(who) {
     p.trash.slice(-10).map(c => `${c.name} [${c.type}]`).join('\n'));
 }
 
+// Bug 8 — sum every active temp power buff targeting this uid (server-side
+// truth lives in game.tempPowerEffects). Used by tooltip + card-info panel so
+// the player sees the buffed total, not just printed power.
+function clientTempPowerSum(uid) {
+  if (!game || !game.tempPowerEffects || !uid) return 0;
+  let s = 0;
+  for (const e of game.tempPowerEffects) if (e.targetUid === uid) s += (e.amount || 0);
+  return s;
+}
+function clientEffectivePower(card) {
+  if (!card || !card.power) return card?.power || 0;
+  return Math.max(0, (card.power || 0) + (card.attachedDon || 0) * 1000 + clientTempPowerSum(card.uid));
+}
+
 // ─── TOOLTIP ───
 function showTooltip(card, e) {
   const t = document.getElementById('tooltip');
   document.getElementById('ttName').textContent    = card.name;
   document.getElementById('ttType').textContent    = `${card.type} · ${card.color||''} · ${card.attribute||''}`;
   document.getElementById('ttAbility').textContent = card.ability || '';
+  // Show effective (buffed) power if it differs from printed.
+  const effPow = clientEffectivePower(card);
+  const printedPow = card.power || 0;
+  const powHtml = card.power
+    ? (effPow !== printedPow
+        ? `<div class="tooltip-stat">Power: <b>${effPow.toLocaleString()}</b> <span style="color:var(--muted);">(${printedPow.toLocaleString()})</span></div>`
+        : `<div class="tooltip-stat">Power: <b>${printedPow.toLocaleString()}</b></div>`)
+    : '';
   document.getElementById('ttStats').innerHTML = `
-    ${card.power   ? `<div class="tooltip-stat">Power: <b>${card.power.toLocaleString()}</b></div>` : ''}
+    ${powHtml}
     ${card.cost!==undefined ? `<div class="tooltip-stat">Cost: <b>${card.cost} DON!!</b></div>` : ''}
     ${card.counter ? `<div class="tooltip-stat">Counter: <b>+${card.counter}</b></div>` : ''}
     ${card.life    ? `<div class="tooltip-stat">Life: <b>${card.life}</b></div>` : ''}
@@ -2927,7 +3109,12 @@ function showCardInfo(card) {
   const parts = [];
   if (card.type) parts.push(card.type);
   if (card.cost !== undefined && card.cost !== null && card.type !== 'LEADER') parts.push(`Cost ${card.cost}`);
-  if (card.power)   parts.push(`Power ${card.power.toLocaleString()}`);
+  if (card.power) {
+    const eff = clientEffectivePower(card);
+    parts.push(eff !== card.power
+      ? `Power ${eff.toLocaleString()} (was ${card.power.toLocaleString()})`
+      : `Power ${card.power.toLocaleString()}`);
+  }
   if (card.counter) parts.push(`Counter +${card.counter}`);
   if (card.life)    parts.push(`Life ${card.life}`);
   if (card.color)   parts.push(card.color);
@@ -3201,6 +3388,6 @@ document.addEventListener('click', e => {
   hideTooltip();
 });
 </script>
-<script src="background.js?v=8"></script>
+<script src="background.js?v=9"></script>
 </body>
 </html>
