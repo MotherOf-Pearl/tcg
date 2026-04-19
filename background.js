@@ -6,6 +6,8 @@
   const BACKGROUNDS = [
     REPO + 'toad-gob.png',
     REPO + 'toad-x-gob-2.png',
+    REPO + 'dead-sam.png',
+    REPO + 'shlawg.png',
     // Add more entries as new backgrounds land in /backgrounds/
   ];
   if (BACKGROUNDS.length === 0) return;
