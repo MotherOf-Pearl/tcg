@@ -567,6 +567,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 .scry-card:hover{border-color:var(--gold);}
 .scry-card img{width:100%;height:100%;object-fit:cover;display:block;}
 .scry-card.kept{border-color:#4ade80;box-shadow:0 0 8px rgba(74,222,128,.5);}
+.scry-card.keep-eligible{border-color:rgba(212,180,80,.85);box-shadow:0 0 6px rgba(255,210,80,.55);}
 /* Pin scry overlay directly above the player hand while scry is active */
 .gb-left.scry-active .gb-self-hand{flex:0 0 auto;}
 .gb-left.scry-active .gb-card-preview.has-card{flex:0 1 auto;}
@@ -1097,6 +1098,7 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       </div>
       <!-- Field card selected -->
       <div id="battleBtns" style="display:none;flex-direction:column;gap:4px;">
+        <button class="gb-pbtn gb-pbtn-lg" id="btnActivateMain" onclick="activateMain()" style="display:none;">Activate Main</button>
         <button class="gb-pbtn gb-pbtn-lg" id="btnAttack" onclick="declareAttack()">Attack</button>
         <button class="gb-pbtn gb-pbtn-sm" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
         <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
@@ -2000,22 +2002,38 @@ function renderScry() {
 
   const title = document.getElementById('scryTitle');
   if (sw.keepCount > 0) {
-    title.textContent = `Select up to ${sw.keepCount} card(s) to add to your hand, then order the rest (1 = top)`;
+    let label = `Select up to ${sw.keepCount} card(s) to add to your hand`;
+    if (sw.keepFilter)      label += ` ({${sw.keepFilter}} only)`;
+    if (sw.keepExcludeName) label += ` — not [${sw.keepExcludeName}]`;
+    label += `, then order the rest (1 = ${sw.placement === 'top' ? 'top' : 'top of bottom'})`;
+    title.textContent = label;
   } else {
-    title.textContent = 'Click cards in the order to place on deck (1 = top)';
+    title.textContent = `Click cards in the order to place on ${sw.placement || 'top'} of deck (1 = top of stack)`;
   }
+
+  // Mark a card "keep-eligible" only if it passes the filters; everything else can
+  // still be ordered for the deck-placement step.
+  const isKeepEligible = (c) => {
+    if (sw.keepFilter) {
+      const aff = c.affiliation || '';
+      if (!aff.toLowerCase().includes(sw.keepFilter.toLowerCase())) return false;
+    }
+    if (sw.keepExcludeName && c.name === sw.keepExcludeName) return false;
+    return true;
+  };
 
   const container = document.getElementById('scryCards');
   container.innerHTML = '';
   sw.cards.forEach((card, idx) => {
     const el = document.createElement('div');
     el.className = 'scry-card';
+    if (sw.keepCount > 0 && isKeepEligible(card)) el.classList.add('keep-eligible');
     el.dataset.idx = idx;
     const imgSrc = card.image || '';
     el.innerHTML = imgSrc
       ? `<img src="${imgSrc}" onerror="this.parentElement.style.background='var(--card-back)';">`
       : '';
-    el.addEventListener('click', () => scryCardClick(idx, sw.keepCount));
+    el.addEventListener('click', () => scryCardClick(idx, sw.keepCount, isKeepEligible(card)));
     el.addEventListener('mouseenter', e => showTooltip(card, e));
     el.addEventListener('mouseleave', hideTooltip);
     container.appendChild(el);
@@ -2024,9 +2042,10 @@ function renderScry() {
   document.getElementById('scrySkip').style.display = sw.keepCount > 0 ? 'block' : 'none';
 }
 
-function scryCardClick(idx, keepCount) {
-  // If keep mode and haven't kept enough, toggle keep
-  if (keepCount > 0 && scryKeep.length < keepCount && !scryKeep.includes(idx) && !scryOrder.includes(idx)) {
+function scryCardClick(idx, keepCount, keepEligible) {
+  // If keep mode and haven't kept enough, AND this card matches the filter — toggle keep.
+  if (keepCount > 0 && keepEligible && scryKeep.length < keepCount
+      && !scryKeep.includes(idx) && !scryOrder.includes(idx)) {
     scryKeep.push(idx);
     updateScryDisplay();
     return;
@@ -2284,28 +2303,62 @@ function selectCard(uid, source) {
       deployHint.textContent = `Not enough DON!! (need ${card.cost}, have ${me.donActive})`;
     }
   } else if (source === 'field' || source === 'leader') {
-    // Field card or leader — show Attack if valid
+    // Field card / leader / stage. Decide which buttons to show.
     hideAllBtnGroups();
-    if (game.turn === 1) {
-      hint('Cannot attack on turn 1.');
+    const ab = card.ability || '';
+    const hasActivateMain = ab.includes('[Activate: Main]');
+    const isOPT = ab.includes('[Once Per Turn]');
+    const usedUp = isOPT && card.usedThisTurn;
+    const isStage = card.type === 'STAGE';
+
+    if (isStage) {
+      // Stages can't attack or take DON. Only [Activate: Main] is meaningful.
+      if (hasActivateMain && !usedUp) {
+        document.getElementById('battleBtns').style.display = 'flex';
+        document.getElementById('btnActivateMain').style.display = 'block';
+        document.getElementById('btnAttack').style.display = 'none';
+        document.getElementById('btnAttachDon').style.display = 'none';
+        hint(`${card.name} — Activate Main`);
+      } else {
+        hint(usedUp ? `${card.name} already used this turn.` : `${card.name}: no actions.`);
+      }
       return;
     }
-    if (source === 'field' && card.playedThisTurn && !(card.ability && card.ability.includes('[Rush]'))) {
-      hint(`${card.name} cannot attack the turn it was played.`);
+
+    // Leader / Character
+    const cannotAttackTurn1 = game.turn === 1;
+    const cannotAttackJustPlayed = source === 'field' && card.playedThisTurn && !ab.includes('[Rush]');
+    const canAttack = !card.rested && !cannotAttackTurn1 && !cannotAttackJustPlayed;
+    const canActivate = !card.rested && hasActivateMain && !usedUp;
+
+    if (!canAttack && !canActivate) {
+      hint(card.rested ? `${card.name} is rested.`
+           : cannotAttackTurn1 ? 'Cannot attack on turn 1.'
+           : cannotAttackJustPlayed ? `${card.name} cannot attack the turn it was played.`
+           : `${card.name}: no actions.`);
       return;
     }
-    if (!card.rested && (source === 'leader' || card.type !== 'STAGE')) {
-      document.getElementById('battleBtns').style.display = 'flex';
-      hint(`${card?.name || 'Leader'} — Attack or Attach DON!!`);
-    } else {
-      hint(`${card?.name || 'Card'} is rested.`);
-    }
+    document.getElementById('battleBtns').style.display = 'flex';
+    document.getElementById('btnActivateMain').style.display = canActivate ? 'block' : 'none';
+    document.getElementById('btnAttack').style.display       = canAttack   ? 'block' : 'none';
+    document.getElementById('btnAttachDon').style.display    = !card.rested ? 'block' : 'none';
+    const parts = [];
+    if (canActivate) parts.push('Activate');
+    if (canAttack)   parts.push('Attack');
+    parts.push('Attach DON!!');
+    hint(`${card.name} — ${parts.join(' / ')}`);
   }
 }
 
 function deploySelected() {
   if (!sel) return;
   act({ type: 'PLAY_CARD', cardUid: sel.uid });
+  cancelSel();
+}
+
+function activateMain() {
+  if (!sel) return;
+  act({ type: 'ACTIVATE_MAIN', cardUid: sel.uid });
   cancelSel();
 }
 

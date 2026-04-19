@@ -362,7 +362,7 @@ const CARD_DB = [
 
   { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'', affiliation:'Duchess of Brittany',
     power:0, cost:1, counter:0, image:IMG('OP01','OP01-090','png'),
-    ability:"[Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
+    ability:"[Activate: Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   // ══════════════════════════════
   // KAIDO RAMP DECK (Purple)
@@ -525,6 +525,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
+    effectQueue: [],     // Pending interactive steps for chained effects (one window at a time today; full queue is reserved for future multi-window cards).
   };
 }
 
@@ -802,6 +803,37 @@ function handleAction(roomId, playerId, action) {
       // DON goes onto the card, not into rested pool
       target.attachedDon = (target.attachedDon||0) + 1;
       log(game, `${playerId.slice(0,6)} attaches DON!! to ${target.name}. (+1000 power)`);
+      break;
+    }
+
+    case 'ACTIVATE_MAIN': {
+      if (!isActive || game.phase !== 'MAIN') return;
+      let card = null;
+      let isLeader = false, isStage = false;
+      if (action.cardUid === p.leader.uid) { card = p.leader; isLeader = true; }
+      else {
+        card = p.field.find(c => c.uid === action.cardUid);
+        if (card && card.type === 'STAGE') isStage = true;
+      }
+      if (!card) return;
+      if (!card.ability || !card.ability.includes('[Activate: Main]')) {
+        send(playerId, {type:'ERROR', msg:'No [Activate: Main] effect.'});
+        return;
+      }
+      if (card.rested && !isStage) {
+        send(playerId, {type:'ERROR', msg:'Card is rested.'});
+        return;
+      }
+      // [Once Per Turn] gate
+      if (card.ability.includes('[Once Per Turn]') && card.usedThisTurn) {
+        send(playerId, {type:'ERROR', msg:'Already used this turn.'});
+        return;
+      }
+      // Mark used; non-stage cards rest as part of activation.
+      card.usedThisTurn = true;
+      if (!isStage) card.rested = true;
+      log(game, `${card.name}: [Activate: Main] activated.`);
+      parseAndApply('activateMain', game, playerId, card, opp);
       break;
     }
 
@@ -1098,7 +1130,28 @@ function handleAction(roomId, playerId, action) {
       const sw = game.scryWindow;
       const kept = action.keptIndices || []; // indices of cards to keep in hand
       const order = action.order || []; // ordered indices for cards going back to deck
-      const placement = action.placement === 'top' ? 'top' : 'bottom';
+      const placement = action.placement === 'top' ? 'top' : (sw.placement === 'top' ? 'top' : 'bottom');
+
+      // Validate keep count + filters
+      if (kept.length > (sw.keepCount || 0)) {
+        send(playerId, {type:'ERROR', msg:`May only keep up to ${sw.keepCount} cards.`});
+        return;
+      }
+      for (const idx of kept) {
+        const c = sw.cards[idx];
+        if (!c) { send(playerId, {type:'ERROR', msg:'Invalid keep index.'}); return; }
+        if (sw.keepFilter) {
+          const aff = c.affiliation || '';
+          if (!aff.toLowerCase().includes(sw.keepFilter.toLowerCase())) {
+            send(playerId, {type:'ERROR', msg:`${c.name} is not a {${sw.keepFilter}} card.`});
+            return;
+          }
+        }
+        if (sw.keepExcludeName && c.name === sw.keepExcludeName) {
+          send(playerId, {type:'ERROR', msg:`Cannot keep another [${sw.keepExcludeName}].`});
+          return;
+        }
+      }
 
       // Add kept cards to hand
       kept.forEach(idx => {
@@ -1422,6 +1475,36 @@ function extractTypeFilter(text) {
   return m ? m[1] : null;
 }
 
+// Generic scry opener — handles any
+//   "Look at top N cards [reveal up to M {Type} type card] [other than [Name]]
+//    and add it to your hand[. Then place the rest at the (top|bottom)]"
+// pattern. Used by [On Play], [Activate: Main], [Counter], [When Attacking], etc.
+function tryOpenScryFromEffect(game, playerId, card, effect) {
+  const p = game.players[playerId];
+  const lookMatch = effect.match(/[Ll]ook at.*?(\d+) cards? from the top/i);
+  if (!lookMatch) return false;
+  const lookCount = Math.min(parseInt(lookMatch[1]), p.deck.length);
+  if (lookCount <= 0) return false;
+  const revealMatch = effect.match(/reveal up to (\d+)/i);
+  const keepCount = revealMatch ? parseInt(revealMatch[1]) : 0;
+  const keepFilter = extractTypeFilter(effect);  // e.g. "Duchess of Brittany"
+  // "other than [Name]" — exclude from keep candidates by name.
+  const otherThanMatch = effect.match(/other than \[([^\]]+)\]/i);
+  const keepExcludeName = otherThanMatch ? otherThanMatch[1].trim() : null;
+  const placement = /place the rest at the bottom/i.test(effect) ? 'bottom' : 'top';
+  game.scryWindow = {
+    playerId,
+    cards: p.deck.splice(0, lookCount),
+    keepCount,
+    keepFilter,        // affiliation filter (e.g. "Duchess of Brittany")
+    keepExcludeName,   // name to exclude (e.g. "Schola Montis Belli")
+    cardName: card.name,
+    placement,
+  };
+  log(game, `${card.name}: looking at top ${lookCount} cards…`);
+  return true;
+}
+
 // Extract "[Card Name] card" name filter (skips bracketed keywords like [On Play]).
 function extractNameFilter(text) {
   const KW = new Set(['On Play','On K.O.','Activate: Main','Main','Counter','Trigger','Blocker',
@@ -1566,23 +1649,7 @@ function parseAndApply(timing, game, playerId, card, opp) {
     }
 
     // Look at X cards from top of deck — open scry window
-    const lookMatch = effect.match(/[Ll]ook at.*?(\d+) cards? from the top/i);
-    console.log('SCRY CHECK:', { cardName: card.name, lookMatch: !!lookMatch, drawMatch: !!drawMatch, deckLen: p.deck.length, effect: effect.substring(0, 60) });
-    if (lookMatch && !drawMatch) {
-      const lookCount = Math.min(parseInt(lookMatch[1]), p.deck.length);
-      if (lookCount > 0) {
-        const revealAndKeep = /reveal up to (\d+).*add.*hand/i.test(effect);
-        const keepCount = revealAndKeep ? parseInt(effect.match(/reveal up to (\d+)/i)[1]) : 0;
-        game.scryWindow = {
-          playerId,
-          cards: p.deck.splice(0, lookCount),
-          keepCount,
-          cardName: card.name,
-        };
-        console.log('SCRY WINDOW OPENED:', { cardName: card.name, lookCount, keepCount, cardsInScry: game.scryWindow.cards.length });
-        log(game, `${card.name}: looking at top ${lookCount} cards...`);
-      }
-    }
+    if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
 
     // Play character from hand (interactive)
     const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
@@ -1871,6 +1938,70 @@ function parseAndApply(timing, game, playerId, card, opp) {
   // ── Event [Main] effects (for PLAY_CARD EVENT) ──
   if (timing === 'eventMain') {
     parseEventMain(game, playerId, card, opp);
+  }
+
+  // ── [Activate: Main] effects (for ACTIVATE_MAIN action) ──
+  if (timing === 'activateMain' && ab.includes('[Activate: Main]')) {
+    const effect = extractEffect(ab, '[Activate: Main]');
+    if (!effect) return;
+
+    // DON!! -N cost (return that many DON to deck)
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
+    if (donCostMatch) {
+      const donCost = parseInt(donCostMatch[1]);
+      const totalDon = p.donActive + p.donRested;
+      if (totalDon < donCost) {
+        send(playerId, {type:'ERROR', msg:`Need ${donCost} DON!! to activate.`});
+        return;
+      }
+      let remaining = donCost;
+      const fromActive = Math.min(remaining, p.donActive);
+      p.donActive -= fromActive; remaining -= fromActive;
+      if (remaining > 0) p.donRested -= remaining;
+      p.donDeck += donCost;
+      log(game, `${card.name}: paid ${donCost} DON!! to activate.`);
+    }
+
+    // Draw N cards
+    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
+    if (drawMatch) drawCards(p, parseInt(drawMatch[1]), game, card.name);
+
+    // Look at top N → reveal {Type} → add to hand → place rest
+    if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
+
+    // Add up to N DON!! from deck
+    if (/[Aa]dd up to 1 DON!!.*set it as active/i.test(effect)) {
+      addDonFromDeck(p, 1, false, game, card.name);
+    } else if (/[Aa]dd up to 1 DON!!/i.test(effect)) {
+      addDonFromDeck(p, 1, true, game, card.name);
+    }
+
+    // K.O. opponent character
+    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch) {
+      const koed = koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    }
+    const koCostMatch = effect.match(/K\.O\.\s+up to 1.*?cost of (\d+) or less/i);
+    if (koCostMatch) {
+      const koed = koByCost(opp, parseInt(koCostMatch[1]), game, card.name);
+      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    }
+
+    // Power reduction to opponent character
+    const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
+    if (powerRedMatch) givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
+
+    // Play character from hand (interactive)
+    const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    if (playMatch) {
+      openPlayFromHand(game, playerId, {
+        costThreshold: parseInt(playMatch[1]),
+        typeName: extractTypeFilter(effect),
+        nameMatch: extractNameFilter(effect),
+        sourceCardName: card.name,
+      });
+    }
   }
 }
 
