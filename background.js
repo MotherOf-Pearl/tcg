@@ -12,6 +12,7 @@
     REPO + 'bg3.png',
     REPO + 'bg4.png',
     REPO + 'bg5.png',
+    REPO + 'bg6.png',
   ];
   if (BACKGROUNDS.length > 0) {
     let bgUrl;

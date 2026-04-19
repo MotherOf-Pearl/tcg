@@ -358,6 +358,10 @@ const CARD_DB = [
     power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'),
     ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
 
+  { id:'OP01-070', name:'Anna, Master of FiFi', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
+    power:9000, cost:9, counter:0, image:IMG('OP01','OP01-070','png'),
+    ability:"[On Play] Place up to 1 Character with a cost of 7 or less at the bottom of the owner's deck." },
+
   { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
     power:0, cost:4, counter:0, image:IMG('ST03','ST03-015','png'),
     ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
@@ -455,11 +459,11 @@ const PRESET_DECKS = {
   'Anna of Brittany': {
     leaderId: 'ST03-001',
     cards: [
-      {id:'OP01-079',count:4},{id:'OP01-077',count:4},{id:'OP01-083',count:4},
+      {id:'OP01-079',count:4},{id:'OP01-077',count:4},{id:'OP01-083',count:2},
       {id:'OP01-085',count:4},{id:'ST03-014',count:3},{id:'OP01-084',count:4},
-      {id:'ST03-003',count:4},{id:'OP01-067',count:3},{id:'ST03-015',count:4},
-      {id:'ST03-016',count:4},{id:'ST03-017',count:4},{id:'OP01-087',count:4},
-      {id:'OP01-090',count:4},
+      {id:'ST03-003',count:4},{id:'OP01-067',count:3},{id:'OP01-070',count:2},
+      {id:'ST03-015',count:4},{id:'ST03-016',count:4},{id:'ST03-017',count:4},
+      {id:'OP01-087',count:4},{id:'OP01-090',count:4},
     ]
   },
   'Constable Jack': {
@@ -1907,6 +1911,24 @@ function parseTrashFromHandCost(effect) {
   return null;
 }
 
+// Detect MANDATORY "trash N card(s) from your hand" inside an effect — i.e.
+// no "you may" prefix and no trailing colon (which would be a cost). Returns
+// {count, filterType, filterPowerMin} or null. Used by Sam the Tall and any
+// card whose ability includes a forced discard as part of the resolution
+// (e.g. "Draw 2 cards and trash 1 card from your hand"). The optional bit on
+// the resolver window is then `false` so the player CANNOT skip.
+function parseMandatoryTrashFromHand(effect) {
+  if (!effect) return null;
+  // Most-specific filters first so "Character card with N+ power" wins over the generic match.
+  let m = effect.match(/(?<!\bmay\s)(?:and )?trash (\d+) Character cards? with a power of (\d+) or more from your hand(?!\s*:)/i);
+  if (m) return { count: parseInt(m[1]), filterType: 'CHARACTER', filterPowerMin: parseInt(m[2]) };
+  m = effect.match(/(?<!\bmay\s)(?:and )?trash (\d+) [Ee]vent cards? from your hand(?!\s*:)/i);
+  if (m) return { count: parseInt(m[1]), filterType: 'EVENT', filterPowerMin: null };
+  m = effect.match(/(?<!\bmay\s)(?:and )?trash (\d+) cards? from your hand(?!\s*:)/i);
+  if (m) return { count: parseInt(m[1]), filterType: null, filterPowerMin: null };
+  return null;
+}
+
 // Detect bounce target patterns:
 //   "Return up to N Character with a cost of M or less to the owner's hand"
 //   "Return up to N Character with M power or less to the owner's hand"
@@ -2198,6 +2220,21 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
         sourceCardName: card.name,
       });
     }
+
+    // MANDATORY trash from hand — fires LAST so any draws/searches above have
+    // already enlarged the hand the player picks from. No "you may" → no skip.
+    // resumeTiming is null because the trash IS the final step; nothing else
+    // needs to re-fire after the player picks (no risk of re-entering this
+    // block and double-drawing).
+    const mandTrash = parseMandatoryTrashFromHand(effect);
+    if (mandTrash && !opts.mandatoryTrashDone) {
+      openTrashFromHand(game, playerId, {
+        count: mandTrash.count, optional: false,
+        filterType: mandTrash.filterType, filterPowerMin: mandTrash.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: null, resumeCardUid: null,
+      });
+    }
   }
 
   // ── [On K.O.] effects ──
@@ -2340,6 +2377,18 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
         log(game, `${card.name}: added a card to life (now ${p.life.length}).`);
       }
     }
+
+    // MANDATORY trash from hand (e.g. Monet OP14-074: "Draw 2 cards and trash
+    // 1 card from your hand"). Same scalable resolver as [On Play] — no skip.
+    const mandTrash = parseMandatoryTrashFromHand(effect);
+    if (mandTrash && !opts.mandatoryTrashDone) {
+      openTrashFromHand(game, playerId, {
+        count: mandTrash.count, optional: false,
+        filterType: mandTrash.filterType, filterPowerMin: mandTrash.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: null, resumeCardUid: null,
+      });
+    }
   }
 
   // ── [When Attacking] effects ──
@@ -2412,6 +2461,17 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     const drawMatch = effect.match(/[Dd]raw (\d+) card/);
     if (drawMatch) {
       drawCards(p, parseInt(drawMatch[1]), game, card.name);
+    }
+
+    // MANDATORY trash from hand at [When Attacking] (scalable for any future card).
+    const mandTrash = parseMandatoryTrashFromHand(effect);
+    if (mandTrash && !opts.mandatoryTrashDone) {
+      openTrashFromHand(game, playerId, {
+        count: mandTrash.count, optional: false,
+        filterType: mandTrash.filterType, filterPowerMin: mandTrash.filterPowerMin,
+        sourceCardName: card.name,
+        resumeTiming: null, resumeCardUid: null,
+      });
     }
   }
 
