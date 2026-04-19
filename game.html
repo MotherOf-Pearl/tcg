@@ -699,6 +699,26 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
 
 /* ═══ RIGHT 1/3 — LOG + BUTTONS ═══ */
 .gb-right-col{display:flex;flex-direction:column;padding:10px;gap:8px;position:relative;overflow:hidden;}
+/* Hover-revealed card detail panel — sticks to bottom of right column. */
+#cardInfoPanel{
+  margin-top:auto;flex-shrink:0;
+  background:rgba(0,0,0,.32);border:1px solid rgba(180,140,50,.28);
+  border-radius:5px;padding:8px;
+  max-height:38vh;overflow-y:auto;
+  scrollbar-width:thin;scrollbar-color:var(--gold-dim) transparent;
+}
+#cardInfoName{font-family:'Cinzel',serif;font-size:.86rem;color:var(--gold);font-weight:700;line-height:1.2;margin-bottom:3px;}
+#cardInfoMeta{font-size:.6rem;color:var(--muted);letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase;}
+#cardInfoAbility{font-size:.7rem;color:var(--text);line-height:1.55;word-wrap:break-word;}
+#cardInfoAbility i{color:var(--muted);}
+/* Keyword badges in ability text */
+.kw{display:inline-block;padding:1px 5px;border-radius:3px;font-weight:700;font-size:.62rem;margin:0 1px;border:1px solid rgba(0,0,0,.45);text-shadow:0 1px 1px rgba(0,0,0,.5);}
+.kw-onplay {background:#2563eb;color:#fff;}
+.kw-blocker{background:#ea580c;color:#fff;}
+.kw-rush   {background:#16a34a;color:#fff;}
+.kw-counter{background:#7c3aed;color:#fff;}
+.kw-trigger{background:#d4a020;color:#1a0e00;text-shadow:none;}
+.kw-default{background:rgba(80,55,20,.85);color:#f5e8c8;}
 .gb-right-top{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
 .gb-info{display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 0;flex-shrink:0;}
 .gb-info-phase{
@@ -1160,6 +1180,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <button class="gb-pbtn gb-pbtn-lg" id="btnResolve" onclick="passCounter()">Resolve Attack</button>
       </div>
       <span id="actionHint" class="gb-hint">Waiting…</span>
+    </div>
+    <!-- Hover-revealed card details (any card the cursor enters) -->
+    <div id="cardInfoPanel" style="display:none;">
+      <div id="cardInfoName"></div>
+      <div id="cardInfoMeta"></div>
+      <div id="cardInfoAbility"></div>
     </div>
     <div class="gb-version">v 1.34c</div>
   </div>
@@ -1948,11 +1974,16 @@ function renderDon(id, active, rested, total, badgeTotal) {
   const spacing = 14;
   // Rested cards go first (left, behind), then active cards on top (right, front)
   // Rested sideways, active upright — all in one row
+  const wireDonHover = (el) => {
+    el.addEventListener('mouseenter', () => showCardInfo(DON_INFO_CARD));
+    el.addEventListener('mouseleave', hideCardInfo);
+  };
   for (let i = 0; i < rested; i++) {
     const card = document.createElement('div');
     card.className = 'don-single rested';
     card.style.left = (i * spacing) + 'px';
     card.style.zIndex = i;
+    wireDonHover(card);
     el.appendChild(card);
   }
   for (let i = 0; i < active; i++) {
@@ -1960,6 +1991,7 @@ function renderDon(id, active, rested, total, badgeTotal) {
     card.className = 'don-single';
     card.style.left = ((rested + i) * spacing) + 'px';
     card.style.zIndex = rested + i + 1;
+    wireDonHover(card);
     el.appendChild(card);
   }
   // Count badge — "active / badgeTotal" so the denominator never drops on attach.
@@ -2705,11 +2737,64 @@ function showTooltip(card, e) {
     preview.innerHTML = `<img src="${card.image}" alt="${card.name}">`;
     preview.classList.add('has-card');
   }
+  // Right-panel ability detail panel
+  showCardInfo(card);
 }
 function hideTooltip() {
   document.getElementById('tooltip').classList.remove('show');
   const preview = document.getElementById('cardPreview');
   if (preview) { preview.innerHTML = ''; preview.classList.remove('has-card'); }
+  hideCardInfo();
+}
+
+// ─── Card detail panel (right column) ─────────────────────────────────────────
+const KW_BADGE_MAP = {
+  'On Play':'kw-onplay', 'Blocker':'kw-blocker', 'Rush':'kw-rush',
+  'Counter':'kw-counter', 'Trigger':'kw-trigger',
+};
+const DON_INFO_CARD = {
+  name: 'DON!! Card', type: 'DON!!',
+  ability: '[Your Turn] Attach to a Leader or Character to give it +1000 power for the turn. Returns to active during your next refresh.',
+};
+function _escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g,
+    m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function _formatAbility(text) {
+  if (!text) return '';
+  return _escapeHtml(text).replace(/\[([^\]]+)\]/g, (_, kw) => {
+    const cls = KW_BADGE_MAP[kw] || 'kw-default';
+    return `<span class="kw ${cls}">[${kw}]</span>`;
+  });
+}
+function showCardInfo(card) {
+  if (!card) return;
+  document.getElementById('cardInfoName').textContent = card.name || '';
+  const parts = [];
+  if (card.type) parts.push(card.type);
+  if (card.cost !== undefined && card.cost !== null && card.type !== 'LEADER') parts.push(`Cost ${card.cost}`);
+  if (card.power)   parts.push(`Power ${card.power.toLocaleString()}`);
+  if (card.counter) parts.push(`Counter +${card.counter}`);
+  if (card.life)    parts.push(`Life ${card.life}`);
+  if (card.color)   parts.push(card.color);
+  document.getElementById('cardInfoMeta').textContent = parts.join(' · ');
+  document.getElementById('cardInfoAbility').innerHTML =
+    card.ability ? _formatAbility(card.ability) : '<i>No ability</i>';
+  document.getElementById('cardInfoPanel').style.display = 'block';
+}
+function hideCardInfo() {
+  // Keep info shown for the currently selected card so the player can read it
+  // while choosing what to do (e.g. read [Activate: Main] before clicking).
+  if (sel?.uid && game) {
+    const me = myPlayer();
+    if (me) {
+      const found = (me.leader && me.leader.uid === sel.uid) ? me.leader
+                  : (me.field || []).find(c => c.uid === sel.uid)
+                  || (me.hand  || []).find(c => c.uid === sel.uid);
+      if (found) { showCardInfo(found); return; }
+    }
+  }
+  document.getElementById('cardInfoPanel').style.display = 'none';
 }
 
 // ─── Phase 1 battle visuals: arrow + power overlays ───
