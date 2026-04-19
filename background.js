@@ -9,6 +9,9 @@
     REPO + 'dead-sam.png',
     REPO + 'shlawg.png',
     REPO + 'pissed-shlawg.png',
+    REPO + 'bg3.png',
+    REPO + 'bg4.png',
+    REPO + 'bg5.png',
   ];
   if (BACKGROUNDS.length > 0) {
     let bgUrl;
