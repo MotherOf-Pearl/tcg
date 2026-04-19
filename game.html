@@ -1411,10 +1411,15 @@ function handleMsg(msg) {
       showScreen('game');
       break;
     case 'GAME_STATE':
+      // FLIP step 1 — capture every visible card's screen position from the OLD DOM
+      // before we replace state. After the new render lays cards out at their
+      // destinations, animateMovements() inverts the deltas and animates back to 0.
+      snapshotPositions();
       game = msg.game;
       showScreen('game');
       if (game.phase === 'MULLIGAN') renderMulligan();
       else renderGame();
+      requestAnimationFrame(() => animateMovements());
       break;
     case 'ERROR':
       hint(msg.msg, true);
@@ -2855,6 +2860,93 @@ function hideCardInfo() {
 }
 
 // ─── Phase 1 battle visuals: arrow + power overlays ───
+// ─── FLIP movement animation ────────────────────────────────────────────────
+// Standard "First, Last, Invert, Play" pattern. We snapshot screen positions
+// before the DOM is rewritten by renderGame, then after the new layout settles
+// we apply translate(dx, dy) on each moved element to put it back at its old
+// position, and transition the translate back to (0, 0).
+//
+// Caveats: (a) preserves any existing CSS transform (e.g. rotate(90deg) on
+// .rested cards) by composing them in the inline style; (b) negates dx/dy
+// when the card sits inside .gb-zone-opp because that zone is rotated 180°
+// so a screen-space delta has to flip before it's applied in the parent's
+// local coord system.
+const cardPositionCache = {};
+
+function _findUidEl(uid) {
+  return document.querySelector(`.gcard-wrap[data-uid="${uid}"]`)
+      || document.querySelector(`.gcard[data-uid="${uid}"]`);
+}
+
+function _isInOppZone(el) {
+  let p = el.parentElement;
+  while (p) {
+    if (p.classList && p.classList.contains('gb-zone-opp')) return true;
+    p = p.parentElement;
+  }
+  return false;
+}
+
+function snapshotPositions() {
+  for (const k in cardPositionCache) delete cardPositionCache[k];
+  // Outer .gcard-wrap first (DON-attached cards), then .gcard for everything else.
+  document.querySelectorAll('.gcard-wrap[data-uid]').forEach(el => {
+    const uid = el.dataset.uid;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) return;
+    cardPositionCache[uid] = { x: r.left, y: r.top, w: r.width, h: r.height };
+  });
+  document.querySelectorAll('.gcard[data-uid]').forEach(el => {
+    const uid = el.dataset.uid;
+    if (cardPositionCache[uid]) return;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0) return;
+    cardPositionCache[uid] = { x: r.left, y: r.top, w: r.width, h: r.height };
+  });
+}
+
+function animateMovements() {
+  const uids = Object.keys(cardPositionCache);
+  for (const uid of uids) {
+    const el = _findUidEl(uid);
+    if (!el) continue;
+    const oldR = cardPositionCache[uid];
+    const newR = el.getBoundingClientRect();
+    if (newR.width === 0) continue;
+    let dx = oldR.x - newR.left;
+    let dy = oldR.y - newR.top;
+    if (Math.abs(dx) < 3 && Math.abs(dy) < 3) continue;
+    if (_isInOppZone(el)) { dx = -dx; dy = -dy; }
+    // Preserve any existing computed transform (CSS rotation, etc.) so we don't
+    // un-rest a rested card mid-flight.
+    const computed = getComputedStyle(el).transform;
+    const baseT = (!computed || computed === 'none') ? '' : computed;
+    el.style.transition = 'none';
+    el.style.transform  = `translate(${dx}px, ${dy}px) ${baseT}`;
+    el.style.pointerEvents = 'none';
+    el.style.willChange = 'transform';
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+        el.style.transform  = baseT; // animate translate back to identity
+      });
+    });
+    let cleaned = false;
+    const cleanup = (e) => {
+      if (e && e.propertyName && e.propertyName !== 'transform') return;
+      if (cleaned) return;
+      cleaned = true;
+      el.style.transition  = '';
+      el.style.transform   = '';
+      el.style.pointerEvents = '';
+      el.style.willChange  = '';
+      el.removeEventListener('transitionend', cleanup);
+    };
+    el.addEventListener('transitionend', cleanup);
+    setTimeout(cleanup, 600); // safety net if transitionend doesn't fire
+  }
+}
+
 function findCardEl(uid) {
   // Prefer the outer gcard-wrap (so coordinates are correct even when DON is attached), then the gcard itself.
   return document.querySelector(`.gcard-wrap[data-uid="${uid}"]`) ||
