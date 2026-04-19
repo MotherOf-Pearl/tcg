@@ -41,7 +41,10 @@
   --card-h: 137px;
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow-x:hidden;}
+body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow-x:hidden;background-size:cover;background-position:center;background-repeat:no-repeat;}
+/* Random body bg: drop the procedural .wood-bg pattern on menu/mulligan/solo screens
+   and replace with a translucent dark scrim so buttons/forms stay readable. */
+body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 
 /* ════════════════════════════════════════════════════
    SCREENS
@@ -3109,5 +3112,6 @@ document.addEventListener('click', e => {
   hideTooltip();
 });
 </script>
+<script src="background.js"></script>
 </body>
 </html>

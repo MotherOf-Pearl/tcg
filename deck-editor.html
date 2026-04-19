@@ -13,7 +13,12 @@
             overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             position: relative;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
         }
+        body.has-random-bg::after,
+        body.has-random-bg::before { display: none; }
 
         /* Warm wood background */
         body::after {
@@ -872,5 +877,6 @@
     populateDeckSelect();
     renderDeck();
     </script>
+    <script src="background.js"></script>
 </body>
 </html>
