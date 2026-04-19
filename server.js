@@ -23,7 +23,8 @@ const server = http.createServer((req, res) => {
   if (page) {
     const file = path.join(BASE_DIR, page);
     if (!fs.existsSync(file)) { console.log('File not found:', file); res.writeHead(404); res.end('File not found: ' + file); return; }
-    res.writeHead(200, { 'Content-Type': 'text/html' });
+    // Force the browser to revalidate HTML on every load so deploys are picked up.
+    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, must-revalidate' });
     fs.createReadStream(file).pipe(res);
   } else if (pathname.match(/\.(png|jpg|jpeg)$/)) {
     const file = path.join(BASE_DIR, pathname.slice(1));
@@ -33,7 +34,8 @@ const server = http.createServer((req, res) => {
   } else if (pathname.match(/\.js$/)) {
     const file = path.join(BASE_DIR, pathname.slice(1));
     if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
-    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    // Same — JS deploys (e.g. background.js) need to bust the browser cache.
+    res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache, must-revalidate' });
     fs.createReadStream(file).pipe(res);
   } else {
     res.writeHead(404); res.end();
