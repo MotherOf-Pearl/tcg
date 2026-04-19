@@ -2353,6 +2353,10 @@ function selectCard(uid, source) {
     const isOPT = ab.includes('[Once Per Turn]');
     const usedUp = isOPT && card.usedThisTurn;
     const isStage = card.type === 'STAGE';
+    // DON!! -N cost on the [Activate: Main] block (0 if no cost).
+    const activateCost = activateMainDonCost(card);
+    const myAvailableDon = totalAvailableDonFor(myPlayer());
+    const canAffordActivate = activateCost === 0 || myAvailableDon >= activateCost;
 
     if (isStage) {
       // Stages can't attack or take DON. Only [Activate: Main] is meaningful.
@@ -2361,12 +2365,14 @@ function selectCard(uid, source) {
         hint(`${card.name} is rested.`);
         return;
       }
-      if (hasActivateMain && !usedUp) {
+      if (hasActivateMain && !usedUp && canAffordActivate) {
         document.getElementById('battleBtns').style.display = 'flex';
         document.getElementById('btnActivateMain').style.display = 'block';
         document.getElementById('btnAttack').style.display = 'none';
         document.getElementById('btnAttachDon').style.display = 'none';
         hint(`${card.name} — Activate Main`);
+      } else if (hasActivateMain && !usedUp && !canAffordActivate) {
+        hint(`${card.name}: need ${activateCost} DON!! to activate (have ${myAvailableDon}).`);
       } else {
         hint(usedUp ? `${card.name} already used this turn.` : `${card.name}: no actions.`);
       }
@@ -2377,13 +2383,15 @@ function selectCard(uid, source) {
     const cannotAttackTurn1 = game.turn === 1;
     const cannotAttackJustPlayed = source === 'field' && card.playedThisTurn && !ab.includes('[Rush]');
     const canAttack = !card.rested && !cannotAttackTurn1 && !cannotAttackJustPlayed;
-    const canActivate = !card.rested && hasActivateMain && !usedUp;
+    const canActivate = !card.rested && hasActivateMain && !usedUp && canAffordActivate;
 
     if (!canAttack && !canActivate) {
       hint(card.rested ? `${card.name} is rested.`
            : cannotAttackTurn1 ? 'Cannot attack on turn 1.'
            : cannotAttackJustPlayed ? `${card.name} cannot attack the turn it was played.`
-           : `${card.name}: no actions.`);
+           : (hasActivateMain && !canAffordActivate)
+              ? `${card.name}: need ${activateCost} DON!! to activate (have ${myAvailableDon}).`
+              : `${card.name}: no actions.`);
       return;
     }
     document.getElementById('battleBtns').style.display = 'flex';
@@ -2396,6 +2404,27 @@ function selectCard(uid, source) {
     parts.push('Attach DON!!');
     hint(`${card.name} — ${parts.join(' / ')}`);
   }
+}
+
+// Cost of the [Activate: Main] block, in DON!! to return — 0 if no cost or no
+// [Activate: Main] effect. Scoped to the [Activate: Main] block so a DON!! cost
+// on a different timing (e.g. [On Play] DON!! -1:) doesn't get picked up.
+function activateMainDonCost(card) {
+  if (!card?.ability) return 0;
+  const idx = card.ability.indexOf('[Activate: Main]');
+  if (idx < 0) return 0;
+  const after = card.ability.substring(idx);
+  const m = after.match(/DON!!\s*-(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Total DON the player can spend on a return-cost: cost-area (active + rested)
+// plus every DON attached to leader / field characters.
+function totalAvailableDonFor(player) {
+  if (!player) return 0;
+  const sumAttached = (player.leader?.attachedDon || 0)
+    + (player.field || []).reduce((s, c) => s + (c.attachedDon || 0), 0);
+  return (player.donActive || 0) + (player.donRested || 0) + sumAttached;
 }
 
 function deploySelected() {
