@@ -485,13 +485,23 @@ function buildCustomDeck(leaderId, cardList) {
   const leader = CARD_DB.find(c => c.id === leaderId);
   if (!leader) return buildCustomDeck('ST03-001', PRESET_DECKS['Anna of Brittany'].cards);
   const deck = [];
+  // Per-card debug log so missing-card / wrong-id problems are visible in
+  // server logs. SKIP warnings here mean the client sent an id that isn't in
+  // CARD_DB (likely stale localStorage from before the card was added).
+  console.log(`[buildCustomDeck] leader=${leaderId} (${leader.name}); ${cardList.length} entries`);
   cardList.forEach(({id, count}) => {
     const card = CARD_DB.find(c => c.id === id);
-    if (!card) return;
-    for (let i = 0; i < Math.min(count, 4); i++) {
+    if (!card) {
+      console.warn(`[buildCustomDeck]   SKIP — id "${id}" not in CARD_DB`);
+      return;
+    }
+    const copies = Math.min(count, 4);
+    console.log(`[buildCustomDeck]   +${copies}x ${id} (${card.name})`);
+    for (let i = 0; i < copies; i++) {
       deck.push({...card, uid:uuidv4(), rested:false, attachedDon:0});
     }
   });
+  console.log(`[buildCustomDeck] built deck: ${deck.length} cards`);
   return { leader: {...leader, uid:uuidv4(), rested:false, attachedDon:0}, deck: shuffle(deck) };
 }
 
