@@ -143,6 +143,45 @@
   if (document.body) setup();
   else document.addEventListener('DOMContentLoaded', setup, { once: true });
 
+  // ─── Smooth cross-page navigation ────────────────────────────────────────
+  // The browser destroys this page's <audio> element on unload, so the new
+  // page has to recreate it from scratch — there's an unavoidable gap. What
+  // we CAN do is make sure the saved position reflects the click moment (not
+  // the last 1s tick of the position-save interval) and give the click-sound
+  // 100ms to start before the page tears down.
+  //
+  // For this path to fire, nav controls must be either <a href="..."> or
+  // <button data-href="...">. onclick="location.href=..." bypasses this and
+  // navigates synchronously, before sessionStorage can flush.
+  const saveMusicPosition = () => {
+    try {
+      sessionStorage.setItem('trackPosition', String(audio.currentTime || 0));
+      sessionStorage.setItem('currentTrack', trackUrl);
+    } catch (_) {}
+  };
+  const interceptNav = () => {
+    document.addEventListener('click', (e) => {
+      // Respect new-tab / new-window modifier clicks — don't hijack those.
+      if (e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const link = e.target.closest('a[href], button[data-href]');
+      if (!link) return;
+      const href = link.getAttribute('data-href') || link.getAttribute('href');
+      if (!href || href.startsWith('#') || /^javascript:/i.test(href)) return;
+      if (link.target === '_blank') return;
+      e.preventDefault();
+      saveMusicPosition();
+      // Brief pause lets the click-sound BufferSource start and the storage
+      // write commit before the browser begins tearing down the page.
+      setTimeout(() => { window.location.href = href; }, 100);
+    }, true);
+  };
+  // Belt-and-suspenders: also save on pagehide / beforeunload so manual nav
+  // (typed URL, back button, refresh) doesn't lose more than 1s of position.
+  window.addEventListener('pagehide',     saveMusicPosition);
+  window.addEventListener('beforeunload', saveMusicPosition);
+  if (document.body) interceptNav();
+  else document.addEventListener('DOMContentLoaded', interceptNav, { once: true });
+
   // ─── Universal button click sound (excludes card / non-button clicks) ───
   // Web Audio API path: the click runs on its own AudioContext, completely
   // disjoint from the HTMLAudioElement powering the music above. The decoded

@@ -101,15 +101,16 @@
 <body>
     <div class="container">
 
-        <!-- Main buttons -->
+        <!-- Main buttons — use data-href so background.js's nav interceptor
+             saves the music position before navigating. -->
         <button class="btn btn-multiplayer">Multiplayer</button>
-        <button class="btn btn-solo" onclick="window.location.href='game.html?solo=true'">Solo v Self</button>
-        <button class="btn btn-deck-editor" onclick="window.location.href='deck-editor.html'">Deck Editor</button>
+        <button class="btn btn-solo" data-href="game.html?solo=true">Solo v Self</button>
+        <button class="btn btn-deck-editor" data-href="deck-editor.html">Deck Editor</button>
 
         <!-- Version -->
         <div class="version">v 1.34c</div>
     </div>
 
-    <script src="background.js?v=10"></script>
+    <script src="background.js?v=11"></script>
 </body>
 </html>
