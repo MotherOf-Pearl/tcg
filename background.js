@@ -144,16 +144,48 @@
   else document.addEventListener('DOMContentLoaded', setup, { once: true });
 
   // ─── Universal button click sound (excludes card / non-button clicks) ───
-  // Spawn a brand-new Audio per click so it never shares state with the music
-  // instance above. Nothing here touches the `audio` (music) variable.
+  // Web Audio API path: the click runs on its own AudioContext, completely
+  // disjoint from the HTMLAudioElement powering the music above. The decoded
+  // PCM buffer is cached after the first fetch so subsequent clicks just spin
+  // up a tiny BufferSource — no fetch, no decode, no Audio element churn, and
+  // critically nothing that can pause / reset the music element.
   const CLICK_URL = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking1.wav';
+  const AC = window.AudioContext || window.webkitAudioContext;
+  const audioCtx = AC ? new AC() : null;
+  let clickBufferPromise = null;
+
+  const loadClickBuffer = () => {
+    if (!audioCtx) return Promise.reject(new Error('No AudioContext'));
+    if (clickBufferPromise) return clickBufferPromise;
+    clickBufferPromise = fetch(CLICK_URL)
+      .then(r => r.arrayBuffer())
+      .then(buf => audioCtx.decodeAudioData(buf))
+      .catch(err => { clickBufferPromise = null; throw err; }); // allow retry
+    return clickBufferPromise;
+  };
+
+  const playClickSound = async () => {
+    if (!audioCtx) return;
+    // Browsers often start the AudioContext suspended until a user gesture —
+    // the click handler IS that gesture, so resume() is safe + cheap if already running.
+    if (audioCtx.state === 'suspended') {
+      try { await audioCtx.resume(); } catch (_) {}
+    }
+    const buffer = await loadClickBuffer();
+    const src = audioCtx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(audioCtx.destination);
+    src.start(0);
+  };
+
+  // Kick off the buffer fetch eagerly (after DOM ready so we don't block paint)
+  // — every subsequent click just plays from cache.
   const wireClick = () => {
+    loadClickBuffer().catch(() => {});
     document.addEventListener('click', (e) => {
       const t = e.target;
       if (!t || !t.closest || !t.closest('button')) return;
-      const click = new Audio(CLICK_URL);
-      click.volume = 0.5;
-      click.play().catch(() => {});
+      playClickSound().catch(() => {});
     }, true);
   };
   if (document.body) wireClick();
