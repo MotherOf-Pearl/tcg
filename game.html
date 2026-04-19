@@ -1690,7 +1690,7 @@ function renderGame() {
     const idx = eff.indexOf('[Trigger]');
     document.getElementById('triggerCardEffect').textContent = idx >= 0 ? eff.substring(idx).trim() : eff;
     const img = document.getElementById('triggerCardImg');
-    if (tw.card.image) { img.src = tw.card.image; img.style.display = 'block'; }
+    if (tw.card.image) { img.src = altImageFor(tw.card); img.style.display = 'block'; }
     else { img.style.display = 'none'; }
   } else {
     // No trigger pending (or it's the opponent's) — make sure the panel from a previous
@@ -2297,13 +2297,32 @@ function addLog(txt) {
 }
 
 // ─── CARD ELEMENTS ───
+// If the user has flagged this card as 'alt' in any deck (deck-editor.html
+// stores `altArt_<deckName>_<cardId>` = 'alt' in localStorage), swap the
+// image URL to the `_alt.<ext>` variant. Otherwise return the original.
+function altImageFor(card) {
+  if (!card || !card.image || !card.id) return card?.image || '';
+  let useAlt = false;
+  try {
+    // Scan localStorage for any deck that flags this card as alt.
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith('altArt_') && k.endsWith('_' + card.id)
+          && localStorage.getItem(k) === 'alt') { useAlt = true; break; }
+    }
+  } catch (_) { /* localStorage might be unavailable */ }
+  if (!useAlt) return card.image;
+  return card.image.replace(/(\.[a-z0-9]+)(\?.*)?$/i, '_alt$1$2');
+}
+
 function makeGameCard(card, onClick, isOpp) {
   const gcard = document.createElement('div');
   gcard.className = 'gcard' + (card.rested ? ' rested' : '');
   gcard.dataset.uid = card.uid;
   const emoji = EMOJI[card.type] || '🂠';
-  const imgHtml = card.image
-    ? `<img src="${card.image}" alt="${card.name}" onerror="this.style.display='none';this.nextSibling.style.display='flex';">
+  const imgUrl = altImageFor(card);
+  const imgHtml = imgUrl
+    ? `<img src="${imgUrl}" alt="${card.name}" onerror="this.style.display='none';this.nextSibling.style.display='flex';">
        <div class="gcard-ph" style="display:none;">${emoji}</div>`
     : `<div class="gcard-ph">${emoji}</div>`;
   gcard.innerHTML = `
@@ -2799,7 +2818,7 @@ function showTooltip(card, e) {
   // Show large card preview in left panel
   const preview = document.getElementById('cardPreview');
   if (preview && card.image) {
-    preview.innerHTML = `<img src="${card.image}" alt="${card.name}">`;
+    preview.innerHTML = `<img src="${altImageFor(card)}" alt="${card.name}">`;
     preview.classList.add('has-card');
   }
   // Right-panel ability detail panel

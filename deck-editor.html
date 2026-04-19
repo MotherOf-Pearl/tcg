@@ -282,6 +282,12 @@
             letter-spacing: 1px;
         }
         .alt-btn:hover { background: rgba(60,40,15,0.9); }
+        .alt-btn.alt-btn-active {
+            color: #1a0e00;
+            background: linear-gradient(180deg, #f0c040 0%, #c8a020 100%);
+            border-color: #f0e090;
+        }
+        .alt-btn:disabled { opacity: .5; cursor: not-allowed; }
 
 
 
@@ -333,8 +339,24 @@
         return `${IMG_BASE}/${set}/${id}_alt.${ext || 'png'}`;
     }
 
-    // Track which cards are showing alt art
-    const altState = {};
+    // ── Alt art preference (persisted per deck per card in localStorage) ──
+    // Key: 'altArt_<deckName>_<cardId>'  Value: 'alt' | 'normal'
+    let currentDeckName = '';
+    function altKey(deckName, cardId) { return `altArt_${deckName}_${cardId}`; }
+    function getAlt(cardId, deckName) {
+      const dn = deckName || currentDeckName;
+      if (!dn) return false;
+      try { return localStorage.getItem(altKey(dn, cardId)) === 'alt'; }
+      catch (_) { return false; }
+    }
+    function setAlt(cardId, isAlt, deckName) {
+      const dn = deckName || currentDeckName;
+      if (!dn) return;
+      try {
+        if (isAlt) localStorage.setItem(altKey(dn, cardId), 'alt');
+        else       localStorage.removeItem(altKey(dn, cardId));
+      } catch (_) {}
+    }
 
     // ── Card Database ──
     const CARD_DB = [
@@ -787,7 +809,7 @@
           const img = document.createElement('img');
           img.className = 'deck-card-img' + (i > 0 ? ' stacked' : '');
           const imgExt = card ? card.imgExt : 'png';
-          img.src = altState[entry.id] ? cardImgAlt(entry.id, imgExt) : cardImg(entry.id, imgExt);
+          img.src = getAlt(entry.id) ? cardImgAlt(entry.id, imgExt) : cardImg(entry.id, imgExt);
           img.alt = card ? card.name : entry.id;
           img.loading = 'lazy';
           img.draggable = false;
@@ -802,14 +824,21 @@
         label.textContent = (card ? card.name : entry.id) + ' x' + entry.count;
         stack.appendChild(label);
 
-        // ALT button for cards with alt art
+        // ALT/Normal toggle for cards that have an alternate art
         if (card && card.hasAlt) {
           const altBtn = document.createElement('button');
           altBtn.className = 'alt-btn';
-          altBtn.textContent = altState[entry.id] ? 'STD' : 'ALT';
+          const cur = getAlt(entry.id);
+          altBtn.textContent = cur ? 'ALT' : 'NORMAL';
+          if (cur) altBtn.classList.add('alt-btn-active');
+          altBtn.title = currentDeckName
+            ? `Toggle alt art for ${card.name} in ${currentDeckName}`
+            : 'Pick a deck first';
+          altBtn.disabled = !currentDeckName;
           altBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            altState[entry.id] = !altState[entry.id];
+            if (!currentDeckName) return;
+            setAlt(entry.id, !getAlt(entry.id));
             renderDeck();
           });
           stack.appendChild(altBtn);
@@ -842,7 +871,9 @@
       if (card.power > 0) stats += `<span>Power: ${card.power}</span>`;
       if (card.counter > 0) stats += `<span>Counter: ${card.counter}</span>`;
       if (card.life) stats += `<span>Life: ${card.life}</span>`;
-      const imgSrc = altState[card.id] ? cardImgAlt(card.id, card.imgExt) : cardImg(card.id, card.imgExt);
+      const imgSrc = (card.hasAlt && getAlt(card.id))
+        ? cardImgAlt(card.id, card.imgExt)
+        : cardImg(card.id, card.imgExt);
       preview.innerHTML =
         `<img src="${imgSrc}" alt="${card.name}" onerror="this.style.display='none';">` +
         `<div class="cp-name">${card.name}</div>` +
@@ -860,6 +891,7 @@
       const decks = getAllDecks();
       const data = decks[name];
       if (!data) return;
+      currentDeckName = name;
       currentDeck = parseDeckString(data);
       renderDeck();
     });
