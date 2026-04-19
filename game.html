@@ -1238,6 +1238,20 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 // ─── CONFIG ───
 const WS_URL = 'wss://game.boohawtcg.com';
 
+// ─── Card movement audio ─────────────────────────────────────────────────
+// One shared <audio> instance. Calling playCardSound() always restarts from
+// 0 so multiple rapid moves cut each other off (no overlapping).
+const cardSound = new Audio('https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/card-noise.wav');
+cardSound.preload = 'auto';
+cardSound.volume  = 0.6;
+function playCardSound() {
+  try {
+    cardSound.currentTime = 0;
+    const p = cardSound.play();
+    if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay blocked until first user interaction */ });
+  } catch (_) { /* ignore */ }
+}
+
 // ─── PRESET DECKS ───
 const PRESET_DECKS = {
   'Anna of Brittany': {
@@ -1801,6 +1815,43 @@ function renderGame() {
     else if (game.phase === 'MAIN') {} // hint set by selectCard
     else hint('');
   }
+
+  // ─── Card movement audio ───
+  // Diff each player's pile counts vs the previous render. Any change to
+  // hand/field/trash/life/donActive/donRested/sum(attachedDon) means a card
+  // moved (drawn, played, KO'd, life flip, DON drawn, DON attached, …) →
+  // play the shared cue. Hovering and pure UI updates leave counts unchanged.
+  maybePlayCardMoveSound(game);
+}
+
+// Track previous card-pile counts for the diff-based audio cue.
+let _lastCardCounts = null;
+function _captureCardCounts(g) {
+  if (!g || !g.players) return null;
+  return Object.values(g.players).map(p => ({
+    hand:      (p.hand      || []).length,
+    field:     (p.field     || []).length,
+    trash:     (p.trash     || []).length,
+    life:      (p.life      || []).length,
+    donActive: p.donActive  || 0,
+    donRested: p.donRested  || 0,
+    attached:  (p.leader && p.leader.attachedDon || 0)
+             + (p.field || []).reduce((s, c) => s + (c.attachedDon || 0), 0),
+  }));
+}
+function maybePlayCardMoveSound(g) {
+  const cur = _captureCardCounts(g);
+  if (!cur) return;
+  if (_lastCardCounts && cur.length === _lastCardCounts.length) {
+    let moved = false;
+    for (let i = 0; i < cur.length && !moved; i++) {
+      const o = _lastCardCounts[i] || {};
+      const n = cur[i];
+      for (const k in n) if (n[k] !== (o[k] || 0)) { moved = true; break; }
+    }
+    if (moved) playCardSound();
+  }
+  _lastCardCounts = cur;
 }
 
 // Redraw arrow + reposition power overlays on window resize (they're fixed-position, not card-anchored).
