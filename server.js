@@ -526,6 +526,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
     donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
+    koTargetWindow: null,     // KO target picker: {playerId, candidateUids, remaining, optional, sourceCardName, resumeTiming, resumeCardUid, filterKind, filterValue}
     effectQueue: [],     // Pending interactive steps for chained effects (one window at a time today; full queue is reserved for future multi-window cards).
   };
 }
@@ -1191,6 +1192,55 @@ function handleAction(roomId, playerId, action) {
     }
 
     // ─── Task #1: [Trigger] interactive resolution ───
+    case 'KO_TARGET_SELECTED': {
+      if (!game.koTargetWindow || game.koTargetWindow.playerId !== playerId) return;
+      const w = game.koTargetWindow;
+      const oppOfActor = game.players[Object.keys(game.players).find(id => id !== playerId)];
+      const finishWindow = () => {
+        const resumeTiming  = w.resumeTiming;
+        const resumeCardUid = w.resumeCardUid;
+        game.koTargetWindow = null;
+        if (resumeTiming && resumeCardUid) {
+          const owner = game.players[playerId];
+          const src = (owner.leader && owner.leader.uid === resumeCardUid) ? owner.leader
+                    : (owner.field || []).find(c => c.uid === resumeCardUid);
+          if (src) {
+            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
+            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { koResolved: true });
+          }
+        }
+      };
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a K.O. target.'}); return; }
+        log(game, `${w.sourceCardName}: K.O. skipped.`);
+        finishWindow();
+        break;
+      }
+      const target = oppOfActor.field.find(c => c.uid === action.targetUid);
+      if (!target || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid K.O. target.'});
+        return;
+      }
+      oppOfActor.field = oppOfActor.field.filter(c => c.uid !== action.targetUid);
+      oppOfActor.trash.push(target);
+      log(game, `\uD83D\uDC80 ${target.name} K.O.'d!`);
+      triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), target, playerId);
+
+      // Multi-target: decrement and re-filter (the just-KO'd card is gone).
+      w.remaining -= 1;
+      if (w.remaining > 0) {
+        const stillThere = oppOfActor.field
+          .filter(c => w.candidateUids.includes(c.uid))
+          .map(c => c.uid);
+        if (stillThere.length > 0) {
+          w.candidateUids = stillThere;
+          break; // window stays open
+        }
+      }
+      finishWindow();
+      break;
+    }
+
     case 'RETURN_DON': {
       if (!game.donReturnWindow || game.donReturnWindow.playerId !== playerId) return;
       const w = game.donReturnWindow;
@@ -1566,6 +1616,32 @@ function openDonReturn(game, playerId, card, required, timing) {
   return true;
 }
 
+// Open the interactive KO target picker. Returns true if at least one valid target
+// exists and the window opened, false otherwise (the caller should fall through).
+// `count` defaults to 1 — for multi-target ("K.O. up to N"), the window stays open
+// until the count is exhausted or the player skips.
+function openKoTargetWindow(game, playerId, opts) {
+  const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
+  const candidates = opp.field.filter(c => c.type === 'CHARACTER' && opts.filter(c));
+  if (candidates.length === 0) {
+    log(game, `${opts.sourceCardName}: no valid K.O. targets.`);
+    return false;
+  }
+  game.koTargetWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    remaining: opts.count || 1,
+    optional: opts.optional !== false,
+    sourceCardName: opts.sourceCardName,
+    filterKind:  opts.filterKind  || 'character',
+    filterValue: opts.filterValue || '',
+    resumeTiming:  opts.resumeTiming  || null,
+    resumeCardUid: opts.resumeCardUid || null,
+  };
+  log(game, `${opts.sourceCardName}: choose a K.O. target (${candidates.length} option(s)).`);
+  return true;
+}
+
 // Generic scry opener — handles any
 //   "Look at top N cards [reveal up to M {Type} type card] [other than [Name]]
 //    and add it to your hand[. Then place the rest at the (top|bottom)]"
@@ -1652,31 +1728,40 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       drawCards(p, parseInt(drawMatch[1]), game, card.name);
     }
 
-    // K.O. by power
-    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch && !effect.includes('cost of')) {
-      const threshold = parseInt(koPowerMatch[1]);
-      const koed = koByPower(opp, threshold, game, card.name);
-      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    // K.O. by power — interactive
+    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch && !effect.includes('cost of') && !opts.koResolved) {
+      const threshold = parseInt(koPowerMatch[2]);
+      const count = parseInt(koPowerMatch[1]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'power', filterValue: threshold,
+        resumeTiming: 'onPlay', resumeCardUid: card.uid,
+      })) return;
     }
 
-    // K.O. by cost
-    const koCostMatch = effect.match(/K\.O\.\s+up to 1.*?cost of (\d+) or less/i);
-    if (koCostMatch) {
-      const threshold = parseInt(koCostMatch[1]);
-      const koed = koByCost(opp, threshold, game, card.name);
-      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    // K.O. by cost — interactive
+    const koCostMatch = effect.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
+    if (koCostMatch && !opts.koResolved) {
+      const count = parseInt(koCostMatch[1]);
+      const threshold = parseInt(koCostMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.cost || 0) <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'cost', filterValue: threshold,
+        resumeTiming: 'onPlay', resumeCardUid: card.uid,
+      })) return;
     }
 
-    // K.O. up to 1 of your opponent's Characters (no threshold — any character)
-    if (/K\.O\.\s+up to 1 of your opponent's Characters\.?$/i.test(effect)) {
-      const target = opp.field.find(c => c.type === 'CHARACTER');
-      if (target) {
-        opp.field = opp.field.filter(c => c.uid !== target.uid);
-        opp.trash.push(target);
-        log(game, `${card.name}: K.O.'d ${target.name}!`);
-        triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), target, playerId);
-      }
+    // K.O. up to 1 of your opponent's Characters (no threshold — any character) — interactive
+    if (/K\.O\.\s+up to 1 of your opponent's Characters\.?$/i.test(effect) && !opts.koResolved) {
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => true,
+        sourceCardName: card.name, count: 1, optional: true,
+        filterKind: 'any', filterValue: '',
+        resumeTiming: 'onPlay', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Rest opponent character (with optional cost threshold)
@@ -1813,16 +1898,30 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       }
     }
 
-    // K.O. opponent character by power
-    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*power or less/i);
-    if (koPowerMatch && !effect.includes('cost of')) {
-      koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+    // K.O. opponent character by power — interactive
+    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*power or less/i);
+    if (koPowerMatch && !effect.includes('cost of') && !opts.koResolved) {
+      const count = parseInt(koPowerMatch[1]);
+      const threshold = parseInt(koPowerMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'power', filterValue: threshold,
+        resumeTiming: 'onKO', resumeCardUid: card.uid,
+      })) return;
     }
 
-    // K.O. opponent character by cost
-    const koCostMatch = effect.match(/K\.O\.\s+up to 1.*?(?:base )?cost of (\d+) or less/i);
-    if (koCostMatch) {
-      koByCost(opp, parseInt(koCostMatch[1]), game, card.name);
+    // K.O. opponent character by cost — interactive
+    const koCostMatch = effect.match(/K\.O\.\s+up to (\d+).*?(?:base )?cost of (\d+) or less/i);
+    if (koCostMatch && !opts.koResolved) {
+      const count = parseInt(koCostMatch[1]);
+      const threshold = parseInt(koCostMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.cost || 0) <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'cost', filterValue: threshold,
+        resumeTiming: 'onKO', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Look at cards (simplified: draw 1)
@@ -1868,11 +1967,17 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
     }
 
-    // K.O. by power
-    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch) {
-      const koed = koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
-      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    // K.O. by power — interactive
+    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch && !opts.koResolved) {
+      const count = parseInt(koPowerMatch[1]);
+      const threshold = parseInt(koPowerMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'power', filterValue: threshold,
+        resumeTiming: 'whenAttacking', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Self power boost
@@ -1922,10 +2027,17 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
     }
 
-    // K.O. in counter
-    const koPowerMatch = counterEffect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch) {
-      koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
+    // K.O. in counter — interactive
+    const koPowerMatch = counterEffect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch && !opts.koResolved) {
+      const count = parseInt(koPowerMatch[1]);
+      const threshold = parseInt(koPowerMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'power', filterValue: threshold,
+        resumeTiming: 'counter', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Play character from hand (interactive — opens playFromHandWindow for the player)
@@ -2039,16 +2151,28 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       addDonFromDeck(p, 1, true, game, card.name);
     }
 
-    // K.O. opponent character
-    const koPowerMatch = effect.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch) {
-      const koed = koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
-      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    // K.O. opponent character — interactive
+    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
+    if (koPowerMatch && !opts.koResolved) {
+      const count = parseInt(koPowerMatch[1]);
+      const threshold = parseInt(koPowerMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'power', filterValue: threshold,
+        resumeTiming: 'activateMain', resumeCardUid: card.uid,
+      })) return;
     }
-    const koCostMatch = effect.match(/K\.O\.\s+up to 1.*?cost of (\d+) or less/i);
-    if (koCostMatch) {
-      const koed = koByCost(opp, parseInt(koCostMatch[1]), game, card.name);
-      if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    const koCostMatch = effect.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
+    if (koCostMatch && !opts.koResolved) {
+      const count = parseInt(koCostMatch[1]);
+      const threshold = parseInt(koCostMatch[2]);
+      if (openKoTargetWindow(game, playerId, {
+        filter: c => (c.cost || 0) <= threshold,
+        sourceCardName: card.name, count, optional: true,
+        filterKind: 'cost', filterValue: threshold,
+        resumeTiming: 'activateMain', resumeCardUid: card.uid,
+      })) return;
     }
 
     // Power reduction to opponent character
@@ -2096,18 +2220,29 @@ function parseEventMain(game, playerId, card, opp) {
     p.donRested += restCost;
   }
 
-  // K.O. by power
-  const koPowerMatch = mainText.match(/K\.O\.\s+up to 1.*?(\d+)\s*[Pp]ower or less/i);
+  // K.O. by power — interactive
+  const koPowerMatch = mainText.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
   if (koPowerMatch && !mainText.includes('cost of')) {
-    const koed = koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
-    if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    const count = parseInt(koPowerMatch[1]);
+    const threshold = parseInt(koPowerMatch[2]);
+    if (openKoTargetWindow(game, playerId, {
+      filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
+      sourceCardName: card.name, count, optional: true,
+      filterKind: 'power', filterValue: threshold,
+      // Event main effects are one-shot — no resume callback needed (the event is in trash by now).
+    })) return;
   }
 
-  // K.O. by cost
-  const koCostMatch = mainText.match(/K\.O\.\s+up to 1.*?cost of (\d+) or less/i);
+  // K.O. by cost — interactive
+  const koCostMatch = mainText.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
   if (koCostMatch) {
-    const koed = koByCost(opp, parseInt(koCostMatch[1]), game, card.name);
-    if (koed) triggerOnKO(game, Object.keys(game.players).find(id => id !== playerId), koed, playerId);
+    const count = parseInt(koCostMatch[1]);
+    const threshold = parseInt(koCostMatch[2]);
+    if (openKoTargetWindow(game, playerId, {
+      filter: c => (c.cost || 0) <= threshold,
+      sourceCardName: card.name, count, optional: true,
+      filterKind: 'cost', filterValue: threshold,
+    })) return;
   }
 
   // Power reduction

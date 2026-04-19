@@ -1151,6 +1151,12 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div id="counterStepAtkPower" style="font-family:'Barlow Condensed',sans-serif;font-size:.78rem;color:var(--text);text-align:center;line-height:1.35;"></div>
         <div style="font-size:.62rem;color:var(--muted);text-align:center;">Defender may play counters…</div>
       </div>
+      <!-- KO target picker -->
+      <div id="koTargetBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="koTargetTitle">Select a character to K.O.</div>
+        <div id="koTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <button class="gb-pbtn gb-pbtn-sm" id="koSkipBtn" onclick="skipKoTarget()" style="display:none;">Skip</button>
+      </div>
       <!-- DON!! -N return-to-deck picker (interactive cost) -->
       <div id="donReturnBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="donReturnTitle">Return DON!! to deck</div>
@@ -1494,7 +1500,9 @@ function renderGame() {
 
   // In solo mode, auto-switch to whoever currently needs to act.
   if (isSolo) {
-    if (game.donReturnWindow) {
+    if (game.koTargetWindow) {
+      myId = game.koTargetWindow.playerId;
+    } else if (game.donReturnWindow) {
       myId = game.donReturnWindow.playerId;
     } else if (game.playFromHandWindow) {
       myId = game.playFromHandWindow.playerId;
@@ -1681,6 +1689,28 @@ function renderGame() {
     if (tw) hint('Opponent is resolving a trigger…');
   }
 
+  // KO target picker — highlight valid candidates on opponent field, show right-panel hint.
+  const ktw = game.koTargetWindow;
+  const ktwPanel = document.getElementById('koTargetBtns');
+  if (ktw && ktw.playerId === myId) {
+    hideAllBtnGroups();
+    ktwPanel.style.display = 'flex';
+    document.getElementById('koTargetTitle').textContent =
+      `${ktw.sourceCardName} — K.O. target`;
+    let hintBits = `Click a highlighted opponent character`;
+    if (ktw.filterKind === 'power') hintBits += ` (≤ ${ktw.filterValue} power)`;
+    else if (ktw.filterKind === 'cost') hintBits += ` (≤ ${ktw.filterValue} cost)`;
+    if (ktw.remaining > 1) hintBits += ` — ${ktw.remaining} left`;
+    document.getElementById('koTargetHint').textContent = hintBits + '.';
+    document.getElementById('koSkipBtn').style.display = ktw.optional ? 'block' : 'none';
+    requestAnimationFrame(() => {
+      ktw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    ktwPanel.style.display = 'none';
+    if (ktw) hint('Opponent is choosing a K.O. target…');
+  }
+
   // DON!! return-to-deck picker (interactive cost). Renders the source breakdown
   // with +/- buttons next to each bucket; Confirm enabled only when total === required.
   const drw = game.donReturnWindow;
@@ -1786,6 +1816,11 @@ function renderLeader(slotId, leader, isSelf) {
     isSelf
       ? () => selectCard(leader.uid, 'leader')
       : () => {
+          if (game?.koTargetWindow?.playerId === myId
+              && game.koTargetWindow.candidateUids.includes(leader.uid)) {
+            act({ type: 'KO_TARGET_SELECTED', targetUid: leader.uid });
+            return;
+          }
           if (attackMode) selectTarget(leader.uid);
         },
     !isSelf));
@@ -1800,6 +1835,11 @@ function renderField(fieldId, field, isSelf) {
       isSelf
         ? () => selectCard(card.uid, 'field')
         : () => {
+            if (game?.koTargetWindow?.playerId === myId
+                && game.koTargetWindow.candidateUids.includes(card.uid)) {
+              act({ type: 'KO_TARGET_SELECTED', targetUid: card.uid });
+              return;
+            }
             if (attackMode) selectTarget(card.uid);
           },
       !isSelf));
@@ -2315,7 +2355,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -2552,6 +2592,13 @@ function useCounter(uid) {
 function resolveAttack() {
   if (!game?.battleState || game.phase !== 'COUNTER_STEP') return;
   act({ type: 'RESOLVE_ATTACK' });
+}
+
+// ─── KO target picker ───
+function skipKoTarget() {
+  if (!game?.koTargetWindow) return;
+  document.getElementById('koTargetBtns').style.display = 'none';
+  act({ type: 'KO_TARGET_SELECTED', skip: true });
 }
 
 // ─── DON!! return-to-deck picker (interactive cost) ───
