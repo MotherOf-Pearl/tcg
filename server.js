@@ -1203,6 +1203,10 @@ function handleAction(roomId, playerId, action) {
       for (const idx of kept) {
         const c = sw.cards[idx];
         if (!c) { send(playerId, {type:'ERROR', msg:'Invalid keep index.'}); return; }
+        if (sw.keepCardType && c.type !== sw.keepCardType) {
+          send(playerId, {type:'ERROR', msg:`${c.name} is not an ${sw.keepCardType.toLowerCase()} card.`});
+          return;
+        }
         if (sw.keepFilter) {
           const aff = c.affiliation || '';
           if (!aff.toLowerCase().includes(sw.keepFilter.toLowerCase())) {
@@ -1744,10 +1748,22 @@ function openPlayFromHand(game, playerId, opts) {
   return true;
 }
 
-// Extract "{Type Name} type Character" affiliation filter from an effect snippet.
+// Extract "{Type Name} type Character/Event/Stage" affiliation filter from an
+// effect snippet. Used by both play-from-hand candidate filtering AND scry
+// reveal-filter, so the trailing card-kind word is required (avoids false
+// positives like "{X} type" appearing in unrelated grammar).
 function extractTypeFilter(text) {
-  const m = text.match(/\{([^}]+)\}\s*type\s*Character/i);
+  const m = text.match(/\{([^}]+)\}\s*type\s*(?:Character|Event|Stage)\b/i);
   return m ? m[1] : null;
+}
+
+// Companion to extractTypeFilter — returns the card kind being filtered to,
+// e.g. "{Duchess of Brittany} type Event card" → 'EVENT'. Used to enforce the
+// type half of the filter inside scry windows so Queen Victoria's reveal only
+// accepts Events even when other affiliated cards are revealed.
+function extractCardTypeFilter(text) {
+  const m = text.match(/\{[^}]+\}\s*type\s*(Character|Event|Stage)\b/i);
+  return m ? m[1].toUpperCase() : null;
 }
 
 // Open the interactive DON!!-return window for a "DON!! -N: <effect>" cost. The
@@ -1835,6 +1851,7 @@ function tryOpenScryFromEffect(game, playerId, card, effect) {
     cards: p.deck.splice(0, lookCount),
     keepCount,
     keepFilter,        // affiliation filter (e.g. "Duchess of Brittany")
+    keepCardType: extractCardTypeFilter(effect), // 'EVENT'|'CHARACTER'|'STAGE'|null
     keepExcludeName,   // name to exclude (e.g. "Schola Montis Belli")
     cardName: card.name,
     placement,
@@ -1858,14 +1875,63 @@ function extractNameFilter(text) {
 // ─── Bug 5/6/8 helpers ────────────────────────────────────────────────────
 
 // Effective power = printed power + 1000 per attached DON + sum of any
-// game.tempPowerEffects targeting this card. Used everywhere battle math
-// happens on the server (DECLARE_ATTACK, USE_BLOCKER, RESOLVE_ATTACK).
+// game.tempPowerEffects targeting this card + any continuous passive (e.g.
+// Jesse the Jester). Used everywhere battle math happens on the server
+// (DECLARE_ATTACK, USE_BLOCKER, RESOLVE_ATTACK) so passives affect actual
+// battle outcomes — not just the displayed power on the client.
 function effectivePowerOf(card, game) {
   if (!card) return 0;
   let p = (card.power || 0) + (card.attachedDon || 0) * 1000;
   const effs = (game && game.tempPowerEffects) || [];
   for (const e of effs) if (e.targetUid === card.uid) p += (e.amount || 0);
+  p += passivePowerBuff(card, game);
   return Math.max(0, p);
+}
+
+// Locate the player who owns a given card (leader OR field). Returns
+// { playerId, player } or null. Used by passive-effect helpers that need
+// to evaluate context (whose turn is it, what's in their trash, etc.).
+function findCardOwner(game, uid) {
+  if (!game || !game.players || !uid) return null;
+  for (const pid of Object.keys(game.players)) {
+    const pl = game.players[pid];
+    if (pl.leader && pl.leader.uid === uid) return { playerId: pid, player: pl };
+    if ((pl.field || []).some(c => c.uid === uid)) return { playerId: pid, player: pl };
+  }
+  return null;
+}
+
+// Continuous passive power buff parser. Today's pattern (Jesse the Jester):
+//   "[DON!! xN] [Your Turn] [If your Leader has the {AFFIL} type,]
+//    this Character gains +PWR power for every M Events in your trash."
+// Recomputed on every effectivePowerOf() call — never stored, never expires.
+// Conditions, all required:
+//   - card has ≥ N attached DON
+//   - it's the card owner's turn (game.activePlayer === owner.playerId)
+//   - if {AFFIL} clause present, owner's leader's affiliation matches
+// Buff = floor(eventsInOwnerTrash / M) * PWR.
+function passivePowerBuff(card, game) {
+  if (!card || !card.ability || !game || !game.players) return 0;
+  const m = card.ability.match(
+    /\[DON!!\s*x(\d+)\]\s*\[Your Turn\](.*?)(?:gains?|gets?)\s*\+(\d+)\s*power for every (\d+) Events?\s+in your trash/i
+  );
+  if (!m) return 0;
+  const donReq   = parseInt(m[1]);
+  const condText = m[2];
+  const powerInc = parseInt(m[3]);
+  const divisor  = parseInt(m[4]);
+  if ((card.attachedDon || 0) < donReq) return 0;
+  const owner = findCardOwner(game, card.uid);
+  if (!owner) return 0;
+  if (game.activePlayer !== owner.playerId) return 0;
+  const affMatch = condText.match(/\{([^}]+)\}\s*type/);
+  if (affMatch) {
+    const lAff = (owner.player.leader && owner.player.leader.affiliation || '').toLowerCase();
+    if (!lAff.includes(affMatch[1].toLowerCase())) return 0;
+  }
+  if (!divisor) return 0;
+  const eventCount = (owner.player.trash || []).filter(c => c.type === 'EVENT').length;
+  return Math.floor(eventCount / divisor) * powerInc;
 }
 
 // Strip any temp power effects targeting a card that just left the field
@@ -2462,6 +2528,12 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (drawMatch) {
       drawCards(p, parseInt(drawMatch[1]), game, card.name);
     }
+
+    // Scry: "Look at top N → reveal up to M {Type} type [Event|Character|Stage] card
+    // → add to hand → place rest at the bottom in any order". Same resolver used by
+    // [On Play] / [Activate: Main]; here it fires on attack declaration so e.g. Queen
+    // Victoria pulls a {Duchess of Brittany} type Event card when she attacks with DON.
+    if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
 
     // MANDATORY trash from hand at [When Attacking] (scalable for any future card).
     const mandTrash = parseMandatoryTrashFromHand(effect);

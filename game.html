@@ -2295,7 +2295,8 @@ function renderScry() {
   const title = document.getElementById('scryTitle');
   if (sw.keepCount > 0) {
     let label = `Select up to ${sw.keepCount} card(s) to add to your hand`;
-    if (sw.keepFilter)      label += ` ({${sw.keepFilter}} only)`;
+    if (sw.keepCardType) label += ` (${sw.keepCardType.charAt(0) + sw.keepCardType.slice(1).toLowerCase()} only)`;
+    if (sw.keepFilter)   label += ` ({${sw.keepFilter}})`;
     if (sw.keepExcludeName) label += ` — not [${sw.keepExcludeName}]`;
     label += `, then order the rest (1 = ${sw.placement === 'top' ? 'top' : 'top of bottom'})`;
     title.textContent = label;
@@ -2306,6 +2307,7 @@ function renderScry() {
   // Mark a card "keep-eligible" only if it passes the filters; everything else can
   // still be ordered for the deck-placement step.
   const isKeepEligible = (c) => {
+    if (sw.keepCardType && c.type !== sw.keepCardType) return false;
     if (sw.keepFilter) {
       const aff = c.affiliation || '';
       if (!aff.toLowerCase().includes(sw.keepFilter.toLowerCase())) return false;
@@ -3038,9 +3040,56 @@ function clientTempPowerSum(uid) {
   for (const e of game.tempPowerEffects) if (e.targetUid === uid) s += (e.amount || 0);
   return s;
 }
+
+// Locate which player owns a card (leader or field). Mirror of the server's
+// findCardOwner — needed by the passive-buff helper below to evaluate whose
+// turn it is and what's in their trash.
+function clientFindCardOwner(uid) {
+  if (!game || !game.players || !uid) return null;
+  for (const pid of Object.keys(game.players)) {
+    const pl = game.players[pid];
+    if (pl.leader && pl.leader.uid === uid) return { playerId: pid, player: pl };
+    if ((pl.field || []).some(c => c.uid === uid)) return { playerId: pid, player: pl };
+  }
+  return null;
+}
+
+// Continuous passive power buff — mirrors server's passivePowerBuff(). Pattern:
+//   "[DON!! xN] [Your Turn] [If your Leader has the {AFFIL} type,]
+//    this Character gains +PWR power for every M Events in your trash."
+// Conditions: ≥N attached DON + owner's turn + (optional) leader affiliation.
+// Buff = floor(eventsInOwnerTrash / M) * PWR. Recomputed every render so it
+// reacts live to DON attach/detach, events entering the trash, turn change.
+function clientPassivePowerBuff(card) {
+  if (!card || !card.ability || !game || !game.players) return 0;
+  const m = card.ability.match(
+    /\[DON!!\s*x(\d+)\]\s*\[Your Turn\](.*?)(?:gains?|gets?)\s*\+(\d+)\s*power for every (\d+) Events?\s+in your trash/i
+  );
+  if (!m) return 0;
+  const donReq   = parseInt(m[1]);
+  const condText = m[2];
+  const powerInc = parseInt(m[3]);
+  const divisor  = parseInt(m[4]);
+  if ((card.attachedDon || 0) < donReq) return 0;
+  const owner = clientFindCardOwner(card.uid);
+  if (!owner) return 0;
+  if (game.activePlayer !== owner.playerId) return 0;
+  const affMatch = condText.match(/\{([^}]+)\}\s*type/);
+  if (affMatch) {
+    const lAff = ((owner.player.leader && owner.player.leader.affiliation) || '').toLowerCase();
+    if (!lAff.includes(affMatch[1].toLowerCase())) return 0;
+  }
+  if (!divisor) return 0;
+  const eventCount = (owner.player.trash || []).filter(c => c.type === 'EVENT').length;
+  return Math.floor(eventCount / divisor) * powerInc;
+}
+
 function clientEffectivePower(card) {
   if (!card || !card.power) return card?.power || 0;
-  return Math.max(0, (card.power || 0) + (card.attachedDon || 0) * 1000 + clientTempPowerSum(card.uid));
+  return Math.max(0, (card.power || 0)
+    + (card.attachedDon || 0) * 1000
+    + clientTempPowerSum(card.uid)
+    + clientPassivePowerBuff(card));
 }
 
 // ─── TOOLTIP ───
@@ -3388,6 +3437,6 @@ document.addEventListener('click', e => {
   hideTooltip();
 });
 </script>
-<script src="background.js?v=14"></script>
+<script src="background.js?v=15"></script>
 </body>
 </html>
