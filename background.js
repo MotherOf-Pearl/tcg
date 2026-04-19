@@ -4,8 +4,9 @@
 (function () {
   const REPO = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/backgrounds/';
   const BACKGROUNDS = [
-    REPO + 'bg1.png',  // toad and gob
-    REPO + 'bg2.png',  // healer matt
+    REPO + 'pissed-gee.png',
+    REPO + 'sam-death.png',
+    REPO + 'toad-x-gob.png',
     // Add more entries as new backgrounds land in /backgrounds/
   ];
   if (BACKGROUNDS.length === 0) return;
