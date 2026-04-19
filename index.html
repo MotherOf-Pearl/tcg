@@ -7,62 +7,28 @@
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
-        body {
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            position: relative;
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
             background-size: cover;
             background-position: center;
             background-repeat: no-repeat;
+        }
+
+        body {
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            position: relative;
             background-color: #2a1a0a;
         }
 
-        /* Disable the procedural wood layers once a random image background is set. */
-        body.has-random-bg::after,
-        body.has-random-bg::before { display: none; }
-
-        /* Warm wood background */
-        body::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-                radial-gradient(ellipse at 25% 45%, rgba(220, 170, 100, 0.9) 0%, transparent 55%),
-                radial-gradient(ellipse at 75% 35%, rgba(215, 160, 90, 0.7) 0%, transparent 50%),
-                radial-gradient(ellipse at 55% 75%, rgba(195, 135, 65, 0.6) 0%, transparent 45%),
-                radial-gradient(ellipse at 85% 65%, rgba(210, 155, 85, 0.8) 0%, transparent 40%),
-                radial-gradient(ellipse at 15% 15%, rgba(200, 148, 75, 0.5) 0%, transparent 45%),
-                radial-gradient(ellipse at 50% 50%, rgba(190, 130, 55, 0.3) 0%, transparent 70%);
-            background-color: #a86a2e;
-            z-index: 0;
-        }
-
-        /* Wood grain texture */
-        body::before {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background:
-                repeating-linear-gradient(
-                    2deg,
-                    transparent 0px, transparent 6px,
-                    rgba(100, 55, 15, 0.06) 6px, rgba(100, 55, 15, 0.06) 7px
-                ),
-                repeating-linear-gradient(
-                    -0.5deg,
-                    transparent 0px, transparent 12px,
-                    rgba(140, 85, 30, 0.04) 12px, rgba(140, 85, 30, 0.04) 13px
-                ),
-                repeating-linear-gradient(
-                    1deg,
-                    transparent 0px, transparent 18px,
-                    rgba(90, 50, 10, 0.05) 18px, rgba(90, 50, 10, 0.05) 20px
-                );
-            z-index: 1;
-            pointer-events: none;
-        }
+        /* The old procedural wood ::before / ::after layers were full-coverage
+           absolute children that sat on top of the body background image and
+           caused visible "brown bars" when the random image was set. They're
+           no longer needed and are unconditionally suppressed. */
+        body::before, body::after { content: none !important; display: none !important; }
 
         .container {
             position: relative;
@@ -174,6 +140,6 @@
         <div class="version">v 1.34c</div>
     </div>
 
-    <script src="background.js?v=3"></script>
+    <script src="background.js?v=4"></script>
 </body>
 </html>
