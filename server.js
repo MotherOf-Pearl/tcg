@@ -30,6 +30,11 @@ const server = http.createServer((req, res) => {
     if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
     res.writeHead(200, { 'Content-Type': 'image/' + (pathname.endsWith('.png') ? 'png' : 'jpeg') });
     fs.createReadStream(file).pipe(res);
+  } else if (pathname.match(/\.js$/)) {
+    const file = path.join(BASE_DIR, pathname.slice(1));
+    if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'Content-Type': 'application/javascript' });
+    fs.createReadStream(file).pipe(res);
   } else {
     res.writeHead(404); res.end();
   }
