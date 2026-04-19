@@ -20,10 +20,9 @@
   }
 
   const apply = () => {
-    document.body.style.backgroundImage    = `url('${url}')`;
-    document.body.style.backgroundSize     = 'cover';
-    document.body.style.backgroundPosition = 'center';
-    document.body.style.backgroundRepeat   = 'no-repeat';
+    // Only set the image — leave background-size/position/repeat/color to each
+    // page's own CSS so individual pages can use cover vs contain etc.
+    document.body.style.backgroundImage = `url('${url}')`;
     document.body.classList.add('has-random-bg');
   };
   if (document.body) apply();
