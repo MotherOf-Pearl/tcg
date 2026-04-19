@@ -1337,14 +1337,19 @@ function handleAction(roomId, playerId, action) {
       const hidx = owner.hand.findIndex(c => c.uid === action.cardUid);
       if (hidx === -1) { game.playFromHandWindow = null; break; }
       const picked = owner.hand.splice(hidx, 1)[0];
+      // Match PLAY_CARD's deploy semantics so the free-played card behaves identically
+      // to a hand-deployed one (including [On Play] firing).
       picked.rested = false;
-      picked.attachedDon = picked.attachedDon || 0;
+      picked.attachedDon = 0;
+      picked.usedThisTurn = false;
       picked.playedThisTurn = true;
       owner.field.push(picked);
       log(game, `${w.sourceCardName || 'Effect'}: played ${picked.name} from hand for free.`);
       // Clear window before firing onPlay (which may itself open another window).
       game.playFromHandWindow = null;
+      // Always fire [On Play] for the deployed card — same as the normal PLAY_CARD path.
       const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
+      log(game, `${picked.name}: triggering [On Play].`);
       parseAndApply('onPlay', game, playerId, picked, opp2);
       break;
     }

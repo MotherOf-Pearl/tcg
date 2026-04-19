@@ -1504,6 +1504,8 @@ function renderGame() {
       myId = game.koTargetWindow.playerId;
     } else if (game.donReturnWindow) {
       myId = game.donReturnWindow.playerId;
+    } else if (game.scryWindow) {
+      myId = game.scryWindow.playerId;
     } else if (game.playFromHandWindow) {
       myId = game.playFromHandWindow.playerId;
     } else if (game.triggerWindow) {
@@ -1927,13 +1929,16 @@ function applyHandOverlap(containerEl) {
 function renderHand(handId, hand, isSelf) {
   const el = document.getElementById(handId);
   el.innerHTML = '';
-  // Phase 3: I'm the defender during COUNTER_STEP — flag counter-eligible cards.
-  const inCounterStep = isSelf && game?.battleState && game.phase === 'COUNTER_STEP'
-    && game.battleState.attackerId !== myId;
   // PLAY_FROM_HAND: highlight every candidate the resolver opened for me.
+  // When PFW is open it takes priority over every other hand interaction —
+  // counter-step highlights are suppressed and non-PFW cards are inert.
   const pfw = (isSelf && game?.playFromHandWindow && game.playFromHandWindow.playerId === myId)
     ? game.playFromHandWindow : null;
   const pfwSet = pfw ? new Set(pfw.candidateUids) : null;
+  // Phase 3: I'm the defender during COUNTER_STEP — flag counter-eligible cards.
+  // Disabled while a PFW window is open.
+  const inCounterStep = !pfw && isSelf && game?.battleState && game.phase === 'COUNTER_STEP'
+    && game.battleState.attackerId !== myId;
   hand.forEach(card => {
     const cv = inCounterStep ? counterValueOf(card) : 0;
     // Eligible for the counter step if it adds power OR has any [Counter] action effect.
@@ -1941,9 +1946,9 @@ function renderHand(handId, hand, isSelf) {
     const isPfwCandidate = pfwSet && pfwSet.has(card.uid);
     const handler = () => {
       if (attackMode) { cancelSel(); return; }
-      // Highest priority: a PLAY_FROM_HAND window is open and this card is eligible.
-      if (isPfwCandidate) {
-        act({ type: 'PLAY_FROM_HAND_RESOLVE', cardUid: card.uid });
+      // PFW window: only candidate cards are clickable, everything else is inert.
+      if (pfw) {
+        if (isPfwCandidate) act({ type: 'PLAY_FROM_HAND_RESOLVE', cardUid: card.uid });
         return;
       }
       if (counterEligibleNow) {
@@ -1970,6 +1975,11 @@ function renderHand(handId, hand, isSelf) {
     if (isPfwCandidate) {
       // Reuse the gold pulse style used for counter-eligible cards.
       cardEl.classList.add('counter-eligible');
+    } else if (pfw) {
+      // PFW open + this card is NOT eligible — visually dim it so the user
+      // sees it isn't a valid pick.
+      cardEl.style.opacity = '0.45';
+      cardEl.style.cursor = 'not-allowed';
     }
     el.appendChild(cardEl);
   });
