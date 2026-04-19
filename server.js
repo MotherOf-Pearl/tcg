@@ -1560,9 +1560,10 @@ function openPlayFromHand(game, playerId, opts) {
     return true;
   });
   if (candidates.length === 0) {
-    log(game, `${sourceCardName || 'Effect'}: no valid Characters in hand` +
-              (typeName ? ` for {${typeName}}` : '') +
-              ` cost ${costThreshold} or less.`);
+    let why = '';
+    if      (nameMatch) why = ` matching [${nameMatch}]`;
+    else if (typeName)  why = ` for {${typeName}}`;
+    log(game, `${sourceCardName || 'Effect'}: no valid Characters in hand${why} (cost ${costThreshold} or less).`);
     return false;
   }
   game.playFromHandWindow = {
@@ -1825,7 +1826,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
 
     // Play character from hand (interactive)
-    const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    const playMatch = effect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
       openPlayFromHand(game, playerId, {
         costThreshold: parseInt(playMatch[1]),
@@ -1879,7 +1880,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     }
 
     // Play character from hand with cost threshold (interactive)
-    const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    const playMatch = effect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
       openPlayFromHand(game, playerId, {
         costThreshold: parseInt(playMatch[1]),
@@ -2046,7 +2047,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     }
 
     // Play character from hand (interactive — opens playFromHandWindow for the player)
-    const playMatch = counterEffect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    const playMatch = counterEffect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
       openPlayFromHand(game, playerId, {
         costThreshold: parseInt(playMatch[1]),
@@ -2185,7 +2186,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (powerRedMatch) givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
 
     // Play character from hand (interactive)
-    const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
+    const playMatch = effect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
       openPlayFromHand(game, playerId, {
         costThreshold: parseInt(playMatch[1]),
