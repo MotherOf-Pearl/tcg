@@ -54,11 +54,45 @@
   const isMuted  = () => { try { return localStorage.getItem('musicMuted') === '1'; } catch (_) { return false; } };
   const setMuted = (m) => { try { localStorage.setItem('musicMuted', m ? '1' : '0'); } catch (_) {} };
 
+  const TARGET_VOL  = 0.3;
+  const FADE_OUT_MS = 300;
+  const FADE_IN_MS  = 500;
+
   const audio = new Audio(trackUrl);
   audio.loop    = true;
-  audio.volume  = 0.3;
+  audio.volume  = 0;          // start silent — fade up after playback begins
   audio.preload = 'auto';
   audio.muted   = isMuted();
+
+  // Linear volume fade using rAF — runs disjoint from the playback engine, so
+  // it never pauses or seeks the audio. `done` callback fires after the final
+  // tick (used by the nav interceptor to defer navigation until the fade is
+  // perceptually complete).
+  const fadeAudio = (targetVol, durationMs, done) => {
+    const startVol = audio.volume;
+    const delta = Math.max(0, Math.min(1, targetVol)) - startVol;
+    if (Math.abs(delta) < 0.001 || durationMs <= 0) {
+      audio.volume = Math.max(0, Math.min(1, targetVol));
+      if (done) done();
+      return;
+    }
+    const startTime = performance.now();
+    const tick = () => {
+      const elapsed = performance.now() - startTime;
+      const t = Math.min(1, elapsed / durationMs);
+      audio.volume = Math.max(0, Math.min(1, startVol + delta * t));
+      if (t < 1) requestAnimationFrame(tick);
+      else if (done) done();
+    };
+    requestAnimationFrame(tick);
+  };
+
+  // Fade in on the FIRST successful playback. `playing` fires every time the
+  // audio (re)starts; { once: true } restricts us to the initial start, so a
+  // pause/resume from mute toggling later won't trigger another fade.
+  audio.addEventListener('playing', () => {
+    fadeAudio(TARGET_VOL, FADE_IN_MS);
+  }, { once: true });
 
   const tryPlay = () => {
     const p = audio.play();
@@ -173,9 +207,13 @@
       if (link.target === '_blank') return;
       e.preventDefault();
       saveMusicPosition();
-      // Brief pause lets the click-sound BufferSource start and the storage
-      // write commit before the browser begins tearing down the page.
-      setTimeout(() => { window.location.href = href; }, 100);
+      // Fade music out, THEN navigate. The fade doesn't touch the Audio
+      // element's transport — volume only — so the position saved above
+      // stays accurate (the audio keeps playing through the fade, just
+      // silently tapering). The matching fade-in on the next page's Audio
+      // element turns the transition into an intentional handoff rather
+      // than a jump cut.
+      fadeAudio(0, FADE_OUT_MS, () => { window.location.href = href; });
     }, true);
   };
   // Belt-and-suspenders: also save on pagehide / beforeunload so manual nav
