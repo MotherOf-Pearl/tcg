@@ -1794,6 +1794,12 @@ function renderTrashSlot(side, trash) {
   badge.id = side + 'TrashN';
   badge.textContent = trash.length;
   slot.appendChild(badge);
+  // Hover shows the top trash card in the standard tooltip + left-panel preview.
+  // Re-bind each render so the handler closes over the current top card.
+  slot.onmouseenter = trash.length > 0
+    ? (e) => showTooltip(trash[trash.length - 1], e)
+    : null;
+  slot.onmouseleave = trash.length > 0 ? hideTooltip : null;
 }
 
 // Dynamically overlap hand cards so they always fit in one row — no scrollbars.
