@@ -1527,12 +1527,13 @@ function renderGame() {
   renderTrashSlot('self', me.trash);
   renderTrashSlot('opp',  opp.trash);
 
-  // DON badge denominator must include attached DON and remaining DON in the deck so
-  // it stays constant when DON is attached to a card (only `donActive` decreases).
+  // DON badge denominator = total DON currently IN PLAY (active + rested + attached).
+  // Excludes donDeck so the number starts at 1 on turn 1 and grows as DON is drawn.
+  // Stays constant when DON is attached to a card (DON moves between buckets).
   const sumAttachedDon = (pl) => (pl.leader.attachedDon || 0)
     + pl.field.reduce((s, c) => s + (c.attachedDon || 0), 0);
-  const meDonTotal  = me.donDeck  + me.donActive  + me.donRested  + sumAttachedDon(me);
-  const oppDonTotal = opp.donDeck + opp.donActive + opp.donRested + sumAttachedDon(opp);
+  const meDonTotal  = me.donActive  + me.donRested  + sumAttachedDon(me);
+  const oppDonTotal = opp.donActive + opp.donRested + sumAttachedDon(opp);
   renderDon('selfDon', me.donActive,  me.donRested,  me.donActive  + me.donRested,  meDonTotal);
   renderDon('oppDon',  opp.donActive, opp.donRested, opp.donActive + opp.donRested, oppDonTotal);
 
