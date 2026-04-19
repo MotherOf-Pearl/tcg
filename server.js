@@ -37,6 +37,13 @@ const server = http.createServer((req, res) => {
     // Same — JS deploys (e.g. background.js) need to bust the browser cache.
     res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache, must-revalidate' });
     fs.createReadStream(file).pipe(res);
+  } else if (pathname.match(/\.(mp3|wav|ogg)$/)) {
+    const file = path.join(BASE_DIR, pathname.slice(1));
+    if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
+    const ext = pathname.split('.').pop().toLowerCase();
+    const ct = { mp3: 'audio/mpeg', wav: 'audio/wav', ogg: 'audio/ogg' }[ext];
+    res.writeHead(200, { 'Content-Type': ct, 'Accept-Ranges': 'bytes' });
+    fs.createReadStream(file).pipe(res);
   } else {
     res.writeHead(404); res.end();
   }
