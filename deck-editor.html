@@ -17,8 +17,17 @@
             background-position: center;
             background-repeat: no-repeat;
         }
-        body.has-random-bg::after,
+        /* In the deck editor we KEEP body::after but repurpose it as a dark
+           wash so the random photo background reads as muted/greyed (better
+           reading contrast for the deck list / card browser). */
         body.has-random-bg::before { display: none; }
+        body.has-random-bg::after {
+          /* Override the wood radial-gradient + #a86a2e bg-color with a flat
+             translucent dark wash. Keeps the existing inset:0/position:absolute
+             from the rule below. */
+          background: rgba(15, 10, 4, 0.55) !important;
+          z-index: 1;
+        }
 
         /* Warm wood background */
         body::after {
@@ -909,7 +918,7 @@
     populateDeckSelect();
     renderDeck();
     </script>
-    <script src="background.js?v=3"></script>
+    <script src="background.js?v=4"></script>
     <script src="music.js?v=1"></script>
 </body>
 </html>
