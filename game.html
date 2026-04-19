@@ -999,8 +999,8 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
       <div style="font-family:'Cinzel',serif;font-size:.7rem;color:var(--gold);text-align:center;" id="scryTitle">Select order (1 = top)</div>
       <div id="scryCards" style="display:flex;gap:4px;justify-content:center;"></div>
       <div id="scryConfirm" style="display:none;gap:6px;">
-        <button class="gb-pbtn gb-pbtn-sm" onclick="confirmScry('top')">Place at the top</button>
-        <button class="gb-pbtn gb-pbtn-sm" onclick="confirmScry('bottom')">Place at the bottom</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="scryPlaceTop"    onclick="confirmScry('top')">Place at the top</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="scryPlaceBottom" onclick="confirmScry('bottom')">Place at the bottom</button>
       </div>
       <button class="gb-pbtn gb-pbtn-sm" id="scrySkip" onclick="skipScry()" style="display:none;">Skip</button>
     </div>
@@ -2039,7 +2039,18 @@ function renderScry() {
     container.appendChild(el);
   });
   document.getElementById('scryConfirm').style.display = 'none';
-  document.getElementById('scrySkip').style.display = sw.keepCount > 0 ? 'block' : 'none';
+  // Skip is only meaningful when the player can opt out without committing to a placement —
+  // hide it whenever the source effect forces a specific placement OR has a keep filter
+  // (e.g. Schola Montis Belli must place the rest at the bottom in any order).
+  const canSkip = sw.keepCount > 0 && !sw.placement && !sw.keepFilter;
+  document.getElementById('scrySkip').style.display = canSkip ? 'block' : 'none';
+  // Placement buttons mirror sw.placement: show only the forced direction when set,
+  // otherwise show both for player choice.
+  const topBtn = document.getElementById('scryPlaceTop');
+  const botBtn = document.getElementById('scryPlaceBottom');
+  if (sw.placement === 'top')         { topBtn.style.display = ''; botBtn.style.display = 'none'; }
+  else if (sw.placement === 'bottom') { topBtn.style.display = 'none'; botBtn.style.display = ''; }
+  else                                { topBtn.style.display = ''; botBtn.style.display = ''; }
 }
 
 function scryCardClick(idx, keepCount, keepEligible) {
@@ -2313,6 +2324,11 @@ function selectCard(uid, source) {
 
     if (isStage) {
       // Stages can't attack or take DON. Only [Activate: Main] is meaningful.
+      // Stages now rest on activation, so a rested stage isn't actionable.
+      if (card.rested) {
+        hint(`${card.name} is rested.`);
+        return;
+      }
       if (hasActivateMain && !usedUp) {
         document.getElementById('battleBtns').style.display = 'flex';
         document.getElementById('btnActivateMain').style.display = 'block';

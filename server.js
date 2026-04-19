@@ -820,7 +820,7 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'No [Activate: Main] effect.'});
         return;
       }
-      if (card.rested && !isStage) {
+      if (card.rested) {
         send(playerId, {type:'ERROR', msg:'Card is rested.'});
         return;
       }
@@ -829,9 +829,9 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'Already used this turn.'});
         return;
       }
-      // Mark used; non-stage cards rest as part of activation.
+      // Mark used + rest the card (stages rest too on activate).
       card.usedThisTurn = true;
-      if (!isStage) card.rested = true;
+      card.rested = true;
       log(game, `${card.name}: [Activate: Main] activated.`);
       parseAndApply('activateMain', game, playerId, card, opp);
       break;
