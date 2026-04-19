@@ -1131,6 +1131,13 @@ body{font-family:'Barlow',sans-serif;color:var(--text);min-height:100vh;overflow
         <div id="counterStepAtkPower" style="font-family:'Barlow Condensed',sans-serif;font-size:.78rem;color:var(--text);text-align:center;line-height:1.35;"></div>
         <div style="font-size:.62rem;color:var(--muted);text-align:center;">Defender may play counters…</div>
       </div>
+      <!-- DON!! -N return-to-deck picker (interactive cost) -->
+      <div id="donReturnBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="donReturnTitle">Return DON!! to deck</div>
+        <div id="donReturnSources" style="display:flex;flex-direction:column;gap:4px;font-size:.62rem;color:var(--text);max-height:160px;overflow-y:auto;padding-right:2px;"></div>
+        <div id="donReturnCounter" style="text-align:center;font-size:.7rem;color:var(--gold);font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;">0 / 0</div>
+        <button class="gb-pbtn gb-pbtn-lg" id="donReturnConfirm" onclick="confirmDonReturn()" disabled>Confirm</button>
+      </div>
       <!-- PLAY_FROM_HAND interactive resolver — pick a hand Character to deploy for free -->
       <div id="playFromHandBtns" style="display:none;flex-direction:column;gap:4px;">
         <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="playFromHandTitle">Play a Character from your hand</div>
@@ -1461,7 +1468,9 @@ function renderGame() {
 
   // In solo mode, auto-switch to whoever currently needs to act.
   if (isSolo) {
-    if (game.playFromHandWindow) {
+    if (game.donReturnWindow) {
+      myId = game.donReturnWindow.playerId;
+    } else if (game.playFromHandWindow) {
       myId = game.playFromHandWindow.playerId;
     } else if (game.triggerWindow) {
       // Whoever revealed the life card decides the trigger.
@@ -1644,6 +1653,23 @@ function renderGame() {
     // render is gone, otherwise [Activate]/[Skip] buttons stay visible after the action.
     triggerPanel.style.display = 'none';
     if (tw) hint('Opponent is resolving a trigger…');
+  }
+
+  // DON!! return-to-deck picker (interactive cost). Renders the source breakdown
+  // with +/- buttons next to each bucket; Confirm enabled only when total === required.
+  const drw = game.donReturnWindow;
+  const drwPanel = document.getElementById('donReturnBtns');
+  if (drw && drw.playerId === myId) {
+    hideAllBtnGroups();
+    drwPanel.style.display = 'flex';
+    if (renderDonReturnPicker.lastSig !== JSON.stringify({u:drw.sourceCardUid,r:drw.required,a:drw.available})) {
+      renderDonReturnPicker(drw);
+    } else {
+      updateDonReturnTotals();
+    }
+  } else {
+    drwPanel.style.display = 'none';
+    if (drw) hint('Opponent is choosing DON!! to return…');
   }
 
   // PLAY_FROM_HAND interactive resolver — pick a Character from hand to deploy free.
@@ -2257,7 +2283,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -2465,6 +2491,91 @@ function useCounter(uid) {
 function resolveAttack() {
   if (!game?.battleState || game.phase !== 'COUNTER_STEP') return;
   act({ type: 'RESOLVE_ATTACK' });
+}
+
+// ─── DON!! return-to-deck picker (interactive cost) ───
+let donReturnSel = { fromActive: 0, fromRested: 0, fromCards: {} };
+function renderDonReturnPicker(drw) {
+  // (Re)build the picker DOM whenever the window's identity changes.
+  donReturnSel = { fromActive: 0, fromRested: 0, fromCards: {} };
+  document.getElementById('donReturnTitle').textContent =
+    `Return ${drw.required} DON!! to deck (${drw.sourceCardName})`;
+  const sources = document.getElementById('donReturnSources');
+  sources.innerHTML = '';
+
+  const row = (label, available, get, set) => {
+    const r = document.createElement('div');
+    r.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 4px;background:rgba(0,0,0,.18);border-radius:3px;';
+    const lbl = document.createElement('div');
+    lbl.style.cssText = 'flex:1;font-size:.62rem;line-height:1.2;';
+    lbl.innerHTML = `<b>${label}</b><br><span style="color:var(--muted);">avail: ${available}</span>`;
+    r.appendChild(lbl);
+    const dec = document.createElement('button');
+    dec.className = 'gb-pbtn gb-pbtn-sm';
+    dec.style.cssText = 'min-width:26px;padding:2px 6px;';
+    dec.textContent = '–';
+    const cnt = document.createElement('span');
+    cnt.style.cssText = 'min-width:20px;text-align:center;font-family:Barlow Condensed,sans-serif;font-weight:700;color:var(--gold);';
+    cnt.textContent = '0';
+    const inc = document.createElement('button');
+    inc.className = 'gb-pbtn gb-pbtn-sm';
+    inc.style.cssText = 'min-width:26px;padding:2px 6px;';
+    inc.textContent = '+';
+    dec.onclick = () => { const v = get(); if (v > 0) { set(v - 1); cnt.textContent = v - 1; updateDonReturnTotals(); } };
+    inc.onclick = () => { const v = get(); if (v < available && _drwTotal() < drw.required) { set(v + 1); cnt.textContent = v + 1; updateDonReturnTotals(); } };
+    r.append(dec, cnt, inc);
+    sources.appendChild(r);
+  };
+
+  if (drw.available.donActive > 0) {
+    row('Active DON!! (cost area)', drw.available.donActive,
+        () => donReturnSel.fromActive,
+        v  => { donReturnSel.fromActive = v; });
+  }
+  if (drw.available.donRested > 0) {
+    row('Rested DON!!', drw.available.donRested,
+        () => donReturnSel.fromRested,
+        v  => { donReturnSel.fromRested = v; });
+  }
+  (drw.available.attachedDon || []).forEach(src => {
+    row(`Attached to ${src.cardName}`, src.attached,
+        () => donReturnSel.fromCards[src.cardUid] || 0,
+        v  => { donReturnSel.fromCards[src.cardUid] = v; });
+  });
+
+  renderDonReturnPicker.lastSig = JSON.stringify({u:drw.sourceCardUid,r:drw.required,a:drw.available});
+  updateDonReturnTotals();
+}
+
+function _drwTotal() {
+  return donReturnSel.fromActive + donReturnSel.fromRested
+       + Object.values(donReturnSel.fromCards).reduce((s, v) => s + v, 0);
+}
+
+function updateDonReturnTotals() {
+  const drw = game?.donReturnWindow;
+  if (!drw) return;
+  const total = _drwTotal();
+  document.getElementById('donReturnCounter').textContent = `${total} / ${drw.required}`;
+  document.getElementById('donReturnConfirm').disabled = total !== drw.required;
+}
+
+function confirmDonReturn() {
+  const drw = game?.donReturnWindow;
+  if (!drw) return;
+  if (_drwTotal() !== drw.required) return;
+  const fromCards = Object.entries(donReturnSel.fromCards)
+    .filter(([, amt]) => amt > 0)
+    .map(([cardUid, amount]) => ({ cardUid, amount }));
+  document.getElementById('donReturnBtns').style.display = 'none';
+  act({
+    type: 'RETURN_DON',
+    selections: {
+      fromActive: donReturnSel.fromActive,
+      fromRested: donReturnSel.fromRested,
+      fromCards,
+    },
+  });
 }
 
 // ─── PLAY_FROM_HAND interactive resolver ───

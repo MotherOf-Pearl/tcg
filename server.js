@@ -525,6 +525,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
+    donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
     effectQueue: [],     // Pending interactive steps for chained effects (one window at a time today; full queue is reserved for future multi-window cards).
   };
 }
@@ -1190,6 +1191,59 @@ function handleAction(roomId, playerId, action) {
     }
 
     // ─── Task #1: [Trigger] interactive resolution ───
+    case 'RETURN_DON': {
+      if (!game.donReturnWindow || game.donReturnWindow.playerId !== playerId) return;
+      const w = game.donReturnWindow;
+      const sel = action.selections || {};
+      const fromActive = parseInt(sel.fromActive) || 0;
+      const fromRested = parseInt(sel.fromRested) || 0;
+      const fromCards  = Array.isArray(sel.fromCards) ? sel.fromCards : [];
+      const totalSel = fromActive + fromRested
+        + fromCards.reduce((s, fc) => s + (parseInt(fc.amount) || 0), 0);
+      if (totalSel !== w.required) {
+        send(playerId, {type:'ERROR', msg:`Must return exactly ${w.required} DON!! (selected ${totalSel}).`});
+        return;
+      }
+      const owner = game.players[playerId];
+      if (fromActive < 0 || fromActive > owner.donActive) {
+        send(playerId, {type:'ERROR', msg:'Invalid active DON!! count.'}); return;
+      }
+      if (fromRested < 0 || fromRested > owner.donRested) {
+        send(playerId, {type:'ERROR', msg:'Invalid rested DON!! count.'}); return;
+      }
+      // Validate per-card amounts before mutating anything.
+      const targets = [];
+      for (const fc of fromCards) {
+        const amt = parseInt(fc.amount) || 0;
+        if (amt <= 0) continue;
+        let target = null;
+        if (fc.cardUid === owner.leader.uid) target = owner.leader;
+        else target = owner.field.find(c => c.uid === fc.cardUid);
+        if (!target) { send(playerId, {type:'ERROR', msg:'Invalid card.'}); return; }
+        if (amt > (target.attachedDon || 0)) {
+          send(playerId, {type:'ERROR', msg:`Not enough DON on ${target.name}.`}); return;
+        }
+        targets.push({ target, amt });
+      }
+      // Apply
+      owner.donActive -= fromActive;
+      owner.donRested -= fromRested;
+      for (const { target, amt } of targets) target.attachedDon -= amt;
+      owner.donDeck += w.required;
+      log(game, `${w.sourceCardName}: returned ${w.required} DON!! to deck.`);
+
+      // Resume the original effect with cost-already-paid.
+      const sourceCard = (owner.leader.uid === w.sourceCardUid) ? owner.leader
+                       : owner.field.find(c => c.uid === w.sourceCardUid);
+      const timing = w.timing;
+      game.donReturnWindow = null;
+      if (sourceCard) {
+        const oppOfSource = game.players[Object.keys(game.players).find(id => id !== playerId)];
+        parseAndApply(timing, game, playerId, sourceCard, oppOfSource, { donCostPaid: true });
+      }
+      break;
+    }
+
     case 'TRIGGER_RESOLVE': {
       if (!game.triggerWindow) return;
       if (game.triggerWindow.playerId !== playerId) return;
@@ -1475,6 +1529,43 @@ function extractTypeFilter(text) {
   return m ? m[1] : null;
 }
 
+// Open the interactive DON!!-return window for a "DON!! -N: <effect>" cost. The
+// player will pick which DON to send back to the deck (active/rested/attached).
+// Returns true if the window opened, false if the player can't afford the cost
+// (sum of donActive + donRested + every attachedDon < required).
+function openDonReturn(game, playerId, card, required, timing) {
+  const p = game.players[playerId];
+  const attachedSources = [];
+  if (p.leader && (p.leader.attachedDon || 0) > 0) {
+    attachedSources.push({ cardUid: p.leader.uid, cardName: p.leader.name, attached: p.leader.attachedDon });
+  }
+  p.field.forEach(c => {
+    if ((c.attachedDon || 0) > 0) {
+      attachedSources.push({ cardUid: c.uid, cardName: c.name, attached: c.attachedDon });
+    }
+  });
+  const totalAttached = attachedSources.reduce((s, a) => s + a.attached, 0);
+  const totalAvailable = p.donActive + p.donRested + totalAttached;
+  if (totalAvailable < required) {
+    log(game, `${card.name}: not enough DON!! to pay (need ${required}, have ${totalAvailable}).`);
+    return false;
+  }
+  game.donReturnWindow = {
+    playerId,
+    sourceCardUid: card.uid,
+    sourceCardName: card.name,
+    timing,
+    required,
+    available: {
+      donActive: p.donActive,
+      donRested: p.donRested,
+      attachedDon: attachedSources,
+    },
+  };
+  log(game, `${card.name}: choose ${required} DON!! to return to deck.`);
+  return true;
+}
+
 // Generic scry opener — handles any
 //   "Look at top N cards [reveal up to M {Type} type card] [other than [Name]]
 //    and add it to your hand[. Then place the rest at the (top|bottom)]"
@@ -1519,7 +1610,7 @@ function extractNameFilter(text) {
 
 // ─── CENTRAL EFFECT PARSER ───
 
-function parseAndApply(timing, game, playerId, card, opp) {
+function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
   const ab = card.ability || '';
   if (!ab) return;
   const p = game.players[playerId];
@@ -1545,22 +1636,14 @@ function parseAndApply(timing, game, playerId, card, opp) {
     if (!effect) return;
 
     // Check DON!! requirement before [On Play] (e.g. "[On Play] DON!! -1:")
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+):/);
-    if (donCostMatch) {
+    // Open the interactive DON-return window the first time we see this card; once
+    // RETURN_DON is resolved, parseAndApply re-runs with opts.donCostPaid=true and we
+    // skip past this block.
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
+    if (donCostMatch && !opts.donCostPaid) {
       const donCost = parseInt(donCostMatch[1]);
-      const totalDon = p.donActive + p.donRested;
-      if (totalDon < donCost) {
-        log(game, `${card.name}: not enough DON!! for effect (need ${donCost}).`);
-        return;
-      }
-      // Pay DON cost from active first, then rested
-      let remaining = donCost;
-      const fromActive = Math.min(remaining, p.donActive);
-      p.donActive -= fromActive;
-      remaining -= fromActive;
-      if (remaining > 0) p.donRested -= remaining;
-      p.donDeck += donCost;
-      log(game, `${card.name}: paid ${donCost} DON!! for effect.`);
+      if (!openDonReturn(game, playerId, card, donCost, 'onPlay')) return;
+      return; // pause until RETURN_DON resolves
     }
 
     // Draw N cards
@@ -1669,18 +1752,11 @@ function parseAndApply(timing, game, playerId, card, opp) {
     if (!effect) return;
 
     // Check DON!! cost for On K.O.
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+):/);
-    if (donCostMatch) {
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
+    if (donCostMatch && !opts.donCostPaid) {
       const donCost = parseInt(donCostMatch[1]);
-      const totalDon = p.donActive + p.donRested;
-      if (totalDon < donCost) return;
-      let remaining = donCost;
-      const fromActive = Math.min(remaining, p.donActive);
-      p.donActive -= fromActive;
-      remaining -= fromActive;
-      if (remaining > 0) p.donRested -= remaining;
-      p.donDeck += donCost;
-      log(game, `${card.name}: paid ${donCost} DON!! for [On K.O.] effect.`);
+      if (!openDonReturn(game, playerId, card, donCost, 'onKO')) return;
+      return;
     }
 
     // Draw N cards
@@ -1779,18 +1855,11 @@ function parseAndApply(timing, game, playerId, card, opp) {
     if (!effect) return;
 
     // Check DON!! cost to activate
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+):/);
-    if (donCostMatch) {
+    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
+    if (donCostMatch && !opts.donCostPaid) {
       const donCost = parseInt(donCostMatch[1]);
-      const totalDon = p.donActive + p.donRested;
-      if (totalDon < donCost) return;
-      let remaining = donCost;
-      const fromActive = Math.min(remaining, p.donActive);
-      p.donActive -= fromActive;
-      remaining -= fromActive;
-      if (remaining > 0) p.donRested -= remaining;
-      p.donDeck += donCost;
-      log(game, `${card.name}: paid ${donCost} DON!! for [When Attacking] effect.`);
+      if (!openDonReturn(game, playerId, card, donCost, 'whenAttacking')) return;
+      return;
     }
 
     // Power reduction to opponent's character
@@ -1945,21 +2014,15 @@ function parseAndApply(timing, game, playerId, card, opp) {
     const effect = extractEffect(ab, '[Activate: Main]');
     if (!effect) return;
 
-    // DON!! -N cost (return that many DON to deck)
+    // DON!! -N cost (interactive: open the return-DON window)
     const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
-    if (donCostMatch) {
+    if (donCostMatch && !opts.donCostPaid) {
       const donCost = parseInt(donCostMatch[1]);
-      const totalDon = p.donActive + p.donRested;
-      if (totalDon < donCost) {
+      if (!openDonReturn(game, playerId, card, donCost, 'activateMain')) {
         send(playerId, {type:'ERROR', msg:`Need ${donCost} DON!! to activate.`});
         return;
       }
-      let remaining = donCost;
-      const fromActive = Math.min(remaining, p.donActive);
-      p.donActive -= fromActive; remaining -= fromActive;
-      if (remaining > 0) p.donRested -= remaining;
-      p.donDeck += donCost;
-      log(game, `${card.name}: paid ${donCost} DON!! to activate.`);
+      return;
     }
 
     // Draw N cards
