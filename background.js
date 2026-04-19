@@ -8,7 +8,6 @@
     REPO + 'toad-x-gob-2.png',
     REPO + 'dead-sam.png',
     REPO + 'shlawg.png',
-    REPO + 'pissed-shlawg.png',
     REPO + 'bg3.png',
     REPO + 'bg4.png',
     REPO + 'bg6.png',
