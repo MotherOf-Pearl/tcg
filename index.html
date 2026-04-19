@@ -110,18 +110,6 @@
         <div class="version">v 1.34c</div>
     </div>
 
-    <script src="background.js?v=6"></script>
-    <script>
-      // Menu-only button click sound (intentionally not loaded on game.html / deck-editor.html).
-      (function () {
-        const clickSound = new Audio('https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking.wav');
-        clickSound.volume = 0.6;
-        document.querySelectorAll('button').forEach(btn => {
-          btn.addEventListener('click', () => {
-            try { clickSound.currentTime = 0; clickSound.play().catch(() => {}); } catch (_) {}
-          });
-        });
-      })();
-    </script>
+    <script src="background.js?v=7"></script>
 </body>
 </html>

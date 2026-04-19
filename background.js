@@ -8,6 +8,7 @@
     REPO + 'toad-x-gob-2.png',
     REPO + 'dead-sam.png',
     REPO + 'shlawg.png',
+    REPO + 'pissed-shlawg.png',
   ];
   if (BACKGROUNDS.length > 0) {
     let bgUrl;
@@ -132,4 +133,20 @@
 
   if (document.body) setup();
   else document.addEventListener('DOMContentLoaded', setup, { once: true });
+
+  // ─── Universal button click sound (excludes card / non-button clicks) ───
+  // Event delegation so dynamically-rendered buttons (game.html re-renders
+  // its right-panel buttons every frame) get the sound automatically.
+  const clickSound = new Audio('https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking.wav');
+  clickSound.volume = 0.6;
+  const wireClick = () => {
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (t && t.closest && t.closest('button')) {
+        try { clickSound.currentTime = 0; clickSound.play().catch(() => {}); } catch (_) {}
+      }
+    }, true);
+  };
+  if (document.body) wireClick();
+  else document.addEventListener('DOMContentLoaded', wireClick, { once: true });
 })();
