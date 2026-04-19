@@ -4,9 +4,7 @@
   // ─── Background image (pick once per session, persists across nav) ───
   const REPO = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/backgrounds/';
   const BACKGROUNDS = [
-    REPO + 'toad-gob.png',
     REPO + 'toad-x-gob-2.png',
-    REPO + 'shlawg.png',
     REPO + 'bg3.png',
     REPO + 'bg4.png',
     REPO + 'bg6.png',
