@@ -308,130 +308,130 @@ const CARD_DB = [
   // ══════════════════════════════
   // ANNA OF BRITTANY DECK (Blue)
   // ══════════════════════════════
-  { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special',
+  { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'),
     ability:"[Activate: Main] Once per turn, you may rest 1 of your Characters: Draw 1 card." },
 
-  { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'),
     ability:"[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order." },
 
-  { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:1000, cost:3, counter:1000, image:IMG('OP01','OP01-079','png'),
     ability:"[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand." },
 
-  { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-083','png'),
     ability:"[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash." },
 
-  { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-084','png'),
     ability:"[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
-  { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-085','png'),
     ability:"[On Play] If your Leader has the {Duchess of Brittany} type, select up to 1 of your opponent's Characters with a cost of 4 or less. The selected Character cannot attack until the end of your opponent's next turn." },
 
-  { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:6000, cost:5, counter:0, image:IMG('ST03','ST03-003','png'),
     ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
 
-  { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:4000, cost:4, counter:1000, image:IMG('ST03','ST03-014','png'),
     ability:"[On Play] Return up to 1 Character with a cost of 3 or less to the owner's hand." },
 
-  { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special',
+  { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'),
     ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
 
-  { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue',
+  { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
     power:0, cost:4, counter:0, image:IMG('ST03','ST03-015','png'),
     ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
 
-  { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue',
+  { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
     power:0, cost:2, counter:0, image:IMG('ST03','ST03-016','png'),
     ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
 
-  { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue',
+  { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
     power:0, cost:2, counter:0, image:IMG('ST03','ST03-017','png'),
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand." },
 
-  { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue',
+  { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
     power:0, cost:2, counter:0, image:IMG('OP01','OP01-087','png'),
     ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
 
-  { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'',
+  { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'', affiliation:'Duchess of Brittany',
     power:0, cost:1, counter:0, image:IMG('OP01','OP01-090','png'),
     ability:"[Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   // ══════════════════════════════
   // KAIDO RAMP DECK (Purple)
   // ══════════════════════════════
-  { id:'ST04-001', name:'Constable Jack', type:'LEADER', color:'Purple', attribute:'Strike',
+  { id:'ST04-001', name:'Constable Jack', type:'LEADER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:5000, life:5, cost:0, counter:0, image:IMG('ST04','ST04-001','png'),
     ability:"[Activate: Main] [Once Per Turn] DON!! -7: Trash up to 1 of your opponent's Life cards." },
 
-  { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
+  { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
     power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-100','png'),
     ability:"[Blocker]" },
 
-  { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:3000, cost:3, counter:0, image:IMG('ST04','ST04-010','png'),
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 3 or less. [Trigger] Play this card." },
 
-  { id:'OP01-101', name:'Shawn the Whimsical', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'OP01-101', name:'Shawn the Whimsical', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-101','png'),
     ability:"[DON!! x1] [When Attacking] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and rest it." },
 
-  { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:4000, cost:3, counter:1000, image:IMG('ST04','ST04-008','png'),
     ability:"[On Play] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
-  { id:'ST04-002', name:'Dabby the Domeless', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'ST04-002', name:'Dabby the Domeless', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:5000, cost:4, counter:2000, image:IMG('ST04','ST04-002','png'),
     ability:"[On Play] DON!! -1: Play up to 1 [Toad Wizzy] card with a cost of 4 or less from your hand." },
 
-  { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:6000, cost:4, counter:1000, image:IMG('ST04','ST04-012','png'),
     ability:"" },
 
-  { id:'ST04-005', name:'Sam the Tall', type:'CHARACTER', color:'Purple', attribute:'Wisdom',
+  { id:'ST04-005', name:'Sam the Tall', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
     power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-005','png'),
     ability:"[Blocker] [On Play] DON!! -1: Draw 2 cards and trash 1 card from your hand." },
 
-  { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:7000, cost:6, counter:0, image:IMG('ST04','ST04-004','png'),
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 4 or less." },
 
-  { id:'OP01-096', name:'Commander Sam', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'OP01-096', name:'Commander Sam', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:7000, cost:7, counter:0, image:IMG('OP01','OP01-096','png'),
     ability:"[On Play] DON!! -2: K.O. up to 1 of your opponent's Characters with a cost of 3 or less and up to 1 of your opponent's Characters with a cost of 2 or less." },
 
-  { id:'ST04-003', name:'Gee, Infernal Hound-Shlawg', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'ST04-003', name:'Gee, Infernal Hound-Shlawg', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:10000, cost:9, counter:0, image:IMG('ST04','ST04-003','png'),
     ability:"[On Play] DON!! -5: K.O. up to 1 of your opponent's Characters with a cost of 6 or less. This Character gains [Rush] during this turn." },
 
-  { id:'OP01-094', name:'Jack, Master of Gee', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'OP01-094', name:'Jack, Master of Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:12000, cost:10, counter:0, image:IMG('OP01','OP01-094','png'),
     ability:"[On Play] DON!! -6: If your Leader has the {Holy Roman Empire} type, K.O. all Characters other than this Character." },
 
-  { id:'ST04-016', name:'Off to the Market', type:'EVENT', color:'Purple',
+  { id:'ST04-016', name:'Off to the Market', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
     power:0, cost:1, counter:0, image:IMG('ST04','ST04-016','png'),
     ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
-  { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple',
+  { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
     power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'),
     ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
 
-  { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple',
+  { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
     power:0, cost:2, counter:0, image:IMG('OP01','OP01-119','png'),
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, if you have 2 or less Life cards, add up to 1 DON!! card from your DON!! deck and rest it. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
-  { id:'ST04-015', name:'Blessed Thy Men', type:'EVENT', color:'Purple',
+  { id:'ST04-015', name:'Blessed Thy Men', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
     power:0, cost:6, counter:0, image:IMG('ST04','ST04-015','png'),
     ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 6 or less, then add up to 1 DON!! card from your DON!! deck and set it as active. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
-  { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:'',
+  { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:'', affiliation:'Holy Roman Empire',
     power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'),
     ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it." },
 ];
@@ -524,6 +524,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     firstPlayer: p1id,
     battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
+    playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
   };
 }
 
@@ -1126,6 +1127,17 @@ function handleAction(roomId, playerId, action) {
       if (game.triggerWindow.playerId !== playerId) return;
       const tw = game.triggerWindow;
       if (action.activate) {
+        // Event triggers: the card moves from hand → trash before resolving its effect
+        // (per OPTCG rules; an Event "trashes itself" when its [Trigger] is activated).
+        if (tw.card.type === 'EVENT') {
+          const owner = game.players[playerId];
+          const hidx = owner.hand.findIndex(c => c.uid === tw.card.uid);
+          if (hidx !== -1) {
+            owner.hand.splice(hidx, 1);
+            owner.trash.push(tw.card);
+            log(game, `[Trigger] ${tw.card.name} → trash.`);
+          }
+        }
         const oppOfTrigger = game.players[Object.keys(game.players).find(id => id !== playerId)];
         log(game, `[Trigger] ${tw.card.name} activated!`);
         parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
@@ -1133,6 +1145,35 @@ function handleAction(roomId, playerId, action) {
         log(game, `[Trigger] ${tw.card.name} skipped.`);
       }
       game.triggerWindow = null;
+      break;
+    }
+
+    case 'PLAY_FROM_HAND_RESOLVE': {
+      if (!game.playFromHandWindow) return;
+      const w = game.playFromHandWindow;
+      if (w.playerId !== playerId) return;
+      const owner = game.players[playerId];
+      if (action.skip) {
+        log(game, `${w.sourceCardName || 'Effect'}: choice skipped.`);
+        game.playFromHandWindow = null;
+        break;
+      }
+      if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid card pick.'});
+        return;
+      }
+      const hidx = owner.hand.findIndex(c => c.uid === action.cardUid);
+      if (hidx === -1) { game.playFromHandWindow = null; break; }
+      const picked = owner.hand.splice(hidx, 1)[0];
+      picked.rested = false;
+      picked.attachedDon = picked.attachedDon || 0;
+      picked.playedThisTurn = true;
+      owner.field.push(picked);
+      log(game, `${w.sourceCardName || 'Effect'}: played ${picked.name} from hand for free.`);
+      // Clear window before firing onPlay (which may itself open another window).
+      game.playFromHandWindow = null;
+      const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
+      parseAndApply('onPlay', game, playerId, picked, opp2);
       break;
     }
   }
@@ -1323,6 +1364,61 @@ function autoPlayFromHand(p, costThreshold, game, cardName, typeFilter) {
   return null;
 }
 
+// ─── PLAY_FROM_HAND interactive resolver ──────────────────────────────────────
+// Opens game.playFromHandWindow so the player picks which Character to deploy
+// for free. Pattern: "Play up to 1 [{TYPE} type] Character card with a cost of
+// N or less from your hand". `typeName` filters by card.affiliation; `nameMatch`
+// targets a specific named card (e.g. ST04-002 references [Toad Wizzy]).
+function openPlayFromHand(game, playerId, opts) {
+  const p = game.players[playerId];
+  const { costThreshold = 99, typeName = null, nameMatch = null, sourceCardName = '' } = opts || {};
+  const candidates = p.hand.filter(c => {
+    if (c.type !== 'CHARACTER') return false;
+    if ((c.cost || 0) > costThreshold) return false;
+    if (nameMatch && c.name !== nameMatch) return false;
+    if (typeName) {
+      const aff = c.affiliation || '';
+      if (!aff.toLowerCase().includes(typeName.toLowerCase())) return false;
+    }
+    return true;
+  });
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName || 'Effect'}: no valid Characters in hand` +
+              (typeName ? ` for {${typeName}}` : '') +
+              ` cost ${costThreshold} or less.`);
+    return false;
+  }
+  game.playFromHandWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    costThreshold,
+    typeName: typeName || '',
+    nameMatch: nameMatch || '',
+    sourceCardName,
+  };
+  log(game, `${sourceCardName || 'Effect'}: choose a Character to play for free` +
+            (typeName ? ` ({${typeName}})` : '') + ` (${candidates.length} option(s)).`);
+  return true;
+}
+
+// Extract "{Type Name} type Character" affiliation filter from an effect snippet.
+function extractTypeFilter(text) {
+  const m = text.match(/\{([^}]+)\}\s*type\s*Character/i);
+  return m ? m[1] : null;
+}
+
+// Extract "[Card Name] card" name filter (skips bracketed keywords like [On Play]).
+function extractNameFilter(text) {
+  const KW = new Set(['On Play','On K.O.','Activate: Main','Main','Counter','Trigger','Blocker',
+    'Rush','Banish','Double Attack','Once Per Turn','When Attacking','On Block',
+    'End of Your Turn','Your Turn',"Opponent's Turn","On Your Opponent's Attack"]);
+  const ms = text.match(/\[([^\]]+)\]\s*card/i);
+  if (!ms) return null;
+  const candidate = ms[1].trim();
+  if (KW.has(candidate) || candidate.startsWith('DON')) return null;
+  return candidate;
+}
+
 // ─── CENTRAL EFFECT PARSER ───
 
 function parseAndApply(timing, game, playerId, card, opp) {
@@ -1473,11 +1569,15 @@ function parseAndApply(timing, game, playerId, card, opp) {
       }
     }
 
-    // Play character from hand
+    // Play character from hand (interactive)
     const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
-      const played = autoPlayFromHand(p, parseInt(playMatch[1]), game, card.name);
-      if (played) parseAndApply('onPlay', game, playerId, played, opp);
+      openPlayFromHand(game, playerId, {
+        costThreshold: parseInt(playMatch[1]),
+        typeName: extractTypeFilter(effect),
+        nameMatch: extractNameFilter(effect),
+        sourceCardName: card.name,
+      });
     }
   }
 
@@ -1530,10 +1630,15 @@ function parseAndApply(timing, game, playerId, card, opp) {
       }
     }
 
-    // Play character from hand with cost threshold
+    // Play character from hand with cost threshold (interactive)
     const playMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
-      autoPlayFromHand(p, parseInt(playMatch[1]), game, card.name);
+      openPlayFromHand(game, playerId, {
+        costThreshold: parseInt(playMatch[1]),
+        typeName: extractTypeFilter(effect),
+        nameMatch: extractNameFilter(effect),
+        sourceCardName: card.name,
+      });
     }
 
     // Play character from trash with cost threshold
@@ -1672,10 +1777,15 @@ function parseAndApply(timing, game, playerId, card, opp) {
       koByPower(opp, parseInt(koPowerMatch[1]), game, card.name);
     }
 
-    // Play character from hand
+    // Play character from hand (interactive — opens playFromHandWindow for the player)
     const playMatch = counterEffect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?hand/i);
     if (playMatch) {
-      autoPlayFromHand(p, parseInt(playMatch[1]), game, card.name);
+      openPlayFromHand(game, playerId, {
+        costThreshold: parseInt(playMatch[1]),
+        typeName: extractTypeFilter(counterEffect),
+        nameMatch: extractNameFilter(counterEffect),
+        sourceCardName: card.name,
+      });
     }
 
     // Nullify effects + power reduction
