@@ -970,11 +970,26 @@ function handleAction(roomId, playerId, action) {
       if (idx === -1) return;
       const card = defender.hand[idx];
       const cv = counterValueOf(card);
-      if (cv <= 0) { send(playerId, {type:'ERROR', msg:'That card has no counter value'}); return; }
+      const hasCounterAbility = !!(card.ability && card.ability.includes('[Counter]'));
+      // Eligible if it adds power OR has any [Counter] action effect (e.g. Snow Merchant).
+      if (cv <= 0 && !hasCounterAbility) {
+        send(playerId, {type:'ERROR', msg:'That card has no counter effect'});
+        return;
+      }
       defender.hand.splice(idx, 1);
       defender.trash.push(card);
-      game.battleState.counterBonus = (game.battleState.counterBonus || 0) + cv;
-      log(game, `\uD83D\uDEE1\uFE0F ${card.name} +${cv} (counter bonus: ${game.battleState.counterBonus})`);
+      if (cv > 0) {
+        game.battleState.counterBonus = (game.battleState.counterBonus || 0) + cv;
+        log(game, `\uD83D\uDEE1\uFE0F ${card.name} +${cv} (counter bonus: ${game.battleState.counterBonus})`);
+      } else {
+        log(game, `\uD83D\uDEE1\uFE0F ${card.name} played as counter — resolving effect.`);
+      }
+      // Always fire any [Counter] action effects (play-from-hand, K.O., bounce, draw, …).
+      // This is a no-op for character counter cards (they don't have [Counter] in ability).
+      if (hasCounterAbility) {
+        const oppOfDefender = game.players[Object.keys(game.players).find(id => id !== defenderId)];
+        parseAndApply('counter', game, defenderId, card, oppOfDefender);
+      }
       break;
     }
 

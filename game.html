@@ -1836,6 +1836,8 @@ function renderHand(handId, hand, isSelf) {
   const pfwSet = pfw ? new Set(pfw.candidateUids) : null;
   hand.forEach(card => {
     const cv = inCounterStep ? counterValueOf(card) : 0;
+    // Eligible for the counter step if it adds power OR has any [Counter] action effect.
+    const counterEligibleNow = inCounterStep && isCounterEligible(card);
     const isPfwCandidate = pfwSet && pfwSet.has(card.uid);
     const handler = () => {
       if (attackMode) { cancelSel(); return; }
@@ -1844,7 +1846,7 @@ function renderHand(handId, hand, isSelf) {
         act({ type: 'PLAY_FROM_HAND_RESOLVE', cardUid: card.uid });
         return;
       }
-      if (inCounterStep && cv > 0) {
+      if (counterEligibleNow) {
         useCounter(card.uid);
         return;
       }
@@ -1857,11 +1859,12 @@ function renderHand(handId, hand, isSelf) {
       }
     };
     const cardEl = makeGameCard(card, handler, false);
-    if (cv > 0) {
+    if (counterEligibleNow) {
       cardEl.classList.add('counter-eligible');
       const badge = document.createElement('div');
       badge.className = 'counter-badge';
-      badge.textContent = `+${cv}`;
+      // Show "+N" for power counters, or just "C" for action-only counters.
+      badge.textContent = cv > 0 ? `+${cv}` : 'C';
       cardEl.appendChild(badge);
     }
     if (isPfwCandidate) {
@@ -2368,6 +2371,13 @@ function counterValueOf(card) {
     if (m) return parseInt(m[1], 10);
   }
   return 0;
+}
+
+// True for any card playable during the counter step — includes action-only counters
+// (e.g. Snow Merchant: "[Counter] Play up to 1 ... from your hand") that grant 0 power.
+function isCounterEligible(card) {
+  if (counterValueOf(card) > 0) return true;
+  return !!(card.ability && card.ability.includes('[Counter]'));
 }
 
 function useCounter(uid) {
