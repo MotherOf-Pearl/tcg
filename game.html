@@ -1239,15 +1239,34 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 const WS_URL = 'wss://game.boohawtcg.com';
 
 // ─── Card movement audio ─────────────────────────────────────────────────
-// One shared <audio> instance. Calling playCardSound() always restarts from
-// 0 so multiple rapid moves cut each other off (no overlapping).
-const cardSound = new Audio('https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/card-noise.wav');
-cardSound.preload = 'auto';
-cardSound.volume  = 0.6;
+// Pool of card-noise variants — each move picks one at random. Sounds never
+// overlap: any in-flight clip is paused + reset before the new one starts.
+const _AUDIO_BASE = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/';
+const cardSounds = [
+  _AUDIO_BASE + 'card-noise.wav',
+  _AUDIO_BASE + 'card-noise-2.wav',
+  _AUDIO_BASE + 'card-noise-3.wav',
+];
+// Pre-create one Audio per URL so the browser caches them — the active clip
+// reference is held in `_lastCardAudio` so the next play can stop it.
+const _cardAudioPool = cardSounds.map(url => {
+  const a = new Audio(url);
+  a.preload = 'auto';
+  a.volume  = 0.6;
+  return a;
+});
+let _lastCardAudio = null;
 function playCardSound() {
   try {
-    cardSound.currentTime = 0;
-    const p = cardSound.play();
+    if (_lastCardAudio) {
+      _lastCardAudio.pause();
+      _lastCardAudio.currentTime = 0;
+    }
+    const idx = Math.floor(Math.random() * _cardAudioPool.length);
+    const a = _cardAudioPool[idx];
+    a.currentTime = 0;
+    _lastCardAudio = a;
+    const p = a.play();
     if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay blocked until first user interaction */ });
   } catch (_) { /* ignore */ }
 }
