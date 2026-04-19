@@ -22,22 +22,6 @@
         body.has-random-bg::after,
         body.has-random-bg::before { display: none; }
 
-        /* Subtle dark backdrop behind the main button column so they stay readable
-           against any photo background. */
-        .btn-backdrop {
-            position: absolute;
-            top: 18%;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 460px;
-            height: 60%;
-            background: rgba(0, 0, 0, 0.50);
-            border-radius: 16px;
-            z-index: 2;
-            pointer-events: none;
-            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45);
-        }
-
         /* Warm wood background */
         body::after {
             content: '';
@@ -173,9 +157,6 @@
 </head>
 <body>
     <div class="container">
-
-        <!-- Dark backdrop behind the main button column for readability -->
-        <div class="btn-backdrop"></div>
 
         <!-- Main buttons -->
         <button class="btn btn-multiplayer">Multiplayer</button>
