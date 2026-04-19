@@ -135,16 +135,16 @@
   else document.addEventListener('DOMContentLoaded', setup, { once: true });
 
   // ─── Universal button click sound (excludes card / non-button clicks) ───
-  // Event delegation so dynamically-rendered buttons (game.html re-renders
-  // its right-panel buttons every frame) get the sound automatically.
-  const clickSound = new Audio('https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking.wav');
-  clickSound.volume = 0.6;
+  // Spawn a brand-new Audio per click so it never shares state with the music
+  // instance above. Nothing here touches the `audio` (music) variable.
+  const CLICK_URL = 'https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/audio/clicking.wav';
   const wireClick = () => {
     document.addEventListener('click', (e) => {
       const t = e.target;
-      if (t && t.closest && t.closest('button')) {
-        try { clickSound.currentTime = 0; clickSound.play().catch(() => {}); } catch (_) {}
-      }
+      if (!t || !t.closest || !t.closest('button')) return;
+      const click = new Audio(CLICK_URL);
+      click.volume = 0.5;
+      click.play().catch(() => {});
     }, true);
   };
   if (document.body) wireClick();
