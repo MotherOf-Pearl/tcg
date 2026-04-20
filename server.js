@@ -3899,6 +3899,55 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'powerBuff', target, value: amount, duration };
   }
 
+  // Phase-5 Priority 1 — "Give [up to N of] your Leader/Character cards
+  // +M power (for|during)? this (battle|turn)". Covers NoroNoro Beam
+  // Sword, Bad Manners Kick Course, and similar buff events where the
+  // effect phrases the buff as imperative "Give …" rather than passive
+  // "X gains …". target is the leader/character pool the player picks
+  // from — the effect agent will need an interactive target picker.
+  // Target-shape helper: the alternation may capture "leader", "leaders",
+  // "character", "characters", "leader or character", or "leaders or
+  // characters". A plain substring test for "leader or character" fails
+  // on the plural form (e.g. "leaders or characters" — note `s` before
+  // the space). Use the word "or" as the signal for the composite target.
+  const targetKind = (label) => {
+    const l = label.toLowerCase();
+    if (/\bor\b/.test(l))       return 'leaderOrCharacter';
+    if (/character/.test(l))    return 'character';
+    return 'leader';
+  };
+  if ((m = seg.match(/[Gg]ive\s+(?:up to\s+(one|\d+)\s+of\s+)?your\s+(leaders? or characters?|leader|character)\s+(?:cards?\s+)?\+(\d+)\s*power\s+(?:for\s+|during\s+)?this\s+(battle|turn)/i))) {
+    const max = m[1] ? (m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1])) : 1;
+    return { type: 'powerBuff', target: targetKind(m[2]),
+             value: parseInt(m[3]),
+             duration: m[4].toLowerCase() === 'battle' ? 'thisBattle' : 'thisTurn',
+             max };
+  }
+  // Phase-5 Priority 1 — "Give [up to N of] your opponent's
+  // Leader/Character -M power …". Debuff form of the above. "cards"
+  // is optional — many ability texts omit it.
+  if ((m = seg.match(/[Gg]ive\s+(?:up to\s+(one|\d+)\s+of\s+)?your\s+opponent'?s?\s+(leaders? or characters?|leader|character)\s+(?:cards?\s+)?-(\d+)\s*power\s+(?:for\s+|during\s+)?this\s+(battle|turn)/i))) {
+    const max = m[1] ? (m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1])) : 1;
+    const kind = targetKind(m[2]);
+    const target = kind === 'leaderOrCharacter' ? 'opponentLeaderOrCharacter'
+                 : kind === 'character' ? 'opponentCharacter' : 'opponentLeader';
+    return { type: 'powerDebuff', target, value: parseInt(m[3]),
+             duration: m[4].toLowerCase() === 'battle' ? 'thisBattle' : 'thisTurn',
+             max };
+  }
+  // Phase-5 Priority 1 — "[Up to one of] your opponent's characters
+  // gets -M power …". Subject-first "gets" rather than imperative
+  // "Give" (Yasopp [DON!! x1] [When Attacking]).
+  if ((m = seg.match(/(?:[Uu]p\s+to\s+(one|\d+)\s+of\s+)?your\s+opponent'?s?\s+(leaders? or characters?|leaders?|characters?)\s+(?:gets?|gains?)\s+-(\d+)\s*power\s+(?:for\s+|during\s+)?this\s+(turn|battle)/i))) {
+    const max = m[1] ? (m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1])) : 1;
+    const kind = targetKind(m[2]);
+    const target = kind === 'leaderOrCharacter' ? 'opponentLeaderOrCharacter'
+                 : kind === 'character' ? 'opponentCharacter' : 'opponentLeader';
+    return { type: 'powerDebuff', target, value: parseInt(m[3]),
+             duration: m[4].toLowerCase() === 'battle' ? 'thisBattle' : 'thisTurn',
+             max };
+  }
+
   if ((m = seg.match(/[Pp]lay (?:up to )?(\d+).*?cost of (\d+) or less.*?hand/i))) {
     const filter = { maxCost: parseInt(m[2]) };
     const affM  = seg.match(/\{([^}]+)\}\s*type/i);
