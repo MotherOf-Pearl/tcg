@@ -844,12 +844,6 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 ════════════════════════════════════════════════════ -->
 <div id="menu" class="screen active wood-bg">
 
-  <!-- Corner buttons -->
-  <div class="menu-corners">
-    <button class="mbtn mbtn-corner bl" onclick="alert('Help coming soon')">Help</button>
-    <button class="mbtn mbtn-corner br" onclick="alert('Credits coming soon')">Credits</button>
-  </div>
-
   <!-- Centre content -->
   <div class="menu-center">
 
@@ -896,9 +890,9 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 
     <!-- Secondary row -->
     <div class="menu-row">
-      <button class="mbtn mbtn-sec" onclick="showDeckEditor()">Deck Editor</button>
+      <button class="mbtn mbtn-sec" onclick="window.location.href='/deck-editor.html'">Deck Editor</button>
       <button class="mbtn mbtn-sec" onclick="window.location.href='game.html?solo=true'">Solo v Self</button>
-      <button class="mbtn mbtn-sec" disabled>Settings</button>
+      <button class="mbtn mbtn-sec" onclick="window.location.href='/'">Back to Main</button>
     </div>
 
   </div>
