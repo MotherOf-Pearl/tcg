@@ -165,7 +165,7 @@ const CARD_DB = [
     ability:"[On Play] Up to one of your opponents characters with power 4000 or less cannot activate [Blocker] the rest of this turn." },
 
   { id:'OP12-008', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
-    power:6000, cost:4, counter:0, image:IMG('OP12','OP12-008','jpg'),
+    power:6000, cost:4, counter:0, image:IMG('OP12','OP12-008','jpg'), useNewPipeline:true,
     ability:"[Blocker] [On Your Opponent's Attack] [Once Per Turn] You may trash 1 card from your hand: Give up to 1 of your opponent's Leader or Characters -2000 power during this turn." },
 
   { id:'OP09-015', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged',
@@ -1077,6 +1077,19 @@ function handleAction(roomId, playerId, action) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
       } else if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
       else parseAndApply('whenAttacking', game, playerId, attacker, opp);
+      // Phase 8 — fire [On Your Opponent's Attack] on defender's side.
+      // Each defender-side pipelined card with that timing gets a run;
+      // windows opened here carry defender playerId so only they resolve.
+      const defenderCards = [
+        ...(opp.leader && opp.leader.useNewPipeline ? [opp.leader] : []),
+        ...(opp.field || []).filter(c => c && c.useNewPipeline),
+      ];
+      for (const c of defenderCards) {
+        const parsed = PARSED_EFFECTS.get(c.id);
+        if (parsed && (parsed.effects || []).some(b => b.timing === 'onYourOpponentsAttack')) {
+          runPipeline('onYourOpponentsAttack', game, oppId, c);
+        }
+      }
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
       break;
     }
