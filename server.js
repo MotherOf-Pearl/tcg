@@ -114,7 +114,7 @@ const CARD_DB = [
     ability:'[Blocker] [End of Your Turn] Set up to 2 of your {Big Mom Pirates} type Characters with a cost of 3 or more as active. Then, add up to 1 DON!! card from your DON!! deck and rest it.' },
 
   { id:'OP14-069', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:10000, cost:10, counter:0, image:IMG('OP14','OP14-069','png'),
+    power:10000, cost:10, counter:0, image:IMG('OP14','OP14-069','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -3: Choose one: \u2022 If your Leader has the {Donquixote Pirates} type, K.O. up to 1 of your opponent's Characters with a cost of 8 or less. \u2022 Rest up to 3 of your opponent's Characters with a cost of 7 or less." },
 
   { id:'OP10-078', name:"I can never forgive anyone who laughs at my family...!!", type:'EVENT', color:'Purple',
@@ -1864,6 +1864,41 @@ function handleAction(roomId, playerId, action) {
       log(game, `${w.sourceCardName}: ${target.name} is now suppressed (${w.kind}) until turn ${expiresAtTurn}.`);
       game.suppressionTargetWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // Phase-5 Priority-8 (3/3) resolver: player picked which branch of a
+    // "Choose one:" card to run (Doflamingo OP14-069). Runs the branch
+    // effects in sequence; if any effect opens a window, its resume
+    // carries the outer pipelineResume so the pipeline continues after
+    // the branch completes. Branches for P8-3 have at most one effect
+    // — multi-effect branches are deferred (not present in CARD_DB).
+    case 'CHOOSE_ONE_SELECTED': {
+      if (!game.chooseOneWindow || game.chooseOneWindow.playerId !== playerId) return;
+      const w = game.chooseOneWindow;
+      const pipelineResume = w.pipelineResume;
+      const branchIndex = action.branchIndex;
+      const branch = (w.branches || [])[branchIndex];
+      if (!branch) { send(playerId, {type:'ERROR', msg:'Invalid branch.'}); return; }
+      if (!branch.available) { send(playerId, {type:'ERROR', msg:'Branch not available (condition unmet).'}); return; }
+      // Locate source card for ctx rebuild.
+      const owner = game.players[playerId];
+      const src = (owner.leader && owner.leader.uid === w.sourceCardUid) ? owner.leader
+               : (owner.field || []).find(c => c.uid === w.sourceCardUid)
+               || (owner.trash || []).find(c => c.uid === w.sourceCardUid);
+      game.chooseOneWindow = null;
+      if (!src) {
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      const ctx = { game, playerId, card: src, player: owner, _blockOptional: true };
+      log(game, `${w.sourceCardName}: picked branch #${branchIndex + 1}.`);
+      let opened = false;
+      for (const eff of (branch.effects || [])) {
+        const res = agentApplyEffect(eff, ctx, pipelineResume);
+        if (res && res.status === 'window-open') { opened = true; break; }
+      }
+      if (!opened && pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -3929,11 +3964,16 @@ function _parseBlock(block, unparsed) {
     }
   }
 
-  // "If your Leader has the {X} type," condition (consumed).
-  const leaderType = body.match(/If your Leader has the \{([^}]+)\}\s*type,?/i);
-  if (leaderType) {
-    conditions.push({ type: 'leaderType', value: leaderType[1] });
-    body = body.replace(leaderType[0], '').trim();
+  // "If your Leader has the {X} type," condition (consumed). Skipped
+  // when the body contains "Choose one:" — in a Choose-One block the
+  // leaderType lives on a specific branch, not the whole block, and
+  // will be captured by the branch parser.
+  if (!/Choose one\s*:/i.test(body)) {
+    const leaderType = body.match(/If your Leader has the \{([^}]+)\}\s*type,?/i);
+    if (leaderType) {
+      conditions.push({ type: 'leaderType', value: leaderType[1] });
+      body = body.replace(leaderType[0], '').trim();
+    }
   }
 
   // "If you have N or more DON!! cards" / "if you have N or less Life cards".
@@ -3990,6 +4030,27 @@ function _parseBlock(block, unparsed) {
 
 function _parseEffectList(body, unparsed) {
   if (!body) return [];
+
+  // Phase 5 Priority 8 (3/3) — "Choose one:" branching. Split on the
+  // bullet (•) character; each branch may carry its own
+  // "If your Leader has the {X} type," condition. Branches return a
+  // single chooseOne effect; branch sub-effects are parsed recursively.
+  const chooseM = body.match(/^\s*Choose one\s*:?\s*(.+)$/i);
+  if (chooseM && /\u2022/.test(chooseM[1])) {
+    const branches = chooseM[1].split(/\u2022/).map(s => s.trim()).filter(Boolean).map(bt => {
+      const conditions = [];
+      let bBody = bt;
+      const lt = bBody.match(/^If your Leader has the \{([^}]+)\}\s*type,?\s*/i);
+      if (lt) {
+        conditions.push({ type: 'leaderType', value: lt[1] });
+        bBody = bBody.substring(lt[0].length);
+      }
+      const effects = _parseEffectList(bBody, unparsed);
+      return { conditions, effects, text: bt };
+    });
+    return [{ type: 'chooseOne', branches }];
+  }
+
   // Protect "K.O." from the period-based splitter — its internal periods
   // look exactly like sentence boundaries otherwise. Swap to a placeholder
   // before splitting, restore after.
@@ -4599,6 +4660,39 @@ function agentApplyEffect(effect, ctx, resume) {
         pipelineResume: resume || null,
       });
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
+    // Phase 5 Priority 8 (3/3) — "Choose one:" branching. Opens the
+    // chooseOneWindow with one entry per branch; availability is
+    // pre-computed from each branch's own conditions (e.g. Doflamingo's
+    // first branch gates on leader type). Player picks a branch; the
+    // CHOOSE_ONE_SELECTED handler runs that branch's effects inline
+    // with the outer pipelineResume threaded through the last effect.
+    case 'chooseOne': {
+      const branches = (effect.branches || []).map((b, i) => {
+        const cond = agentCheckConditions(b.conditions || [], ctx);
+        return {
+          index: i,
+          available: cond.ok,
+          conditions: b.conditions || [],
+          effects: b.effects || [],
+          text: b.text || '',
+        };
+      });
+      if (!branches.some(b => b.available)) {
+        log(ctx.game, `${ctx.card.name}: no eligible branches for Choose One.`);
+        return { status: 'no-targets' };
+      }
+      ctx.game.chooseOneWindow = {
+        playerId: ctx.playerId,
+        sourceCardName: ctx.card.name,
+        sourceCardUid: ctx.card.uid,
+        sourceCardId: ctx.card.id,
+        branches,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose one branch (${branches.filter(b => b.available).length} available).`);
+      return { status: 'window-open' };
     }
 
     // Phase 5 Priority 5 — meta-reference. "Activate this card's [X]
