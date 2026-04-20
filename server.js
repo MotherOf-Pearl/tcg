@@ -1529,6 +1529,31 @@ function handleAction(roomId, playerId, action) {
       finishWindow();
       break;
     }
+
+    // Resolve add-from-trash selection (George the Brave & friends). This is
+    // the tail of the effect, so there is no resumeTiming to re-enter.
+    case 'ADD_FROM_TRASH_SELECTED': {
+      if (!game.addFromTrashWindow || game.addFromTrashWindow.playerId !== playerId) return;
+      const w = game.addFromTrashWindow;
+      const owner = game.players[playerId];
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a card from trash.'}); return; }
+        log(game, `${w.sourceCardName}: add-from-trash skipped.`);
+        game.addFromTrashWindow = null;
+        break;
+      }
+      if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid trash selection.'});
+        return;
+      }
+      const idx = owner.trash.findIndex(c => c.uid === action.cardUid);
+      if (idx === -1) { send(playerId, {type:'ERROR', msg:'Card no longer in trash.'}); return; }
+      const picked = owner.trash.splice(idx, 1)[0];
+      owner.hand.push(picked);
+      log(game, `${w.sourceCardName}: added ${picked.name} from trash to hand.`);
+      game.addFromTrashWindow = null;
+      break;
+    }
   }
 
   checkWin(game);
@@ -2072,6 +2097,51 @@ function openTrashFromHand(game, playerId, opts) {
   return true;
 }
 
+// Parses the tail effect "add up to N (Event|Character)? card(s)? from your
+// trash to your hand". Returns { count, filterType } or null. filterType is
+// 'EVENT' / 'CHARACTER' / null. Designed to match every card with this phrase,
+// not just George the Brave — any [On K.O.] effect text containing this
+// clause routes here.
+function parseAddFromTrashToHand(effect) {
+  if (!effect) return null;
+  const m = effect.match(/add up to (\d+)\s+(Event|Character)?\s*cards?\s+from your trash to your hand/i);
+  if (!m) return null;
+  return { count: parseInt(m[1]), filterType: m[2] ? m[2].toUpperCase() : null };
+}
+
+// Evaluates an optional "If your Leader has the {AFFIL} type," gate at the
+// start of an effect clause. Returns true when no gate is present OR the
+// player's leader's affiliation string matches (case-insensitive substring,
+// same rule used by passivePowerBuff).
+function leaderAffiliationGatePasses(effect, player) {
+  const m = effect && effect.match(/If your Leader has the \{([^}]+)\}\s*type/i);
+  if (!m) return true;
+  const lAff = ((player && player.leader && player.leader.affiliation) || '').toLowerCase();
+  return lAff.includes(m[1].toLowerCase());
+}
+
+// Open the interactive add-from-trash picker. Candidates are cards already in
+// the player's trash matching filterType (or all trash cards if null). If no
+// eligible card exists the window doesn't open and the effect simply logs.
+function openAddFromTrash(game, playerId, opts) {
+  const p = game.players[playerId];
+  const { count = 1, filterType = null, optional = true, sourceCardName = '' } = opts || {};
+  const isEligible = (c) => !filterType || c.type === filterType;
+  const candidates = (p.trash || []).filter(isEligible);
+  if (candidates.length === 0) {
+    const label = filterType ? filterType.toLowerCase() + 's' : 'cards';
+    log(game, `${sourceCardName}: no ${label} in trash.`);
+    return false;
+  }
+  game.addFromTrashWindow = {
+    playerId, max: count, optional, sourceCardName, filterType,
+    candidateUids: candidates.map(c => c.uid),
+  };
+  const what = filterType ? `an ${filterType.toLowerCase()}` : 'a card';
+  log(game, `${sourceCardName}: choose ${what} from your trash to add to your hand.`);
+  return true;
+}
+
 // Open the bounce-target picker. Targets are CHARACTERS (own + opponent) on the
 // field that match the cost/power filter. Returns true if window opened.
 function openBounceTarget(game, playerId, opts) {
@@ -2451,6 +2521,25 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       if (p.deck.length > 0) {
         p.life.push(p.deck.shift());
         log(game, `${card.name}: added a card to life (now ${p.life.length}).`);
+      }
+    }
+
+    // "Add up to N [Event|Character] from your trash to your hand." Scalable
+    // to every [On K.O.] card with this phrase. Optional affiliation gate
+    // "If your Leader has the {AFFIL} type," is checked first — fails
+    // silently when the leader doesn't match (George the Brave outside a
+    // Duchess of Brittany leader, etc.).
+    const addFromTrash = parseAddFromTrashToHand(effect);
+    if (addFromTrash) {
+      if (leaderAffiliationGatePasses(effect, p)) {
+        openAddFromTrash(game, playerId, {
+          count: addFromTrash.count,
+          filterType: addFromTrash.filterType,
+          optional: true,
+          sourceCardName: card.name,
+        });
+      } else {
+        log(game, `${card.name}: leader affiliation does not match — effect skipped.`);
       }
     }
 

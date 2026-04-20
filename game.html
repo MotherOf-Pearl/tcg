@@ -1187,6 +1187,12 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div id="bounceTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
         <button class="gb-pbtn gb-pbtn-sm" id="bounceTargetSkip" onclick="skipBounceTarget()">Skip</button>
       </div>
+      <!-- ADD_FROM_TRASH resolver: pick a card in your trash to add to your hand -->
+      <div id="addFromTrashBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="addFromTrashTitle">Add a card from your trash</div>
+        <div id="addFromTrashHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <button class="gb-pbtn gb-pbtn-sm" id="addFromTrashSkip" onclick="skipAddFromTrash()">Skip</button>
+      </div>
       <!-- Task #1 [Trigger] interactive window — defender chooses to activate or skip -->
       <div id="triggerWindowBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);text-align:center;">[Trigger]</div>
@@ -1214,6 +1220,14 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
   </div>
 
 </div><!-- #game -->
+
+<!-- ADD_FROM_TRASH browser — horizontal strip pinned to bottom of viewport,
+     populated only while game.addFromTrashWindow is open for the local player.
+     Click a card to send ADD_FROM_TRASH_SELECTED. -->
+<div id="addFromTrashStrip" style="display:none;position:fixed;left:50%;bottom:14px;transform:translateX(-50%);max-width:92vw;padding:10px 14px;background:rgba(12,12,14,.92);border:1px solid var(--gold-dim);border-radius:8px;z-index:9990;box-shadow:0 6px 24px rgba(0,0,0,.5);">
+  <div id="addFromTrashStripTitle" style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);text-align:center;margin-bottom:6px;letter-spacing:.5px;">Select a card from your trash</div>
+  <div id="addFromTrashStripCards" style="display:flex;gap:8px;overflow-x:auto;padding:4px;max-width:88vw;"></div>
+</div>
 
 <!-- Phase 1 battle overlays: fixed-position container for power numbers — topmost layer. -->
 <div id="battleOverlays" style="position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:9999;overflow:visible;"></div>
@@ -1559,6 +1573,8 @@ function renderGame() {
       myId = game.trashFromHandWindow.playerId;
     } else if (game.bounceTargetWindow) {
       myId = game.bounceTargetWindow.playerId;
+    } else if (game.addFromTrashWindow) {
+      myId = game.addFromTrashWindow.playerId;
     } else if (game.koTargetWindow) {
       myId = game.koTargetWindow.playerId;
     } else if (game.donReturnWindow) {
@@ -1819,6 +1835,29 @@ function renderGame() {
   } else {
     btwPanel.style.display = 'none';
     if (btw) hint('Opponent is choosing a bounce target…');
+  }
+
+  // ADD_FROM_TRASH resolver: side panel + bottom strip of selectable trash
+  // cards. Strip rendering is delegated to renderAddFromTrashStrip() which
+  // populates from game.players[myId].trash filtered by candidateUids.
+  const aftw = game.addFromTrashWindow;
+  const aftwPanel = document.getElementById('addFromTrashBtns');
+  const aftwStrip = document.getElementById('addFromTrashStrip');
+  if (aftw && aftw.playerId === myId) {
+    hideAllBtnGroups();
+    aftwPanel.style.display = 'flex';
+    const what = aftw.filterType ? `${aftw.filterType.toLowerCase()} card` : 'card';
+    document.getElementById('addFromTrashTitle').textContent =
+      `${aftw.sourceCardName} — add ${what} from trash`;
+    document.getElementById('addFromTrashHint').textContent =
+      `Click a ${what} below to add it to your hand.`;
+    document.getElementById('addFromTrashSkip').style.display = aftw.optional ? 'block' : 'none';
+    renderAddFromTrashStrip(aftw);
+    aftwStrip.style.display = 'block';
+  } else {
+    aftwPanel.style.display = 'none';
+    aftwStrip.style.display = 'none';
+    if (aftw) hint('Opponent is choosing a card from trash…');
   }
 
   // DON!! return-to-deck picker (interactive cost). Renders the source breakdown
@@ -2564,7 +2603,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','trashFromHandBtns','bounceTargetBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -2960,6 +2999,40 @@ function skipBounceTarget() {
   if (!game?.bounceTargetWindow) return;
   document.getElementById('bounceTargetBtns').style.display = 'none';
   act({ type: 'BOUNCE_TARGET_SELECTED', skip: true });
+}
+
+// ─── ADD_FROM_TRASH resolver (client) ────────────────────────────────────
+// Renders the bottom strip of selectable trash cards. Each card is a clickable
+// makeGameCard; clicking dispatches ADD_FROM_TRASH_SELECTED with its uid.
+function renderAddFromTrashStrip(w) {
+  const host = document.getElementById('addFromTrashStripCards');
+  if (!host) return;
+  host.innerHTML = '';
+  const me = game?.players?.[myId];
+  if (!me) return;
+  const uidSet = new Set(w.candidateUids);
+  const cards = (me.trash || []).filter(c => uidSet.has(c.uid));
+  cards.forEach(card => {
+    const el = makeGameCard(card, () => selectAddFromTrash(card.uid), false);
+    el.classList.add('counter-eligible');
+    el.style.cursor = 'pointer';
+    host.appendChild(el);
+  });
+}
+
+function selectAddFromTrash(uid) {
+  const w = game?.addFromTrashWindow;
+  if (!w || !w.candidateUids.includes(uid)) return;
+  document.getElementById('addFromTrashBtns').style.display = 'none';
+  document.getElementById('addFromTrashStrip').style.display = 'none';
+  act({ type: 'ADD_FROM_TRASH_SELECTED', cardUid: uid });
+}
+
+function skipAddFromTrash() {
+  if (!game?.addFromTrashWindow) return;
+  document.getElementById('addFromTrashBtns').style.display = 'none';
+  document.getElementById('addFromTrashStrip').style.display = 'none';
+  act({ type: 'ADD_FROM_TRASH_SELECTED', skip: true });
 }
 
 // ─── Task #1 [Trigger] interactive window ───
