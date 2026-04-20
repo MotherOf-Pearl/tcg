@@ -249,7 +249,7 @@ const CARD_DB = [
     ability:"[Activate: Main] Look at the top 5 cards of your deck, reveal and add one {Red Hair Pirates} type card to your hand. Place the rest at the bottom of the deck in any order. [Trigger] Draw one card." },
 
   { id:'ST21-017', name:'Gum-Gum Mole Gun', type:'EVENT', color:'Red',
-    power:0, cost:4, counter:0, image:IMG('ST21','ST21-017','jpg'),
+    power:0, cost:4, counter:0, image:IMG('ST21','ST21-017','jpg'), useNewPipeline:true,
     ability:"[Main] Give up to one of your opponents characters -5000 power during this turn. Then, if you have a character with 6000 power or more, K.O. up to one of your opponents characters with a power of 2000 or less. [Trigger] Activate this card's [Main] effect." },
 
   // ══════════════════════════════
@@ -312,7 +312,7 @@ const CARD_DB = [
     ability:"[Counter] Nullify the effects of up to 1 of your opponent's leader or character and give them -4000 power during this turn. [Trigger] Nullify the effects of up to 1 of your opponent's leader or character during this turn." },
 
   { id:'OP09-098', name:'Black Hole', type:'EVENT', color:'Black',
-    power:0, cost:4, counter:0, image:IMG('OP09','OP09-098','jpg'),
+    power:0, cost:4, counter:0, image:IMG('OP09','OP09-098','jpg'), useNewPipeline:true,
     ability:"[Main] If your Leader has the {Blackbeard Pirates} type, negate the effect of up to 1 of your opponent's Characters during this turn. Then, if that Character has a cost of 4 or less, K.O. it. [Trigger] Negate the effect of up to 1 of your opponent's Leader or Character cards during this turn." },
 
   { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:'',
@@ -1920,6 +1920,9 @@ function handleAction(roomId, playerId, action) {
         kind: w.kind, expiresAtTurn, source: w.sourceCardName,
       });
       log(game, `${w.sourceCardName}: ${target.name} is now suppressed (${w.kind}) until turn ${expiresAtTurn}.`);
+      // Phase 8 — track the picked target for ifLastTarget / koLastTarget
+      // follow-ups (Black Hole). Cleared after the dependent effect runs.
+      game._lastPickedTargetUid = target.uid;
       game.suppressionTargetWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
@@ -4215,7 +4218,26 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   // silently so they don't show up as unparsed noise.
   if (/^\s*[Pp]lace the rest/.test(seg)) return null;
 
-  let m;
+  let m, condM;
+
+  // Phase 8 — conditional effect wrappers must run BEFORE any effect
+  // matcher that could match the inner clause (e.g. koTarget matches
+  // the inner "K.O. it" / "K.O. up to 1 …" in a conditional trailer).
+  //   "if you have a character with N power or more, <effect>"   (Mole Gun)
+  //   "if that Character has (a )cost of N or less, K.O. it"     (Black Hole)
+  if ((condM = seg.match(/^[,\s]*if you have a character with (\d+) power or more,\s*(.+)$/i))) {
+    const inner = _parseEffectSegment(condM[2], unparsed, bodyPlacement);
+    if (inner) {
+      return { type: 'conditionalEffect',
+        condition: { type: 'ownCharacterPowerMin', value: parseInt(condM[1]) },
+        effect: inner };
+    }
+  }
+  if ((condM = seg.match(/^[,\s]*if that Character has (?:a )?cost of (\d+) or less,\s*K\.O\. it/i))) {
+    return { type: 'conditionalEffect',
+      condition: { type: 'lastTargetMaxCost', value: parseInt(condM[1]) },
+      effect: { type: 'koLastTarget' } };
+  }
 
   if ((m = seg.match(/^(?:[Dd]raw) (one|\d+) cards?/))) {
     const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
@@ -4260,19 +4282,23 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'aoeKO', excludeSelf: true };
   }
 
-  if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?cost of (\d+) or less/i))) {
-    return { type: 'koTarget', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]), opponent: true } };
+  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?cost of (\d+) or less/i))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'koTarget', max: n, filter: { maxCost: parseInt(m[2]), opponent: true } };
   }
-  if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?(\d+)\s*power or less/i))) {
-    return { type: 'koTarget', max: parseInt(m[1]), filter: { maxPower: parseInt(m[2]), opponent: true } };
+  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?(\d+)\s*power or less/i))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'koTarget', max: n, filter: { maxPower: parseInt(m[2]), opponent: true } };
   }
   // Phase 5 Priority 3 — alternate word order: "power of N or less"
   // (Lucky Roux: "Characters with an original power of 6000 or less").
-  if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?power of (\d+) or less/i))) {
-    return { type: 'koTarget', max: parseInt(m[1]), filter: { maxPower: parseInt(m[2]), opponent: true } };
+  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?power of (\d+) or less/i))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'koTarget', max: n, filter: { maxPower: parseInt(m[2]), opponent: true } };
   }
-  if ((m = seg.match(/K\.O\. (?:up to )?(\d+) of your opponent'?s? Character/i))) {
-    return { type: 'koTarget', max: parseInt(m[1]), filter: { opponent: true } };
+  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+) of your opponent'?s? Character/i))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'koTarget', max: n, filter: { opponent: true } };
   }
 
   if ((m = seg.match(/[Rr]eturn (?:up to )?(\d+)(?: of your opponent'?s?)? Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i))) {
@@ -4917,6 +4943,56 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 8 — conditional effect wrapper. Evaluates `effect.condition`
+    // against the game state and runs `effect.effect` only if met.
+    //   ownCharacterPowerMin — at least one own Character whose effective
+    //     power (base + attached DON × 1000) meets the threshold.
+    //   lastTargetMaxCost — the most-recently-picked target (stored on
+    //     game._lastPickedTargetUid by the suppression window resolver)
+    //     has cost ≤ the threshold.
+    case 'conditionalEffect': {
+      const cond = effect.condition || {};
+      let met = false;
+      if (cond.type === 'ownCharacterPowerMin') {
+        const powerOf = (c) => (c.power || 0) + (c.attachedDon || 0) * 1000;
+        met = (ctx.player.field || []).some(c => c.type === 'CHARACTER' && powerOf(c) >= cond.value);
+      } else if (cond.type === 'lastTargetMaxCost') {
+        const uid = ctx.game._lastPickedTargetUid;
+        if (uid) {
+          for (const pid of Object.keys(ctx.game.players)) {
+            const pl = ctx.game.players[pid];
+            const cand = (pl.field || []).find(c => c.uid === uid)
+                       || (pl.leader && pl.leader.uid === uid ? pl.leader : null);
+            if (cand && (cand.cost || 0) <= cond.value) { met = true; break; }
+          }
+        }
+      }
+      if (!met) {
+        log(ctx.game, `${ctx.card.name}: conditional follow-up skipped (condition unmet).`);
+        return { status: 'applied' };
+      }
+      return agentApplyEffect(effect.effect, ctx, resume);
+    }
+
+    // Phase 8 — K.O. the card referenced by game._lastPickedTargetUid
+    // (Black Hole's "K.O. it" after the suppress pick).
+    case 'koLastTarget': {
+      const uid = ctx.game._lastPickedTargetUid;
+      if (!uid) return { status: 'applied' };
+      for (const pid of Object.keys(ctx.game.players)) {
+        const pl = ctx.game.players[pid];
+        const idx = (pl.field || []).findIndex(c => c.uid === uid);
+        if (idx !== -1) {
+          const koed = pl.field.splice(idx, 1)[0];
+          pl.trash.push(koed);
+          log(ctx.game, `${ctx.card.name}: K.O.'d ${koed.name} (follow-up).`);
+          triggerOnKO(ctx.game, pid, koed, ctx.playerId);
+          break;
+        }
+      }
+      return { status: 'applied' };
+    }
+
     // Phase 8 — un-rest up to N rested DON!! cards in place. Synchronous;
     // doesn't touch the deck. Used by Rosinante's end-of-turn refresh.
     case 'setOwnDonActive': {
