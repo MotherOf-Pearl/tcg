@@ -70,7 +70,7 @@ const CARD_DB = [
     ability:'[Activate: Main] You may rest 1 of your DON!! and this Character: Look at the top 5 cards of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand. Place the rest at the bottom of your deck in any order.' },
 
   { id:'OP14-067', name:'Dellinger', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:2000, cost:1, counter:1000, image:IMG('OP14','OP14-067','png'),
+    power:2000, cost:1, counter:1000, image:IMG('OP14','OP14-067','png'), useNewPipeline:true,
     ability:'[On K.O.] Add up to 1 DON!! card from your DON!! deck and rest it; look at 5 cards from the top of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand.' },
 
   { id:'ST18-001', name:'Usohachi', type:'CHARACTER', color:'Yellow', attribute:'Ranged',
@@ -98,7 +98,7 @@ const CARD_DB = [
     ability:'[On Play] You may trash 1 event card from your hand: Draw 2 cards. [End of Your Turn] If you have 7 or more DON!! cards, set up to 2 of them as active.' },
 
   { id:'OP14-074', name:'Monet', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:6000, cost:5, counter:1000, image:IMG('OP14','OP14-074','png'),
+    power:6000, cost:5, counter:1000, image:IMG('OP14','OP14-074','png'), useNewPipeline:true,
     ability:"[On Play] If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] Draw 2 cards and trash 1 card from your hand. Then, add up to 2 DON!! cards from your DON!! deck and rest them." },
 
   { id:'OP14-068', name:'Trebol', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -406,7 +406,7 @@ const CARD_DB = [
     ability:"[On Play] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'ST04-002', name:'Dabby the Domeless', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:5000, cost:4, counter:2000, image:IMG('ST04','ST04-002','png'),
+    power:5000, cost:4, counter:2000, image:IMG('ST04','ST04-002','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -1: Play up to 1 [Toad Wizzy] card with a cost of 4 or less from your hand." },
 
   { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -414,7 +414,7 @@ const CARD_DB = [
     ability:"" },
 
   { id:'ST04-005', name:'Sam the Tall', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
-    power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-005','png'),
+    power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-005','png'), useNewPipeline:true,
     ability:"[Blocker] [On Play] DON!! -1: Draw 2 cards and trash 1 card from your hand." },
 
   { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -422,7 +422,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 4 or less." },
 
   { id:'OP01-096', name:'Commander Sam', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:7000, cost:7, counter:0, image:IMG('OP01','OP01-096','png'),
+    power:7000, cost:7, counter:0, image:IMG('OP01','OP01-096','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -2: K.O. up to 1 of your opponent's Characters with a cost of 3 or less and up to 1 of your opponent's Characters with a cost of 2 or less." },
 
   { id:'ST04-003', name:'Gee, Infernal Hound-Shlawg', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -4533,6 +4533,42 @@ function parseAbility(text) {
     }
   );
 
+  // Track F — convert "; <newEffect>" to ". <newEffect>" when the
+  // semicolon separates independent effects rather than a scry
+  // continuation. Dellinger: "rest it; look at …" → two effects.
+  // Limit to addDon-then-look-at to avoid disturbing scry's internal
+  // "cards; reveal" which is a conjunction.
+  processed = processed.replace(
+    /(DON!![^;.]*?rest it);(\s*[Ll]ook at)/g, '$1.$2'
+  );
+
+  // Track F — Commander Sam dual K.O. Splits
+  //   "K.O. up to N … cost of X or less and up to M … cost of Y or less"
+  // into two sentences so the segment splitter emits two koTarget effects.
+  processed = processed.replace(
+    /([Kk]\.O\. up to \d+ of your opponent'?s? Characters? with a cost of \d+ or less) and (up to \d+ of your opponent'?s? Characters? with a cost of \d+ or less)/g,
+    '$1. K.O. $2'
+  );
+
+  // Track F — mandatory hand-trash after Draw (Sam the Tall, Monet).
+  //   "Draw N cards and trash M cards from your hand" → two segments:
+  //   drawCards + trashFromHandEffect.
+  processed = processed.replace(
+    /([Dd]raw (?:\d+|one) cards?) and trash ((?:\d+|one) cards? from your hand)/g,
+    '$1. Trash $2'
+  );
+
+  // Track F — preserve bracketed card-name filters ("[Name] card") from
+  // the body-level [tag] stripper. Keywords/timings go through the
+  // negative list so we don't wrap those.
+  processed = processed.replace(
+    /\[([^\]]+)\]\s+card/g,
+    (full, name) => {
+      if (/^(Blocker|Double Attack|Banish|Rush|On Play|On K\.O\.|On Block|Trigger|Counter|Main|Activate: Main|When Attacking|End of Your Turn|Your Turn|Opponent's Turn|Once Per Turn|DON!! x\d+)$/.test(name)) return full;
+      return `\u00a7NAME_${name.replace(/\s+/g, '|')}\u00a7 card`;
+    }
+  );
+
   // Track-P — preserve remaining inline [Name] exclusions ("other than
   // [Foo]") through the body-level bracket stripper. Runs AFTER
   // effect-specific placeholders (playFromTrash etc.) that already
@@ -5076,10 +5112,11 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   if ((m = seg.match(/[Pp]lay (?:up to )?(\d+).*?cost of (\d+) or less.*?hand/i))) {
     const filter = { maxCost: parseInt(m[2]) };
     const affM  = seg.match(/\{([^}]+)\}\s*type/i);
-    const nameM = seg.match(/\[([^\]]+)\]\s*card/i);
+    const nameM = seg.match(/\[([^\]]+)\]\s*card/i)
+              || seg.match(/\u00a7NAME_([^\u00a7]+)\u00a7\s*card/);
     const typeM = seg.match(/\b(Character|Event|Stage)\s+card/i);
     if (affM)  filter.affiliation = affM[1];
-    if (nameM) filter.name = nameM[1];
+    if (nameM) filter.name = nameM[1].replace(/\|/g, ' ');
     if (typeM) filter.type = typeM[1].toUpperCase();
     return { type: 'playFromHand', max: parseInt(m[1]), filter, free: true };
   }
