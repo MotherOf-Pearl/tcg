@@ -161,7 +161,7 @@ const CARD_DB = [
     ability:"[Activate: Main] You may rest this character: If your leader has the {Red Hair Pirates} type, give up to 1 of your opponent's characters -2000 power during this turn." },
 
   { id:'OP09-014', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Special',
-    power:3000, cost:3, counter:2000, image:IMG('OP09','OP09-014','jpg'),
+    power:3000, cost:3, counter:2000, image:IMG('OP09','OP09-014','jpg'), useNewPipeline:true,
     ability:"[On Play] Up to one of your opponents characters with power 4000 or less cannot activate [Blocker] the rest of this turn." },
 
   { id:'OP12-008', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
@@ -343,7 +343,7 @@ const CARD_DB = [
     ability:"[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-085','png'),
+    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-085','png'), useNewPipeline:true,
     ability:"[On Play] If your Leader has the {Duchess of Brittany} type, select up to 1 of your opponent's Characters with a cost of 4 or less. The selected Character cannot attack until the end of your opponent's next turn." },
 
   { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -3787,16 +3787,43 @@ function parseAbility(text) {
 
   // Phase 5 Priority 5 — pre-process "Activate this card's [X] effect"
   // meta-references. Replace with a placeholder so the splitter doesn't
-  // treat the embedded [Timing] bracket as a new block boundary (which
-  // was producing spurious empty-timing blocks for Snow Merchant,
-  // Cig Break, Siege of Londinium, etc.). The placeholder encodes the
-  // referenced timing so _parseEffectSegment can emit an
-  // activateOwnEffect without needing side state.
-  const processed = text.replace(
+  // treat the embedded [Timing] bracket as a new block boundary.
+  let processed = text.replace(
     /[Aa]ctivate this card'?s?\s*\[([^\]]+)\]\s*effect/g,
     (raw, inner) => {
       const timing = TIMING_MAP['[' + inner + ']'];
       return timing ? `\u00a7ACTIVATE_${timing}\u00a7` : raw;
+    }
+  );
+
+  // Phase 5 Priority 8 — pre-process the "select up to N … The selected
+  // … cannot attack …" compound (Sarra the Wise). Two sentences are
+  // collapsed into a single suppressTarget placeholder so the segment
+  // splitter doesn't separate the target-pick from its effect.
+  processed = processed.replace(
+    /select up to (one|\d+) of your opponent'?s? (leaders? or characters?|leaders?|characters?)(?:\s+[^.]*?cost of (\d+) or less)?\.?\s*The selected (?:Character|Leader) cannot attack(?:\s+[^.]*?)?(?:until (?:the )?end of (?:your )?opponent'?s? next (?:turn|end phase)|during this turn|for this turn)/gi,
+    (_m, count, kindStr, costStr) => {
+      const n = (count || '1').toLowerCase() === 'one' ? 1 : parseInt(count);
+      const label = (kindStr || '').toLowerCase();
+      const tk = /\bor\b/.test(label) ? 'leaderOrCharacter'
+               : /character/.test(label) ? 'character' : 'leader';
+      const cost = costStr ? parseInt(costStr) : '';
+      const dur = /until/i.test(_m) ? 'opponentNextTurn' : 'thisTurn';
+      return `\u00a7SUPPRESS_attack_${n}_${tk}_${cost}_${dur}\u00a7`;
+    }
+  );
+
+  // Phase 5 Priority 8 — pre-process "cannot activate [Blocker]" (Limejuice).
+  // This ALSO protects the inline [Blocker] bracket from the keyword scan
+  // that would otherwise falsely tag Limejuice as a [Blocker] card.
+  processed = processed.replace(
+    /[Uu]p to (one|\d+) of your opponent'?s?\s*(characters?|leaders?)(?:\s+with\s+(?:a\s+)?(?:cost of (\d+) or less|power (\d+) or less))?\s*cannot activate \[Blocker\][^.]*?(?:(?:for|during) this turn|the rest of this turn)?/gi,
+    (_m, count, kindStr, costStr, powStr) => {
+      const n = (count || '1').toLowerCase() === 'one' ? 1 : parseInt(count);
+      const tk = /character/i.test(kindStr) ? 'character' : 'leader';
+      const maxCost = costStr ? parseInt(costStr) : '';
+      const maxPower = powStr ? parseInt(powStr) : '';
+      return `\u00a7SUPPRESS_blocker_${n}_${tk}_${maxCost}_${maxPower}\u00a7`;
     }
   );
 
@@ -3952,7 +3979,9 @@ function _parseBlock(block, unparsed) {
     body = body.substring(restDon[0].length).trim();
   }
 
-  const optional = /\b(?:you may|up to)\b/i.test(body);
+  // Placeholders set by parseAbility pre-processing already collapsed an
+  // "up to N" phrase; treat their presence as implying optional.
+  const optional = /\b(?:you may|up to)\b|\u00a7SUPPRESS_/i.test(body);
   const effects  = _parseEffectList(body, unparsed);
   const withTarget = effects.find(e => e.max != null);
   const maxTargets = withTarget ? withTarget.max : null;
@@ -4173,6 +4202,24 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   // can re-run the target block when fired.
   if ((m = seg.match(/\u00a7ACTIVATE_(\w+)\u00a7/))) {
     return { type: 'activateOwnEffect', timing: m[1] };
+  }
+
+  // Phase 5 Priority 8 — attack-prevention suppression placeholder.
+  // Set by parseAbility pre-processing for Sarra-style compounds.
+  if ((m = seg.match(/\u00a7SUPPRESS_attack_(\d+)_(\w+)_(\d*)_(\w+)\u00a7/))) {
+    const filter = m[3] ? { maxCost: parseInt(m[3]) } : {};
+    return { type: 'suppressTarget', kind: 'attack',
+             max: parseInt(m[1]), targetKind: m[2], filter, duration: m[4] };
+  }
+  // Phase 5 Priority 8 — blocker-ability suppression placeholder.
+  // Set by parseAbility pre-processing for Limejuice-style "cannot
+  // activate [Blocker]" lines.
+  if ((m = seg.match(/\u00a7SUPPRESS_blocker_(\d+)_(\w+)_(\d*)_(\d*)\u00a7/))) {
+    const filter = {};
+    if (m[3]) filter.maxCost = parseInt(m[3]);
+    if (m[4]) filter.maxPower = parseInt(m[4]);
+    return { type: 'suppressTarget', kind: 'blockerAbility',
+             max: parseInt(m[1]), targetKind: m[2], filter, duration: 'thisTurn' };
   }
 
   // Phase 5 Priority 8 — effect suppression. Two sentence shapes:
