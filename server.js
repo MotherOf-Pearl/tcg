@@ -181,7 +181,7 @@ const CARD_DB = [
     ability:"[Blocker] [On Play] You may trash 1 Character card with a power of 6000 or more from your hand: Draw 2 cards." },
 
   { id:'OP03-013', name:'Marco', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:6000, cost:5, counter:1000, image:IMG('OP03','OP03-013','png'),
+    power:6000, cost:5, counter:1000, image:IMG('OP03','OP03-013','png'), useNewPipeline:true,
     ability:"[Your Turn] [On Play] K.O. up to 1 of your opponent's Characters with 3000 Power or less. [On K.O.] You may trash 1 Event card from your hand. Play this character from the trash as rested." },
 
   { id:'OP09-013', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged',
@@ -304,7 +304,7 @@ const CARD_DB = [
     ability:"[Blocker] [Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type and this character was played this turn, up to one of your opponent's leader effects are negated for the rest of the turn. Then, up to one of your opponent's characters effects are negated until the end of your opponent's next turn, that character also cannot attack." },
 
   { id:'OP09-096', name:"This is MY AGE!!!!", type:'EVENT', color:'Yellow',
-    power:0, cost:1, counter:0, image:IMG('OP09','OP09-096','jpg'),
+    power:0, cost:1, counter:0, image:IMG('OP09','OP09-096','jpg'), useNewPipeline:true,
     ability:"[Main] Look at the top 3 cards of your deck and reveal up to one {Blackbeard Pirates} type card other than [This is MY AGE!!!!] and put it into your hand. Then put the rest of the cards into your trash. [Trigger] Activate this card's [Main] effect." },
 
   { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black',
@@ -1451,7 +1451,12 @@ function handleAction(roomId, playerId, action) {
       //   single mode ('top' / 'bottom'): client sends order + placement
       //     override; existing behavior.
       const remaining = sw.cards.filter((_, idx) => !kept.includes(idx));
-      if (sw.placement === 'either' && (action.topOrder || action.bottomOrder)) {
+      if (sw.placement === 'trash') {
+        // "This is MY AGE" variant: un-kept cards go to the player's trash
+        // rather than back to the deck. No ordering choice needed.
+        p.trash.push(...remaining);
+        log(game, `${sw.cardName}: trashed ${remaining.length} card(s) from the reveal.`);
+      } else if (sw.placement === 'either' && (action.topOrder || action.bottomOrder)) {
         const topCards = (action.topOrder    || []).map(i => remaining[i]).filter(Boolean);
         const botCards = (action.bottomOrder || []).map(i => remaining[i]).filter(Boolean);
         // deck[0] = top; unshift(a,b,c) → deck becomes [a,b,c,...], so first in topCards
@@ -1750,8 +1755,23 @@ function handleAction(roomId, playerId, action) {
         const resumeCardUid = w.resumeCardUid;
         const pipelineResume = w.pipelineResume;
         const sourceName = w.sourceCardName;
+        const selfRevive = w._selfRevive;
         game.trashFromHandWindow = null;
         if (!paid) return;
+        // Track-P partial — Marco-style self-revive finalisation. Move
+        // the source card from trash → field in the requested state.
+        if (selfRevive) {
+          const tidx = owner.trash.findIndex(c => c.uid === selfRevive.cardUid);
+          if (tidx !== -1) {
+            const picked = owner.trash.splice(tidx, 1)[0];
+            picked.rested = (selfRevive.reviveState === 'rested');
+            picked.attachedDon = 0;
+            picked.usedThisTurn = false;
+            picked.playedThisTurn = true;
+            owner.field.push(picked);
+            log(game, `${selfRevive.sourceName}: revived from trash${picked.rested ? ' (rested)' : ''}.`);
+          }
+        }
         // Phase-4: new-pipeline cards take precedence.
         if (pipelineResume) {
           resumePipeline(game, playerId, pipelineResume);
@@ -4205,6 +4225,16 @@ function parseAbility(text) {
     }
   );
 
+  // Track-P partial — "You may trash N <Type> card from your hand. Play
+  // this character from the trash as (rested|active)." (Marco OP03-013).
+  // The optional hand-trash cost is written with a period rather than a
+  // colon, so the block-level cost matcher misses it. Encode the whole
+  // compound into a single selfRevive placeholder.
+  processed = processed.replace(
+    /[Yy]ou may trash (\d+) (Character|Event) cards? from your hand\.\s*Play this character from the trash as (rested|active)/g,
+    (_m, n, t, state) => `\u00a7REVIVE_${n}_${t}_${state}\u00a7`
+  );
+
   // Phase 7 — pre-process "Play up to N … from your trash [rested]". Encodes
   // affiliation/type/cost/exclude-name/rested-flag into a placeholder so
   // the inline [ExcludeName] bracket survives the body bracket stripper.
@@ -4219,6 +4249,15 @@ function parseAbility(text) {
       return `\u00a7PFT_${n}_${a}_${t}_${c}_${e}_${r}\u00a7`;
     }
   );
+
+  // Track-P — preserve remaining inline [Name] exclusions ("other than
+  // [Foo]") through the body-level bracket stripper. Runs AFTER
+  // effect-specific placeholders (playFromTrash etc.) that already
+  // capture their own excludeName so this only catches leftovers
+  // (scry for "This is MY AGE").
+  processed = processed.replace(/other than \[([^\]]+)\]/g, (_m, name) => {
+    return `other than \u00a7EXCLUDE_${name.replace(/\s+/g, '|')}\u00a7`;
+  });
 
   // Phase 7 — pre-process "This Character gains [KEYWORD] during this turn"
   // (and opponent-next-turn variant). Protects the bracketed keyword from
@@ -4469,7 +4508,8 @@ function _parseEffectList(body, unparsed) {
   // full body so we can attach placement to the scry effect regardless
   // of segmentation.
   const bodyPlacement =
-      /place the rest at the bottom/i.test(body) ? 'bottom'
+      /put the rest of the cards? (?:in)?to your trash/i.test(body) ? 'trash'
+    : /place the rest at the bottom/i.test(body) ? 'bottom'
     : /top or bottom/i.test(body) ? 'either'
     : 'top';
 
@@ -4486,6 +4526,7 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   // Scry placement continuations are consumed via bodyPlacement — skip
   // silently so they don't show up as unparsed noise.
   if (/^\s*[Pp]lace the rest/.test(seg)) return null;
+  if (/^\s*[Pp]ut the rest of the cards? (?:in)?to your trash/i.test(seg)) return null;
 
   let m, condM;
 
@@ -4613,7 +4654,10 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     const scry = { type: 'scry', count: parseInt(m[1]), placement: bodyPlacement };
     const revealM  = seg.match(/reveal(?:\s+(?:up to|and add))?\s+(one|\d+)/i);
     const filterM  = seg.match(/\{([^}]+)\}\s*type\s*(Character|Event|Stage)?/i);
-    const excludeM = seg.match(/other than \[([^\]]+)\]/i);
+    // Match either the raw "[Name]" form or the pre-processed
+    // placeholder §EXCLUDE_Name-with-|-for-spaces§.
+    const excludeM = seg.match(/other than \[([^\]]+)\]/i)
+                  || seg.match(/other than \u00a7EXCLUDE_([^\u00a7]+)\u00a7/);
     if (/reveal/i.test(seg)) {
       const rCount = revealM ? (revealM[1].toLowerCase() === 'one' ? 1 : parseInt(revealM[1])) : 1;
       scry.reveal = { count: rCount, filter: {} };
@@ -4621,7 +4665,7 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
         scry.reveal.filter.affiliation = filterM[1];
         if (filterM[2]) scry.reveal.filter.type = filterM[2].toUpperCase();
       }
-      if (excludeM) scry.reveal.filter.excludeName = excludeM[1];
+      if (excludeM) scry.reveal.filter.excludeName = excludeM[1].replace(/\|/g, ' ');
     }
     return scry;
   }
@@ -4763,6 +4807,14 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   // Phase 7 — keyword grant placeholder. Set by parseAbility pre-processing.
   if ((m = seg.match(/\u00a7GRANT_([a-z0-9-]+)_([a-zA-Z]+)\u00a7/))) {
     return { type: 'grantKeyword', keyword: m[1].replace(/-/g, ' '), duration: m[2] };
+  }
+
+  // Track-P partial — selfRevive placeholder. Marco OP03-013 only.
+  if ((m = seg.match(/\u00a7REVIVE_(\d+)_(Character|Event)_(rested|active)\u00a7/))) {
+    return { type: 'selfRevive',
+      costCount: parseInt(m[1]),
+      costType: m[2].toUpperCase(),
+      reviveState: m[3] };
   }
 
   // Phase 7 — playFromTrash placeholder. Fields, in order:
@@ -5264,6 +5316,30 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Track-P partial — Marco-style self-revive: pay an optional
+    // trashFromHand cost, then move the source (currently in trash
+    // from its [On K.O.]) back to the field. Uses the existing
+    // trashFromHandWindow machinery with a _selfRevive marker so the
+    // cost resolver can finalise the move.
+    case 'selfRevive': {
+      const opened = openTrashFromHand(ctx.game, ctx.playerId, {
+        count: effect.costCount || 1,
+        optional: true,
+        filterType: effect.costType || null,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      if (!opened) return { status: 'applied' };
+      // Stash revive details on the window so TRASH_FROM_HAND_RESOLVE
+      // can move the source card after the cost is paid.
+      ctx.game.trashFromHandWindow._selfRevive = {
+        cardUid: ctx.card.uid,
+        reviveState: effect.reviveState || 'rested',
+        sourceName: ctx.card.name,
+      };
+      return { status: 'window-open' };
+    }
+
     // Phase 8 — playSelf: move source card from hand to field as a
     // free play (Monk Matt's [Trigger] "Play this card"). When the
     // trigger is activated from a life reveal the card is in hand,
