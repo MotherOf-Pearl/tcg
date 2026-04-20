@@ -300,7 +300,7 @@ const CARD_DB = [
     ability:"[Blocker] [On K.O.] Play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less from your trash rested." },
 
   { id:'OP09-093', name:'Marshall D. Teach', type:'CHARACTER', color:'Black', attribute:'Special',
-    power:12000, cost:10, counter:0, image:IMG('OP09','OP09-093','jpg'),
+    power:12000, cost:10, counter:0, image:IMG('OP09','OP09-093','jpg'), useNewPipeline:true,
     ability:"[Blocker] [Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type and this character was played this turn, up to one of your opponent's leader effects are negated for the rest of the turn. Then, up to one of your opponent's characters effects are negated until the end of your opponent's next turn, that character also cannot attack." },
 
   { id:'OP09-096', name:"This is MY AGE!!!!", type:'EVENT', color:'Yellow',
@@ -2024,7 +2024,13 @@ function handleAction(roomId, playerId, action) {
       target.suppressions.push({
         kind: w.kind, expiresAtTurn, source: w.sourceCardName,
       });
-      log(game, `${w.sourceCardName}: ${target.name} is now suppressed (${w.kind}) until turn ${expiresAtTurn}.`);
+      // Track I — Teach-char compound: same pick also gets attack-supp.
+      if (w.alsoAttack && w.kind !== 'attack') {
+        target.suppressions.push({
+          kind: 'attack', expiresAtTurn, source: w.sourceCardName,
+        });
+      }
+      log(game, `${w.sourceCardName}: ${target.name} is now suppressed (${w.kind}${w.alsoAttack ? ' + attack' : ''}) until turn ${expiresAtTurn}.`);
       // Phase 8 — track the picked target for ifLastTarget / koLastTarget
       // follow-ups (Black Hole). Cleared after the dependent effect runs.
       game._lastPickedTargetUid = target.uid;
@@ -5308,7 +5314,12 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
                      : /character/.test(label) ? 'character'
                      : 'leader';
     const duration = /until .*? (?:next )?(?:turn|end phase)/i.test(seg) ? 'opponentNextTurn' : 'thisTurn';
-    return { type: 'suppressTarget', kind: 'effects', max, targetKind, duration };
+    const e = { type: 'suppressTarget', kind: 'effects', max, targetKind, duration };
+    // Track I — Teach character's compound: effects negated AND
+    // the same target cannot attack. Both suppressions land on the
+    // single picked uid.
+    if (/that character also cannot attack/i.test(seg)) e.alsoAttack = true;
+    return e;
   }
 
   unparsed.push(seg);
@@ -5726,6 +5737,7 @@ function agentApplyEffect(effect, ctx, resume) {
         optional: ctx._blockOptional != null ? ctx._blockOptional : (effect.optional !== false),
         sourceCardName: ctx.card.name,
         filter: effect.filter || {},
+        alsoAttack: effect.alsoAttack || false,
         pipelineResume: resume || null,
       });
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
@@ -6198,7 +6210,8 @@ function openSuppressionTarget(game, playerId, opts) {
   const { side = 'opponent', targetKind = 'leaderOrCharacter',
           kind = 'effects', duration = 'thisTurn',
           optional = true, sourceCardName = '',
-          filter = {}, pipelineResume = null } = opts || {};
+          filter = {}, pipelineResume = null,
+          alsoAttack = false } = opts || {};
   const pool = side === 'opponent' ? opp : me;
   let candidates = [];
   if (targetKind === 'leader' || targetKind === 'leaderOrCharacter') {
@@ -6221,7 +6234,7 @@ function openSuppressionTarget(game, playerId, opts) {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     optional, sourceCardName, kind, duration, side, targetKind,
-    pipelineResume,
+    alsoAttack, pipelineResume,
   };
   log(game, `${sourceCardName}: choose a target to suppress (${kind}, ${candidates.length} option(s)).`);
   return true;
