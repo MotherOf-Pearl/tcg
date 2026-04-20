@@ -74,7 +74,7 @@ const CARD_DB = [
     ability:'[On K.O.] Add up to 1 DON!! card from your DON!! deck and rest it; look at 5 cards from the top of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand.' },
 
   { id:'ST18-001', name:'Usohachi', type:'CHARACTER', color:'Yellow', attribute:'Ranged',
-    power:3000, cost:3, counter:2000, image:IMG('ST18','ST18-001','png'),
+    power:3000, cost:3, counter:2000, image:IMG('ST18','ST18-001','png'), useNewPipeline:true,
     ability:"[On Play] If you have 8 or more DON!! cards, rest up to 1 of your opponent's Characters with a cost of 5 or less." },
 
   { id:'OP10-076', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -157,7 +157,7 @@ const CARD_DB = [
     ability:"[Activate: Main] You may place this character on the bottom of its owner's deck: Give up to one of your opponent's characters -3000 power for this turn." },
 
   { id:'OP09-011', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Strike',
-    power:3000, cost:3, counter:2000, image:IMG('OP09','OP09-011','jpg'),
+    power:3000, cost:3, counter:2000, image:IMG('OP09','OP09-011','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] You may rest this character: If your leader has the {Red Hair Pirates} type, give up to 1 of your opponent's characters -2000 power during this turn." },
 
   { id:'OP09-014', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Special',
@@ -225,7 +225,7 @@ const CARD_DB = [
     ability:"All of your opponents characters have -1000 power. [Rush]" },
 
   { id:'OP09-021', name:'Red Force', type:'STAGE', color:'Red', attribute:'',
-    power:0, cost:2, counter:0, image:IMG('OP09','OP09-021','jpg'),
+    power:0, cost:2, counter:0, image:IMG('OP09','OP09-021','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] You may rest this stage: If your leader has the {Red Hair Pirates} type, give up to one of your opponent's characters -1000 power for this turn." },
 
   { id:'OP04-016', name:'Bad Manners Kick Course', type:'EVENT', color:'Red',
@@ -276,7 +276,7 @@ const CARD_DB = [
     ability:"[Activate: Main] You may trash one card from your hand and this character: If your leader has the {Blackbeard Pirates} type, draw one card. Then give up to one of your opponents characters -2 cost for the turn." },
 
   { id:'OP09-088', name:'Shiryuu', type:'CHARACTER', color:'Black', attribute:'Slash',
-    power:4000, cost:3, counter:2000, image:IMG('OP09','OP09-088','jpg'),
+    power:4000, cost:3, counter:2000, image:IMG('OP09','OP09-088','jpg'), useNewPipeline:true,
     ability:"[DON!! x1] [When Attacking] You may trash 2 cards from your hand: Draw 2 cards." },
 
   { id:'OP09-086', name:'Jesus Burgess', type:'CHARACTER', color:'Purple', attribute:'Strike',
@@ -450,7 +450,7 @@ const CARD_DB = [
     ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 6 or less, then add up to 1 DON!! card from your DON!! deck and set it as active. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:'', affiliation:'Holy Roman Empire',
-    power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'),
+    power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'), useNewPipeline:true,
     ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it." },
 ];
 
@@ -4019,6 +4019,16 @@ function _parseBlock(block, unparsed) {
     body = body.substring(restDon[0].length).trim();
   }
 
+  // Phase 6 — "You may rest this (Character|Stage):" — self-rest cost.
+  // For Activate: Main abilities this is the canonical cost; the game
+  // engine auto-rests the source card as part of ACTIVATE_MAIN, so the
+  // agent treats an already-rested card as "cost paid trivially".
+  const restSelf = body.match(/^You may rest this (Character|Stage|character|stage)\s*:\s*/i);
+  if (restSelf) {
+    costs.push({ type: 'restSelf' });
+    body = body.substring(restSelf[0].length).trim();
+  }
+
   // Placeholders set by parseAbility pre-processing already collapsed an
   // "up to N" phrase; treat their presence as implying optional.
   const optional = /\b(?:you may|up to)\b|\u00a7SUPPRESS_/i.test(body);
@@ -4424,6 +4434,13 @@ function agentPayCosts(costs, ctx, resume) {
           { pipelineResume: resume || null });
         if (!opened) return { status: 'unaffordable' };
         return { status: 'window-open' };
+      }
+      case 'restSelf': {
+        // Synchronous cost: if the engine already rested the card (the
+        // typical ACTIVATE_MAIN path rests before running the pipeline)
+        // the cost is met for free; otherwise rest the source now.
+        if (!ctx.card.rested) ctx.card.rested = true;
+        break;  // continue loop to any subsequent costs
       }
       default:
         console.log('[AGENT-COST] Not yet supported in new pipeline:', c.type, `(card ${ctx.card.name})`);
