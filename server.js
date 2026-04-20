@@ -94,7 +94,7 @@ const CARD_DB = [
     ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead. [When Attacking] DON!! -1: Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
   { id:'OP10-072', name:'Donquixote Rosinante', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:6000, cost:5, counter:1000, image:IMG('OP10','OP10-072','jpg'),
+    power:6000, cost:5, counter:1000, image:IMG('OP10','OP10-072','jpg'), useNewPipeline:true,
     ability:'[On Play] You may trash 1 event card from your hand: Draw 2 cards. [End of Your Turn] If you have 7 or more DON!! cards, set up to 2 of them as active.' },
 
   { id:'OP14-074', name:'Monet', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -110,7 +110,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -1: Play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand. [Opponent's Turn] [Once Per Turn] You may rest 1 of your DON!!: add up to 1 Active DON!! from your DON!! deck." },
 
   { id:'OP11-067', name:'Charlotte Katakuri', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:8000, cost:8, counter:0, image:IMG('OP11','OP11-067','jpg'),
+    power:8000, cost:8, counter:0, image:IMG('OP11','OP11-067','jpg'), useNewPipeline:true,
     ability:'[Blocker] [End of Your Turn] Set up to 2 of your {Big Mom Pirates} type Characters with a cost of 3 or more as active. Then, add up to 1 DON!! card from your DON!! deck and rest it.' },
 
   { id:'OP14-069', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -632,6 +632,20 @@ function doDraw(game) {
 
 function doEnd(game) {
   const p = game.players[game.activePlayer];
+  const endingPlayerId = game.activePlayer;
+  // Phase 8 — fire [End of Your Turn] abilities on the ending player's
+  // leader/field cards before the turn flips. Only pipeline-migrated
+  // cards participate; legacy parseAndApply path didn't emit endOfTurn.
+  const endCards = [
+    ...(p.leader && p.leader.useNewPipeline ? [p.leader] : []),
+    ...(p.field || []).filter(c => c && c.useNewPipeline),
+  ];
+  for (const c of endCards) {
+    const parsed = PARSED_EFFECTS.get(c.id);
+    if (parsed && (parsed.effects || []).some(b => b.timing === 'endOfTurn')) {
+      runPipeline('endOfTurn', game, endingPlayerId, c);
+    }
+  }
   while (p.hand.length > 8) { p.trash.push(p.hand.pop()); }
   const ids = Object.keys(game.players);
   game.activePlayer = ids.find(id => id !== game.activePlayer);
@@ -4215,6 +4229,23 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) Active DON!!/))) {
     return { type: 'addDon', count: parseInt(m[1]), state: 'active' };
   }
+
+  // Phase 8 — "set up to N of them as active" after a DON!! clause
+  // (Rosinante OP10-072): un-rest up to N rested DON!! cards. Distinct
+  // from addDon (which pulls from deck) — this only un-rests existing.
+  if ((m = seg.match(/^[,\s]*set up to (\d+) of them as active/i))) {
+    return { type: 'setOwnDonActive', count: parseInt(m[1]) };
+  }
+
+  // Phase 8 — "Set up to N of your {X} type Characters with a cost of M
+  // or more as active" (Katakuri OP11-067): un-rest N of your own
+  // Characters matching the filter. The "cost of M or more" is a
+  // minCost, mirroring the maxCost shape used elsewhere.
+  if ((m = seg.match(/[Ss]et up to (\d+) of your \{([^}]+)\}\s*type Characters?(?:\s+with\s+(?:a\s+)?cost of (\d+) or more)?\s+as active/i))) {
+    const filter = { affiliation: m[2] };
+    if (m[3]) filter.minCost = parseInt(m[3]);
+    return { type: 'setCharacterActive', max: parseInt(m[1]), filter };
+  }
   if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) (?:Active )?DON!!.*?(?:set it as active|active)/))) {
     return { type: 'addDon', count: parseInt(m[1]), state: 'active' };
   }
@@ -4886,6 +4917,47 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 8 — un-rest up to N rested DON!! cards in place. Synchronous;
+    // doesn't touch the deck. Used by Rosinante's end-of-turn refresh.
+    case 'setOwnDonActive': {
+      const count = Math.min(effect.count || 0, ctx.player.donRested || 0);
+      if (count <= 0) return { status: 'applied' };
+      ctx.player.donRested -= count;
+      ctx.player.donActive = (ctx.player.donActive || 0) + count;
+      log(ctx.game, `${ctx.card.name}: set ${count} DON!! as active.`);
+      return { status: 'applied' };
+    }
+
+    // Phase 8 — un-rest up to N of your own Characters matching the
+    // filter (Katakuri OP11-067). For count=1 we open a restTarget-style
+    // picker scoped to the owner's own field. Auto-resolves synchronously
+    // when there is at most one eligible candidate.
+    case 'setCharacterActive': {
+      const filter = effect.filter || {};
+      const restedEligible = (ctx.player.field || []).filter(c => {
+        if (c.type !== 'CHARACTER') return false;
+        if (!c.rested) return false;
+        if (filter.minCost != null && (c.cost || 0) < filter.minCost) return false;
+        if (filter.affiliation) {
+          const aff = c.affiliation || '';
+          if (!aff.toLowerCase().includes(filter.affiliation.toLowerCase())) return false;
+        }
+        return true;
+      });
+      if (restedEligible.length === 0) {
+        log(ctx.game, `${ctx.card.name}: no eligible rested Characters to set active.`);
+        return { status: 'applied' };
+      }
+      // Auto-pick up to max: simplest semantics — un-rest the first N
+      // matching characters. Katakuri's end-of-turn use-case doesn't
+      // warrant a picker UI; if future cards need selection we can
+      // wrap this in a window.
+      const n = Math.min(effect.max || 1, restedEligible.length);
+      for (let i = 0; i < n; i++) restedEligible[i].rested = false;
+      log(ctx.game, `${ctx.card.name}: set ${n} Character(s) as active.`);
+      return { status: 'applied' };
+    }
+
     // Phase 7 — play a Character card from trash (Kuzan ST27-003). Opens
     // playFromTrashWindow; resolver moves the picked card onto the
     // field and fires its onPlay pipeline (same as playFromHand).
