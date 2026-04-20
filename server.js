@@ -647,7 +647,32 @@ function doEnd(game) {
       return (e.expiresAtTurn == null) || (e.expiresAtTurn >= game.turn);
     });
   }
+  // Phase 5 Priority 8 — prune expired suppressions. Same expiry
+  // semantics as tempPowerEffects: thisTurn-kind gets expiresAtTurn
+  // equal to the turn they were applied on (now < game.turn → dropped).
+  const pruneSuppressions = (card) => {
+    if (!card || !Array.isArray(card.suppressions) || card.suppressions.length === 0) return;
+    card.suppressions = card.suppressions.filter(s => (s.expiresAtTurn == null) || s.expiresAtTurn >= game.turn);
+  };
+  for (const pid of Object.keys(game.players)) {
+    const pl = game.players[pid];
+    pruneSuppressions(pl.leader);
+    (pl.field || []).forEach(pruneSuppressions);
+  }
   doRefresh(game);
+}
+
+// Phase 5 Priority 8 — suppression helpers. Each checks whether the
+// given card has an active suppression of the given kind. Returning
+// truthy means the caller should skip / reject the operation.
+function isEffectsSuppressed(card) {
+  return !!(card && Array.isArray(card.suppressions) && card.suppressions.some(s => s.kind === 'effects'));
+}
+function isAttackSuppressed(card) {
+  return !!(card && Array.isArray(card.suppressions) && card.suppressions.some(s => s.kind === 'attack'));
+}
+function isBlockerAbilitySuppressed(card) {
+  return !!(card && Array.isArray(card.suppressions) && card.suppressions.some(s => s.kind === 'blockerAbility'));
 }
 
 function addDon(game) {
@@ -842,9 +867,13 @@ function handleAction(roomId, playerId, action) {
         p.field.push(card);
         card.playedThisTurn = true;
         log(game, `${playerId.slice(0,6)} plays ${card.name} (${card.power} power).`);
-        // Phase-4 routing: new-pipeline characters run their [On Play]
-        // through runPipeline; legacy characters stay on parseAndApply.
-        if (card.useNewPipeline) {
+        // P5/P8 — effects suppression gates the onPlay fire. The card
+        // still enters play; only its triggered ability is muted.
+        if (isEffectsSuppressed(card)) {
+          log(game, `${card.name}: [On Play] suppressed by opponent effect.`);
+        } else if (card.useNewPipeline) {
+          // Phase-4 routing: new-pipeline characters run through runPipeline;
+          // legacy characters stay on parseAndApply.
           runPipeline('onPlay', game, playerId, card);
         } else {
           parseAndApply('onPlay', game, playerId, card, opp);
@@ -912,6 +941,11 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'Already used this turn.'});
         return;
       }
+      // P8 — effects suppression blocks the Activate: Main fire.
+      if (isEffectsSuppressed(card)) {
+        send(playerId, {type:'ERROR', msg:`${card.name}: [Activate: Main] suppressed by opponent effect.`});
+        return;
+      }
       // Mark used + rest the card (stages rest too on activate).
       card.usedThisTurn = true;
       card.rested = true;
@@ -962,7 +996,10 @@ function handleAction(roomId, playerId, action) {
       log(game, `\u2694\uFE0F ${attacker.name} (${attackPower}) attacks ${defender.name} (${defendPower})!`);
 
       // Trigger [When Attacking] effects
-      if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
+      // P8 — effects suppression blocks the triggered ability.
+      if (isEffectsSuppressed(attacker)) {
+        log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
+      } else if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
       else parseAndApply('whenAttacking', game, playerId, attacker, opp);
 
       game.counterWindow = {
@@ -990,6 +1027,10 @@ function handleAction(roomId, playerId, action) {
       if (attacker.playedThisTurn && !(attacker.ability && attacker.ability.includes('[Rush]'))) {
         send(playerId, {type:'ERROR', msg:'This character cannot attack this turn'}); return;
       }
+      // P8 — attack suppression (Sarra the Wise-style "cannot attack until…").
+      if (isAttackSuppressed(attacker)) {
+        send(playerId, {type:'ERROR', msg:'That card cannot attack.'}); return;
+      }
       const attackerPower = effectivePowerOf(attacker, game);
       attacker.rested = true;
       game.battleState = {
@@ -1009,7 +1050,11 @@ function handleAction(roomId, playerId, action) {
       // parser checks any [DON!! xN] gate and may open trash-from-hand / DON-cost
       // / KO target windows. If the effect modifies attacker power (e.g. +N self
       // boost), refresh battleState.attackerPower so the overlay/arrow reflect it.
-      if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
+      // P8 — effects suppression blocks the triggered ability; attack itself
+      // still proceeds (attack suppression is a separate kind, checked above).
+      if (isEffectsSuppressed(attacker)) {
+        log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
+      } else if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
       else parseAndApply('whenAttacking', game, playerId, attacker, opp);
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
       break;
@@ -1073,6 +1118,11 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'That card has no [Blocker]'}); return;
       }
       if (blocker.rested) { send(playerId, {type:'ERROR', msg:'Blocker is rested'}); return; }
+      // P8 — "cannot activate [Blocker]" (Limejuice-style). Attack proceeds
+      // normally as if no blocker was declared.
+      if (isBlockerAbilitySuppressed(blocker)) {
+        send(playerId, {type:'ERROR', msg:'Blocker ability is suppressed.'}); return;
+      }
       blocker.rested = true;
       game.battleState.targetUid     = blocker.uid;
       game.battleState.targetName    = blocker.name;
@@ -1089,7 +1139,10 @@ function handleAction(roomId, playerId, action) {
       // [On Block] effect through the multi-agent pipeline. Every other
       // card's [On Block] still depends on parseAndApply (which doesn't
       // currently wire onBlock at all — that's the point of the migration).
-      if (blocker.useNewPipeline) {
+      // P8 — effects suppression blocks the [On Block] fire.
+      if (isEffectsSuppressed(blocker)) {
+        log(game, `${blocker.name}: [On Block] suppressed by opponent effect.`);
+      } else if (blocker.useNewPipeline) {
         runPipeline('onBlock', game, defenderId, blocker);
       }
       break;
@@ -1148,12 +1201,15 @@ function handleAction(roomId, playerId, action) {
       // This is a no-op for character counter cards (they don't have [Counter] in ability).
       if (hasCounterAbility) {
         const oppOfDefender = game.players[Object.keys(game.players).find(id => id !== defenderId)];
-        // Phase-5 Priority-1 routing: new-pipeline counter events
-        // (NoroNoro Beam Sword, Bad Manners Kick Course) run their
-        // [Counter] block through runPipeline. Legacy cards stay on
-        // parseAndApply. The counter card has already been trashed and
-        // any event-cost DON already deducted above.
-        if (card.useNewPipeline) {
+        // P8 — effects suppression mutes the [Counter] ability. The card
+        // still discards for its counter value; only the ability fire is
+        // blocked.
+        if (isEffectsSuppressed(card)) {
+          log(game, `${card.name}: [Counter] ability suppressed by opponent effect.`);
+        } else if (card.useNewPipeline) {
+          // Phase-5 Priority-1 routing: new-pipeline counter events
+          // (NoroNoro Beam Sword, Bad Manners Kick Course) run their
+          // [Counter] block through runPipeline.
           runPipeline('counter', game, defenderId, card);
         } else {
           parseAndApply('counter', game, defenderId, card, oppOfDefender);
@@ -1550,12 +1606,20 @@ function handleAction(roomId, playerId, action) {
         }
         const oppOfTrigger = game.players[Object.keys(game.players).find(id => id !== playerId)];
         log(game, `[Trigger] ${tw.card.name} activated!`);
-        // Phase 5 Priority 5 — route new-pipeline cards through
-        // runPipeline for their [Trigger] block. Snow Merchant is the
-        // first card that benefits (its [Trigger] block contains a
-        // meta-ref to its own [Counter] block).
-        if (tw.card.useNewPipeline) runPipeline('trigger', game, playerId, tw.card);
-        else parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
+        // P8 — effects suppression: trigger fire is blocked when the
+        // card (now in trash) carries a suppression. Rare in practice
+        // since suppressions usually target cards on the field.
+        if (isEffectsSuppressed(tw.card)) {
+          log(game, `${tw.card.name}: [Trigger] suppressed by opponent effect.`);
+        } else if (tw.card.useNewPipeline) {
+          // Phase 5 Priority 5 — route new-pipeline cards through
+          // runPipeline for their [Trigger] block. Snow Merchant is the
+          // first card that benefits (its [Trigger] block contains a
+          // meta-ref to its own [Counter] block).
+          runPipeline('trigger', game, playerId, tw.card);
+        } else {
+          parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
+        }
       } else {
         log(game, `[Trigger] ${tw.card.name} skipped.`);
       }
@@ -1760,6 +1824,46 @@ function handleAction(roomId, playerId, action) {
       target.rested = true;
       log(game, `${w.sourceCardName}: rested ${target.name}.`);
       finishWindow();
+      break;
+    }
+
+    // Phase-5 Priority-8 resolver: player picked a target to apply a
+    // suppression to. Pushes a { kind, expiresAtTurn } entry onto the
+    // target's suppressions array. doEnd prunes expired entries.
+    case 'SUPPRESSION_TARGET_SELECTED': {
+      if (!game.suppressionTargetWindow || game.suppressionTargetWindow.playerId !== playerId) return;
+      const w = game.suppressionTargetWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a suppression target.'}); return; }
+        log(game, `${w.sourceCardName}: suppression skipped.`);
+        game.suppressionTargetWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid target.'}); return;
+      }
+      // Locate the target on either field or as a leader.
+      let target = null;
+      for (const pid of Object.keys(game.players)) {
+        const pl = game.players[pid];
+        if (pl.leader && pl.leader.uid === action.targetUid) { target = pl.leader; break; }
+        const hit = (pl.field || []).find(c => c.uid === action.targetUid);
+        if (hit) { target = hit; break; }
+      }
+      if (!target) { send(playerId, {type:'ERROR', msg:'Target gone.'}); return; }
+      // Compute expiresAtTurn. 'thisTurn' keeps the buff for the rest of
+      // the current turn; doEnd drops it at the end (same math as
+      // tempPowerEffects). 'opponentNextTurn' persists one extra turn.
+      const expiresAtTurn = w.duration === 'opponentNextTurn' ? (game.turn + 1) : game.turn;
+      if (!Array.isArray(target.suppressions)) target.suppressions = [];
+      target.suppressions.push({
+        kind: w.kind, expiresAtTurn, source: w.sourceCardName,
+      });
+      log(game, `${w.sourceCardName}: ${target.name} is now suppressed (${w.kind}) until turn ${expiresAtTurn}.`);
+      game.suppressionTargetWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -3510,6 +3614,11 @@ function tempPowerSum(game, uid) {
 // Trigger [On K.O.] for a KO'd character
 function triggerOnKO(game, ownerId, card, killerId) {
   if (!card.ability || !card.ability.includes('[On K.O.]')) return;
+  // P5/P8 — effects suppression gates every event-driven ability fire.
+  if (isEffectsSuppressed(card)) {
+    log(game, `${card.name}: [On K.O.] suppressed by opponent effect.`);
+    return;
+  }
   const owner = game.players[ownerId];
   const opp = game.players[killerId];
   if (!owner || !opp) return;
@@ -4066,6 +4175,31 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'activateOwnEffect', timing: m[1] };
   }
 
+  // Phase 5 Priority 8 — effect suppression. Two sentence shapes:
+  //   "[Nn]egate|[Nn]ullify the effect(s) of up to N of your opponent's
+  //     (leader|character|leader or character) [cards] [during this turn]"
+  //   "up to one of your opponent's (leader|character|…) effects are negated
+  //     [until end of …|during this turn]"
+  // Both emit suppressTarget with kind='effects' and a duration.
+  if ((m = seg.match(/(?:[Nn]egate|[Nn]ullify) the effects? of (?:up to (one|\d+) of )?your opponent'?s? (leaders? or characters?|leaders?|characters?)(?: cards?)?(?:.*?during this (turn|battle))?(?:.*?until .*? (?:turn|end phase))?/i))) {
+    const max = m[1] ? (m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1])) : 1;
+    const label = m[2].toLowerCase();
+    const targetKind = /\bor\b/.test(label) ? 'leaderOrCharacter'
+                     : /character/.test(label) ? 'character'
+                     : 'leader';
+    const duration = /until .*? (?:next )?(?:turn|end phase)/i.test(seg) ? 'opponentNextTurn' : 'thisTurn';
+    return { type: 'suppressTarget', kind: 'effects', max, targetKind, duration };
+  }
+  if ((m = seg.match(/(?:up to (one|\d+) of )?your opponent'?s? (leaders? or characters?|leaders?|characters?)(?: cards?)? effects?\s+(?:are|is)?\s*negated/i))) {
+    const max = m[1] ? (m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1])) : 1;
+    const label = m[2].toLowerCase();
+    const targetKind = /\bor\b/.test(label) ? 'leaderOrCharacter'
+                     : /character/.test(label) ? 'character'
+                     : 'leader';
+    const duration = /until .*? (?:next )?(?:turn|end phase)/i.test(seg) ? 'opponentNextTurn' : 'thisTurn';
+    return { type: 'suppressTarget', kind: 'effects', max, targetKind, duration };
+  }
+
   unparsed.push(seg);
   return null;
 }
@@ -4402,6 +4536,24 @@ function agentApplyEffect(effect, ctx, resume) {
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
     }
 
+    // Phase 5 Priority 8 — suppression target (negate / attack-prevent /
+    // blocker-ability-prevent). Opens the shared suppression window
+    // which on resolution pushes a { kind, expiresAtTurn } entry onto
+    // the chosen target's suppressions array.
+    case 'suppressTarget': {
+      const opened = openSuppressionTarget(ctx.game, ctx.playerId, {
+        side: 'opponent',
+        targetKind: effect.targetKind || 'leaderOrCharacter',
+        kind: effect.kind || 'effects',
+        duration: effect.duration || 'thisTurn',
+        optional: ctx._blockOptional != null ? ctx._blockOptional : (effect.optional !== false),
+        sourceCardName: ctx.card.name,
+        filter: effect.filter || {},
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
     // Phase 5 Priority 5 — meta-reference. "Activate this card's [X]
     // effect" runs the target timing's block effects on this card.
     // Snow Merchant is the canonical case: [Trigger] delegates to the
@@ -4559,6 +4711,47 @@ function resumePipeline(game, playerId, resume) {
   });
 }
 
+// Phase-5 Priority-8 — opens a target picker for a suppression effect.
+// The chosen target gets a {kind, expiresAtTurn} entry pushed onto its
+// `suppressions` array. Enforcement checks read these entries at every
+// fire site (see isEffectsSuppressed / isAttackSuppressed /
+// isBlockerAbilitySuppressed).
+function openSuppressionTarget(game, playerId, opts) {
+  const me  = game.players[playerId];
+  const oppId = Object.keys(game.players).find(id => id !== playerId);
+  const opp = game.players[oppId];
+  const { side = 'opponent', targetKind = 'leaderOrCharacter',
+          kind = 'effects', duration = 'thisTurn',
+          optional = true, sourceCardName = '',
+          filter = {}, pipelineResume = null } = opts || {};
+  const pool = side === 'opponent' ? opp : me;
+  let candidates = [];
+  if (targetKind === 'leader' || targetKind === 'leaderOrCharacter') {
+    if (pool.leader) candidates.push(pool.leader);
+  }
+  if (targetKind === 'character' || targetKind === 'leaderOrCharacter') {
+    candidates.push(...(pool.field || []).filter(c => c.type === 'CHARACTER'));
+  }
+  // Apply cost/power filter (Limejuice: "power 4000 or less").
+  candidates = candidates.filter(c => {
+    if (filter.maxCost != null && (c.cost || 0) > filter.maxCost) return false;
+    if (filter.maxPower != null && ((c.power || 0) + (c.attachedDon || 0) * 1000) > filter.maxPower) return false;
+    return true;
+  });
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName}: no valid suppression targets (kind=${kind}).`);
+    return false;
+  }
+  game.suppressionTargetWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    optional, sourceCardName, kind, duration, side, targetKind,
+    pipelineResume,
+  };
+  log(game, `${sourceCardName}: choose a target to suppress (${kind}, ${candidates.length} option(s)).`);
+  return true;
+}
+
 // Phase-5 Priority-1 UI-agent surface — opens an interactive target
 // picker for powerBuff / powerDebuff effects. `side` is 'self' or
 // 'opponent'; `targetKind` is 'leader' | 'character' | 'leaderOrCharacter'.
@@ -4642,6 +4835,8 @@ module.exports = {
   parseAbility, PARSED_EFFECTS,
   // Phase-3/4 pipeline surface
   runPipeline, resumePipeline, triggerOnKO,
+  // Phase-5 P8 suppression helpers
+  isEffectsSuppressed, isAttackSuppressed, isBlockerAbilitySuppressed,
   // Catalog
   CARD_DB, PRESET_DECKS,
   // Deck + game construction
