@@ -134,7 +134,7 @@ const CARD_DB = [
     ability:"[Counter] DON!! -1: If your Leader has the {Donquixote Pirates} type, up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
   { id:'OP10-079', name:'God Thread', type:'EVENT', color:'Purple',
-    power:0, cost:5, counter:0, image:IMG('OP10','OP10-079','jpg'),
+    power:0, cost:5, counter:0, image:IMG('OP10','OP10-079','jpg'), useNewPipeline:true,
     ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 5 or less. Then, add up to 1 Active DON!! from your DON!! deck. [Trigger] Add up to 1 Active DON!! from your DON!! deck." },
 
   // ══════════════════════════════
@@ -4102,6 +4102,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'drawCards', count: n };
   }
 
+  // Phase 7 — "Add up to N Active DON!! from your DON!! deck" (God Thread
+  // and similar): the "Active" adjective precedes DON!! rather than a
+  // trailing "set it as active" — unique enough to check before the
+  // general matchers.
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) Active DON!!/))) {
+    return { type: 'addDon', count: parseInt(m[1]), state: 'active' };
+  }
   if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) (?:Active )?DON!!.*?(?:set it as active|active)/))) {
     return { type: 'addDon', count: parseInt(m[1]), state: 'active' };
   }
