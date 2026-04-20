@@ -296,7 +296,7 @@ const CARD_DB = [
     ability:"[Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type, until the end of your opponent's next turn this character gains [Double Attack] and [Banish] or [Blocker]." },
 
   { id:'ST27-003', name:'Kuzan', type:'CHARACTER', color:'Blue', attribute:'Special',
-    power:6000, cost:6, counter:1000, image:IMG('ST27','ST27-003','jpg'),
+    power:6000, cost:6, counter:1000, image:IMG('ST27','ST27-003','jpg'), useNewPipeline:true,
     ability:"[Blocker] [On K.O.] Play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less from your trash rested." },
 
   { id:'OP09-093', name:'Marshall D. Teach', type:'CHARACTER', color:'Black', attribute:'Special',
@@ -557,6 +557,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
+    playFromTrashWindow: null, // Phase 7: {playerId, candidateUids, filter, rested, sourceCardName, pipelineResume}
     donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
     koTargetWindow: null,     // KO target picker: {playerId, candidateUids, remaining, optional, sourceCardName, resumeTiming, resumeCardUid, filterKind, filterValue}
     // Bug 5 — TRASH_FROM_HAND_COST: parsed from "You may trash N card(s) from your hand: <effect>".
@@ -1674,6 +1675,43 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // Phase 7 — resolver for playFromTrash window. Moves the chosen
+    // Character from trash to field (rested if the window flags so) and
+    // fires its onPlay pipeline, mirroring PLAY_FROM_HAND_RESOLVE.
+    case 'PLAY_FROM_TRASH_RESOLVE': {
+      if (!game.playFromTrashWindow || game.playFromTrashWindow.playerId !== playerId) return;
+      const w = game.playFromTrashWindow;
+      const owner = game.players[playerId];
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must pick a target.'}); return; }
+        log(game, `${w.sourceCardName}: skipped.`);
+        game.playFromTrashWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid pick.'});
+        return;
+      }
+      const tidx = owner.trash.findIndex(c => c.uid === action.cardUid);
+      if (tidx === -1) { game.playFromTrashWindow = null; break; }
+      const picked = owner.trash.splice(tidx, 1)[0];
+      picked.rested = w.rested === true;
+      picked.attachedDon = 0;
+      picked.usedThisTurn = false;
+      picked.playedThisTurn = true;
+      owner.field.push(picked);
+      log(game, `${w.sourceCardName}: played ${picked.name} from trash${picked.rested ? ' (rested)' : ''}.`);
+      game.playFromTrashWindow = null;
+      const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
+      log(game, `${picked.name}: triggering [On Play].`);
+      if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
+      else parseAndApply('onPlay', game, playerId, picked, opp2);
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
     // Bug 5 — resolve "You may trash N card(s) from your hand:" cost. Player either
     // confirms a selection (cards trashed → resume effect) or skips (no effect fires).
     case 'TRASH_FROM_HAND_RESOLVE': {
@@ -2198,6 +2236,37 @@ function autoPlayFromHand(p, costThreshold, game, cardName, typeFilter) {
 }
 
 // ─── PLAY_FROM_HAND interactive resolver ──────────────────────────────────────
+// Phase 7 — opens playFromTrashWindow so the player picks which trashed
+// Character to deploy (optionally rested). Filter supports affiliation,
+// type, maxCost, excludeName — matching the parsed playFromTrash effect.
+function openPlayFromTrash(game, playerId, opts) {
+  const p = game.players[playerId];
+  const { filter = {}, rested = false, sourceCardName = '',
+          pipelineResume = null, max = 1, optional = true } = opts || {};
+  const candidates = (p.trash || []).filter(c => {
+    if (filter.type && c.type !== filter.type) return false;
+    if (filter.maxCost != null && (c.cost || 0) > filter.maxCost) return false;
+    if (filter.affiliation) {
+      const aff = c.affiliation || '';
+      if (!aff.toLowerCase().includes(filter.affiliation.toLowerCase())) return false;
+    }
+    if (filter.excludeName && c.name === filter.excludeName) return false;
+    return true;
+  });
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName || 'Effect'}: no eligible Character in trash.`);
+    return false;
+  }
+  game.playFromTrashWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    filter, rested, sourceCardName, optional, max,
+    pipelineResume,
+  };
+  log(game, `${sourceCardName}: choose a Character from trash (${candidates.length} option(s)).`);
+  return true;
+}
+
 // Opens game.playFromHandWindow so the player picks which Character to deploy
 // for free. Pattern: "Play up to 1 [{TYPE} type] Character card with a cost of
 // N or less from your hand". `typeName` filters by card.affiliation; `nameMatch`
@@ -3858,6 +3927,21 @@ function parseAbility(text) {
     }
   );
 
+  // Phase 7 — pre-process "Play up to N … from your trash [rested]". Encodes
+  // affiliation/type/cost/exclude-name/rested-flag into a placeholder so
+  // the inline [ExcludeName] bracket survives the body bracket stripper.
+  processed = processed.replace(
+    /[Pp]lay up to (\d+)\s+\{([^}]+)\}\s*type\s+(Character|Event|Stage)?\s*cards?(?:\s+with\s+(?:a\s+)?cost of (\d+) or less)?(?:\s+other than \[([^\]]+)\])?\s+from your trash(\s+rested)?/g,
+    (_m, n, aff, type, cost, excl, rested) => {
+      const a = aff.replace(/\s+/g, '-');
+      const t = type || '';
+      const c = cost || '';
+      const e = excl ? excl.replace(/\s+/g, '-') : '';
+      const r = rested ? '1' : '0';
+      return `\u00a7PFT_${n}_${a}_${t}_${c}_${e}_${r}\u00a7`;
+    }
+  );
+
   // Phase 7 — pre-process "This Character gains [KEYWORD] during this turn"
   // (and opponent-next-turn variant). Protects the bracketed keyword from
   // the body-level [tag] stripper that runs in _parseBlock, so the
@@ -4320,6 +4404,16 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   // Phase 7 — keyword grant placeholder. Set by parseAbility pre-processing.
   if ((m = seg.match(/\u00a7GRANT_([a-z0-9-]+)_([a-zA-Z]+)\u00a7/))) {
     return { type: 'grantKeyword', keyword: m[1].replace(/-/g, ' '), duration: m[2] };
+  }
+
+  // Phase 7 — playFromTrash placeholder. Fields, in order:
+  //   max, affiliation (dash-joined), type, maxCost, excludeName, rested-flag
+  if ((m = seg.match(/\u00a7PFT_(\d+)_([^_§]+)_([^_§]*)_([^_§]*)_([^_§]*)_([01])\u00a7/))) {
+    const filter = { affiliation: m[2].replace(/-/g, ' ') };
+    if (m[3]) filter.type = m[3].toUpperCase();
+    if (m[4]) filter.maxCost = parseInt(m[4]);
+    if (m[5]) filter.excludeName = m[5].replace(/-/g, ' ');
+    return { type: 'playFromTrash', max: parseInt(m[1]), filter, rested: m[6] === '1' };
   }
 
   // Phase 5 Priority 8 — blocker-ability suppression placeholder.
@@ -4792,6 +4886,21 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 7 — play a Character card from trash (Kuzan ST27-003). Opens
+    // playFromTrashWindow; resolver moves the picked card onto the
+    // field and fires its onPlay pipeline (same as playFromHand).
+    case 'playFromTrash': {
+      const opened = openPlayFromTrash(ctx.game, ctx.playerId, {
+        filter: effect.filter || {},
+        rested: effect.rested === true,
+        max: effect.max || 1,
+        optional: effect.optional !== false,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
     // Phase 7 — keyword grant. Pushes a { keyword, expiresAtTurn } entry
     // onto ctx.card.tempKeywords; hasRush / other keyword checks read
     // this list. doEnd prunes expired entries.
