@@ -2517,8 +2517,83 @@ function effectivePowerOf(card, game) {
   let p = (card.power || 0) + (card.attachedDon || 0) * 1000;
   const effs = (game && game.tempPowerEffects) || [];
   for (const e of effs) if (e.targetUid === card.uid) p += (e.amount || 0);
-  p += passivePowerBuff(card, game);
+  p += passivePowerBuffTyped(card, game);
   return Math.max(0, p);
+}
+
+// Track P Phase 2 — typed passive power evaluator. Aggregates every
+// passive entry that affects this card's power: own-card
+// scaledPowerBuff (Jesse, Burgess), scopedPowerBuff (Chopper), and
+// globalPowerModifier entries on the opposing side (OP09-004 Shanks).
+function passivePowerBuffTyped(card, game) {
+  if (!card || !game || !game.players) return 0;
+  const owner = findCardOwner(game, card.uid);
+  if (!owner) return 0;
+  let total = 0;
+
+  for (const p of (PASSIVE_EFFECTS.get(card.id) || [])) {
+    if (!_passiveScopeOk(p, game, owner)) continue;
+    if (!_passiveConditionsOk(p.conditions, card, game, owner)) continue;
+    if (p.type === 'scaledPowerBuff') {
+      let count = 0;
+      if (p.source === 'eventsInTrash') {
+        count = (owner.player.trash || []).filter(c => c.type === 'EVENT').length;
+      } else if (p.source === 'trashCards') {
+        count = (owner.player.trash || []).length;
+      }
+      total += Math.floor(count / (p.per || 1)) * (p.amount || 0);
+    } else if (p.type === 'scopedPowerBuff') {
+      total += (p.amount || 0);
+    }
+  }
+
+  // Global modifiers emitted by the opposing side's cards that affect
+  // characters on THIS card's side.
+  const oppId = Object.keys(game.players).find(id => id !== owner.playerId);
+  const opp = game.players[oppId];
+  if (opp) {
+    const sources = [opp.leader, ...(opp.field || [])].filter(Boolean);
+    for (const src of sources) {
+      for (const gp of (PASSIVE_EFFECTS.get(src.id) || [])) {
+        if (gp.type !== 'globalPowerModifier') continue;
+        if (gp.side === 'opponent' && gp.target === 'characters' && card.type === 'CHARACTER') {
+          total += (gp.amount || 0);
+        }
+      }
+    }
+  }
+
+  return total;
+}
+
+function _passiveScopeOk(entry, game, owner) {
+  if (!entry.scope || entry.scope === 'always') return true;
+  if (entry.scope === 'yourTurn') return game.activePlayer === owner.playerId;
+  if (entry.scope === 'opponentsTurn') return game.activePlayer !== owner.playerId;
+  return true;
+}
+
+function _passiveConditionsOk(conditions, card, game, owner) {
+  if (!Array.isArray(conditions)) return true;
+  for (const c of conditions) {
+    if (c.type === 'donAttached') {
+      if ((card.attachedDon || 0) < c.value) return false;
+    } else if (c.type === 'leaderType') {
+      const aff = ((owner.player.leader && owner.player.leader.affiliation) || '').toLowerCase();
+      if (!aff.includes(c.value.toLowerCase())) return false;
+    } else if (c.type === 'ownTrashCountMin') {
+      if ((owner.player.trash || []).length < c.value) return false;
+    } else if (c.type === 'ownCharacterPowerMin') {
+      const powerOf = (c2) => (c2.power || 0) + (c2.attachedDon || 0) * 1000;
+      if (!(owner.player.field || []).some(c2 => c2.type === 'CHARACTER' && powerOf(c2) >= c.value)) return false;
+    } else if (c.type === 'oppCharacterPowerMin') {
+      const oppId = Object.keys(game.players).find(id => id !== owner.playerId);
+      const opp = game.players[oppId];
+      if (!opp) return false;
+      if (!(opp.field || []).some(c2 => c2.type === 'CHARACTER' && (c2.power || 0) >= c.value)) return false;
+    }
+  }
+  return true;
 }
 
 // Locate the player who owns a given card (leader OR field). Returns
@@ -5610,6 +5685,7 @@ module.exports = {
   handleAction, doRefresh, doDraw, doEnd, nextPhase,
   // Keyword detectors
   hasBlocker, hasRush, hasDoubleAttack, hasBanish,
+  effectivePowerOf,
   counterValueOf,
   // Broadcast plumbing (tests replace clients.get(id).send with a spy)
   rooms, clients, send, broadcast, sendState,
