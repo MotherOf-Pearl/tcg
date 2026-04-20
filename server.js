@@ -268,7 +268,7 @@ const CARD_DB = [
     ability:"[Activate: Main] You may rest this character and one of your DON!!: Look at the top 5 cards of your deck, reveal up to one {Blackbeard Pirates} type card and put it into your hand. Place the rest at the bottom of your deck in any order." },
 
   { id:'OP11-083', name:'Caribou', type:'CHARACTER', color:'Black', attribute:'Special',
-    power:2000, cost:1, counter:2000, image:IMG('OP11','OP11-083','jpg'),
+    power:2000, cost:1, counter:2000, image:IMG('OP11','OP11-083','jpg'), useNewPipeline:true,
     ability:"[Blocker] [On Play] Trash 2 cards from your hand." },
 
   { id:'OP09-089', name:'Stronger', type:'CHARACTER', color:'Blue', attribute:'Wisdom',
@@ -288,7 +288,7 @@ const CARD_DB = [
     ability:"If your Leader has the {Blackbeard Pirates} type, this Character gains [Blocker]. [On K.O.] If your Leader has the {Blackbeard Pirates} type, K.O. up to 1 of your opponent's Characters with a base cost of 4 or less." },
 
   { id:'OP10-082', name:'Kuzan', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:5000, cost:5, counter:0, image:IMG('OP10','OP10-082','jpg'),
+    power:5000, cost:5, counter:0, image:IMG('OP10','OP10-082','jpg'), useNewPipeline:true,
     ability:"This Character cannot be removed from the field by your opponent's effects. [Activate: Main] You may trash this Character: Draw 1 card. Then, play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less other than [Kuzan] from your trash." },
 
   { id:'OP09-084', name:'Catarina Devon', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -4152,6 +4152,14 @@ function _parseBlock(block, unparsed) {
     body = body.substring(restSelf[0].length).trim();
   }
 
+  // Phase 8 — "You may trash this (Character|Stage):" — self-trash cost
+  // (Kuzan OP10-082). Moves source card from field to trash.
+  const trashSelf = body.match(/^You may trash this (Character|Stage|character|stage)\s*:\s*/i);
+  if (trashSelf) {
+    costs.push({ type: 'trashSelf' });
+    body = body.substring(trashSelf[0].length).trim();
+  }
+
   // Placeholders set by parseAbility pre-processing already collapsed an
   // "up to N" phrase; treat their presence as implying optional.
   const optional = /\b(?:you may|up to)\b|\u00a7SUPPRESS_/i.test(body);
@@ -4237,6 +4245,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'conditionalEffect',
       condition: { type: 'lastTargetMaxCost', value: parseInt(condM[1]) },
       effect: { type: 'koLastTarget' } };
+  }
+
+  // Phase 8 — mandatory "Trash N cards from your hand" as an EFFECT
+  // (not a cost), e.g. Caribou OP11-083. Distinct from the "You may
+  // trash N cards from your hand:" cost form handled in _parseBlock.
+  if ((m = seg.match(/^[Tt]rash (\d+) cards? from your hand/))) {
+    return { type: 'trashFromHandEffect', count: parseInt(m[1]) };
   }
 
   if ((m = seg.match(/^(?:[Dd]raw) (one|\d+) cards?/))) {
@@ -4633,6 +4648,18 @@ function agentPayCosts(costs, ctx, resume) {
         if (!ctx.card.rested) ctx.card.rested = true;
         break;  // continue loop to any subsequent costs
       }
+      case 'trashSelf': {
+        // Synchronous cost: move source from field to trash. ctx.card
+        // reference stays valid (same object, now in trash).
+        const f = ctx.player.field;
+        const idx = f.findIndex(c => c.uid === ctx.card.uid);
+        if (idx !== -1) {
+          f.splice(idx, 1);
+          ctx.player.trash.push(ctx.card);
+          log(ctx.game, `${ctx.card.name}: trashed as cost.`);
+        }
+        break;
+      }
       default:
         console.log('[AGENT-COST] Not yet supported in new pipeline:', c.type, `(card ${ctx.card.name})`);
         return { status: 'unsupported' };
@@ -4943,6 +4970,19 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 8 — mandatory "Trash N cards from your hand" as an effect
+    // (Caribou OP11-083). Opens trashFromHandWindow with optional=false
+    // so the player must pick exactly N cards.
+    case 'trashFromHandEffect': {
+      const count = effect.count || 1;
+      const opened = openTrashFromHand(ctx.game, ctx.playerId, {
+        count, optional: false,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
     // Phase 8 — conditional effect wrapper. Evaluates `effect.condition`
     // against the game state and runs `effect.effect` only if met.
     //   ownCharacterPowerMin — at least one own Character whose effective
