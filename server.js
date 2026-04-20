@@ -363,11 +363,11 @@ const CARD_DB = [
     ability:"[On Play] Place up to 1 Character with a cost of 7 or less at the bottom of the owner's deck." },
 
   { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
-    power:0, cost:4, counter:0, image:IMG('ST03','ST03-015','png'),
+    power:0, cost:4, counter:0, image:IMG('ST03','ST03-015','png'), useNewPipeline:true,
     ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
 
   { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
-    power:0, cost:2, counter:0, image:IMG('ST03','ST03-016','png'),
+    power:0, cost:2, counter:0, image:IMG('ST03','ST03-016','png'), useNewPipeline:true,
     ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
 
   { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
@@ -1550,7 +1550,12 @@ function handleAction(roomId, playerId, action) {
         }
         const oppOfTrigger = game.players[Object.keys(game.players).find(id => id !== playerId)];
         log(game, `[Trigger] ${tw.card.name} activated!`);
-        parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
+        // Phase 5 Priority 5 — route new-pipeline cards through
+        // runPipeline for their [Trigger] block. Snow Merchant is the
+        // first card that benefits (its [Trigger] block contains a
+        // meta-ref to its own [Counter] block).
+        if (tw.card.useNewPipeline) runPipeline('trigger', game, playerId, tw.card);
+        else parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
       } else {
         log(game, `[Trigger] ${tw.card.name} skipped.`);
       }
@@ -3671,11 +3676,26 @@ function parseAbility(text) {
   const out = { raw: text || '', keywords: [], effects: [], unparsedSegments: [] };
   if (!text) return out;
 
+  // Phase 5 Priority 5 — pre-process "Activate this card's [X] effect"
+  // meta-references. Replace with a placeholder so the splitter doesn't
+  // treat the embedded [Timing] bracket as a new block boundary (which
+  // was producing spurious empty-timing blocks for Snow Merchant,
+  // Cig Break, Siege of Londinium, etc.). The placeholder encodes the
+  // referenced timing so _parseEffectSegment can emit an
+  // activateOwnEffect without needing side state.
+  const processed = text.replace(
+    /[Aa]ctivate this card'?s?\s*\[([^\]]+)\]\s*effect/g,
+    (raw, inner) => {
+      const timing = TIMING_MAP['[' + inner + ']'];
+      return timing ? `\u00a7ACTIVATE_${timing}\u00a7` : raw;
+    }
+  );
+
   for (const [token, name] of Object.entries(KEYWORD_MAP)) {
-    if (text.includes(token)) out.keywords.push(name);
+    if (processed.includes(token)) out.keywords.push(name);
   }
 
-  const blocks = _splitIntoBlocks(text);
+  const blocks = _splitIntoBlocks(processed);
   for (const block of blocks) {
     const parsed = _parseBlock(block, out.unparsedSegments);
     if (parsed) out.effects.push(parsed);
@@ -4032,6 +4052,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'powerDebuff', value: parseInt(m[1]), target: 'opponentCharacter' };
   }
 
+  // Phase 5 Priority 5 — meta-reference placeholder. Set by parseAbility
+  // pre-processing. Encodes the referenced timing so the effect agent
+  // can re-run the target block when fired.
+  if ((m = seg.match(/\u00a7ACTIVATE_(\w+)\u00a7/))) {
+    return { type: 'activateOwnEffect', timing: m[1] };
+  }
+
   unparsed.push(seg);
   return null;
 }
@@ -4353,6 +4380,41 @@ function agentApplyEffect(effect, ctx, resume) {
         pipelineResume: resume || null,
       });
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
+    // Phase 5 Priority 5 — meta-reference. "Activate this card's [X]
+    // effect" runs the target timing's block effects on this card.
+    // Snow Merchant is the canonical case: [Trigger] delegates to the
+    // [Counter] block. We check the target block's conditions (but not
+    // its costs — meta-refs typically skip the cost, "activate this
+    // card's [X] effect" being a rules shortcut rather than a full
+    // re-play). If the target has multiple effects only the first one's
+    // window-open propagates; this covers every known card today.
+    case 'activateOwnEffect': {
+      const parsed = PARSED_EFFECTS.get(ctx.card.id);
+      if (!parsed) return { status: 'applied' };
+      const target = (parsed.effects || []).find(b => b.timing === effect.timing);
+      if (!target) return { status: 'applied' };
+      const cond = agentCheckConditions(target.conditions, ctx);
+      if (!cond.ok) {
+        console.log(`[AGENT-TRACE] ${ctx.card.name}: meta-ref target block condition failed: ${cond.reason}`);
+        return { status: 'applied' };
+      }
+      // Thread target block's optional signal into ctx so downstream
+      // pickers pick up the right skippability.
+      const savedOptional = ctx._blockOptional;
+      ctx._blockOptional = target.optional;
+      try {
+        for (const e of (target.effects || [])) {
+          const res = agentApplyEffect(e, ctx, resume);
+          if (res.status === 'window-open') return res;
+          if (res.status === 'unsupported') return res;
+          if (res.status === 'abort-block') return res;
+        }
+      } finally {
+        ctx._blockOptional = savedOptional;
+      }
+      return { status: 'applied' };
     }
 
     // Phase-4 Batch 3 — scry ("Look at N cards from the top…"). Builds
