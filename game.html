@@ -1149,6 +1149,7 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
       <!-- Phase 1: BLOCK_STEP info for the attacker -->
       <div id="blockStepInfo" style="display:none;flex-direction:column;gap:4px;">
         <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);text-align:center;line-height:1.35;" id="blockStepText"></div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:.7rem;color:var(--muted);text-align:center;letter-spacing:1px;">Waiting for opponent to block…</div>
       </div>
       <!-- Phase 2: BLOCK_STEP options for the defender -->
       <div id="blockBtns" style="display:none;flex-direction:column;gap:4px;">
@@ -1167,7 +1168,7 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
       <div id="counterStepAtkInfo" style="display:none;flex-direction:column;gap:4px;">
         <div style="font-family:'Cinzel',serif;font-size:.85rem;color:var(--gold);text-align:center;">Counter Step</div>
         <div id="counterStepAtkPower" style="font-family:'Barlow Condensed',sans-serif;font-size:.78rem;color:var(--text);text-align:center;line-height:1.35;"></div>
-        <div style="font-size:.62rem;color:var(--muted);text-align:center;">Defender may play counters…</div>
+        <div style="font-family:'Barlow Condensed',sans-serif;font-size:.7rem;color:var(--muted);text-align:center;letter-spacing:1px;">Waiting for opponent to counter…</div>
       </div>
       <!-- KO target picker -->
       <div id="koTargetBtns" style="display:none;flex-direction:column;gap:6px;">
@@ -1673,9 +1674,16 @@ function showAttackOutcome(msg) {
       text = iAmAttacker ? `Attack failed — defender wins!` : `Attack blocked!`;
       break;
     case 'blocked':
+      // BUG 5 — "blocked" means a Blocker intercepted. Wording stays.
       text = iAmAttacker
         ? `Blocked! ${msg.targetName} survives.`
         : `Attack blocked!`;
+      break;
+    case 'defender_power_win':
+      // BUG 5 — defender won through raw power (no blocker used).
+      text = iAmAttacker
+        ? `No damage — defender wins!`
+        : `${msg.targetName} survived the attack.`;
       break;
     case 'game_won':
       text = iAmAttacker ? `Victory! Final blow landed.` : `Defeat — no life remaining.`;

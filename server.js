@@ -1057,6 +1057,9 @@ function handleAction(roomId, playerId, action) {
       game.battleState.targetName    = blocker.name;
       game.battleState.targetPower   = effectivePowerOf(blocker, game);
       game.battleState.targetIsLeader = false;
+      // BUG 5 — flag so RESOLVE_ATTACK can distinguish "blocked by blocker"
+      // from "defender won through raw power" in its outcome broadcast.
+      game.battleState.blockerUsed = true;
       // Reset any prior counter bonus — counters are paid AFTER the block step.
       game.battleState.counterBonus = 0;
       game.phase = 'COUNTER_STEP';
@@ -1088,6 +1091,18 @@ function handleAction(roomId, playerId, action) {
       if (cv <= 0 && !hasCounterAbility) {
         send(playerId, {type:'ERROR', msg:'That card has no counter effect'});
         return;
+      }
+      // BUG 4 — Event counter cards cost DON equal to their printed cost;
+      // Character counters (trash from hand for their Counter value) cost 0.
+      // Enforce before splicing so the card stays in hand on failure.
+      if (card.type === 'EVENT') {
+        const cost = card.cost || 0;
+        if (cost > defender.donActive) {
+          send(playerId, {type:'ERROR', msg:`Not enough active DON (need ${cost}, have ${defender.donActive})`});
+          return;
+        }
+        defender.donActive -= cost;
+        defender.donRested += cost;
       }
       defender.hand.splice(idx, 1);
       defender.trash.push(card);
@@ -1122,10 +1137,10 @@ function handleAction(roomId, playerId, action) {
       else attackerCard = attackerPlayer.field.find(c => c.uid === bs.attackerUid);
 
       const totalDefense = bs.targetPower + (bs.counterBonus || 0);
-      // OPTCG tie rules: leader → defender wins ties (>); character → attacker wins ties (>=).
-      const attackerWins = bs.targetIsLeader
-        ? bs.attackerPower >  totalDefense
-        : bs.attackerPower >= totalDefense;
+      // BUG 16 — house rule: attacker wins every tie (leader AND character).
+      // Diverges from published OPTCG tie rules (defender usually wins leader
+      // ties on a >). User explicitly asked for >= across the board.
+      const attackerWins = bs.attackerPower >= totalDefense;
 
       // Outcome payload assembled as we resolve — broadcast after so both
       // clients can render a role-specific transient banner (BUG 2) and
@@ -1141,6 +1156,7 @@ function handleAction(roomId, playerId, action) {
         outcome: 'blocked',   // will be overwritten below
         lifeRemaining: defender.life.length,
         doubleAttack: !!(attackerCard && hasDoubleAttack(attackerCard)),
+        blockerUsed: !!bs.blockerUsed,  // BUG 5
       };
 
       if (attackerWins) {
@@ -1172,7 +1188,13 @@ function handleAction(roomId, playerId, action) {
         }
       } else {
         log(game, `\uD83D\uDEE1\uFE0F ${bs.targetName} survives the attack (${bs.attackerPower} vs ${totalDefense}).`);
-        outcome.outcome = bs.targetIsLeader ? 'attack_failed' : 'blocked';
+        // BUG 5 — wording split. "attack_failed" = attack didn't land on the
+        // leader (no damage). "blocked" = a real Blocker intercepted. Third
+        // case — defender won through raw power on a character target — is a
+        // defender-power-win and gets its own category.
+        if (bs.targetIsLeader)        outcome.outcome = 'attack_failed';
+        else if (bs.blockerUsed)      outcome.outcome = 'blocked';
+        else                          outcome.outcome = 'defender_power_win';
         // Blocker that wins stays on board, but remains rested (already rested by USE_BLOCKER).
       }
 
@@ -2112,10 +2134,15 @@ function parseMandatoryTrashFromHand(effect) {
 // Returns { count, filterKind: 'cost'|'power', filterValue } or null.
 function parseBounceTarget(effect) {
   if (!effect) return null;
-  let m = effect.match(/[Rr]eturn up to (\d+) Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i);
-  if (m) return { count: parseInt(m[1]), filterKind: 'cost', filterValue: parseInt(m[2]) };
-  m = effect.match(/[Rr]eturn up to (\d+) Character.*?(\d+)\s*power or less.*?(?:owner'?s? )?hand/i);
-  if (m) return { count: parseInt(m[1]), filterKind: 'power', filterValue: parseInt(m[2]) };
+  // BUG 13 — "(?:up to )?" makes mandatory phrasings ("Return 1 Character…")
+  // match too. The `optional` flag is derived from whether "you may" or
+  // "up to" appears anywhere in the effect text — scalable to every bounce
+  // regardless of specific card.
+  const opt = /\b(?:you may|up to)\b/i.test(effect);
+  let m = effect.match(/[Rr]eturn (?:up to )?(\d+) Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i);
+  if (m) return { count: parseInt(m[1]), filterKind: 'cost',  filterValue: parseInt(m[2]), optional: opt };
+  m = effect.match(/[Rr]eturn (?:up to )?(\d+) Character.*?(\d+)\s*power or less.*?(?:owner'?s? )?hand/i);
+  if (m) return { count: parseInt(m[1]), filterKind: 'power', filterValue: parseInt(m[2]), optional: opt };
   return null;
 }
 
@@ -2330,7 +2357,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: true, sourceCardName: card.name,
+        optional: bounce.optional, sourceCardName: card.name,
         resumeTiming: 'onPlay', resumeCardUid: card.uid,
       })) return;
     }
@@ -2375,6 +2402,28 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
         filterKind: 'any', filterValue: '',
         resumeTiming: 'onPlay', resumeCardUid: card.uid,
       })) return;
+    }
+
+    // BUG 17 — AOE K.O. ("K.O. all Characters other than this Character").
+    // Non-interactive — every matching opponent character goes to trash in
+    // one pass, each firing its own [On K.O.] via triggerOnKO. Leader
+    // affiliation gate (when present) is enforced via the existing helper.
+    // Scales to any AOE K.O. line with this phrasing.
+    if (/K\.O\.\s+all Characters other than this Character/i.test(effect) && !opts.aoeKoResolved) {
+      if (leaderAffiliationGatePasses(effect, p)) {
+        const victims = (opp.field || []).filter(c => c.type === 'CHARACTER' && c.uid !== card.uid);
+        const oppId = Object.keys(game.players).find(id => id !== playerId);
+        for (const target of victims) {
+          opp.field = opp.field.filter(c => c.uid !== target.uid);
+          opp.trash.push(target);
+          dropTempEffectsFor(game, target.uid);
+          log(game, `\uD83D\uDC80 ${target.name} K.O.'d by ${card.name}!`);
+          triggerOnKO(game, oppId, target, playerId);
+        }
+        opts.aoeKoResolved = true;
+      } else {
+        log(game, `${card.name}: leader affiliation does not match — AOE K.O. skipped.`);
+      }
     }
 
     // Rest opponent character (with optional cost threshold)
@@ -2491,7 +2540,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: true, sourceCardName: card.name,
+        optional: bounce.optional, sourceCardName: card.name,
         resumeTiming: 'onKO', resumeCardUid: card.uid,
       })) return;
     }
@@ -2773,7 +2822,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: true, sourceCardName: card.name,
+        optional: bounce.optional, sourceCardName: card.name,
         resumeTiming: 'counter', resumeCardUid: card.uid,
       })) return;
     }
@@ -2858,7 +2907,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: true, sourceCardName: card.name,
+        optional: bounce.optional, sourceCardName: card.name,
         resumeTiming: 'trigger', resumeCardUid: card.uid,
       })) return;
     }
@@ -2931,7 +2980,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: true, sourceCardName: card.name,
+        optional: bounce.optional, sourceCardName: card.name,
         resumeTiming: 'activateMain', resumeCardUid: card.uid,
       })) return;
     }
@@ -3061,7 +3110,7 @@ function parseEventMain(game, playerId, card, opp, opts = {}) {
   if (bounce && !opts.bounceResolved) {
     if (openBounceTarget(game, playerId, {
       filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-      optional: true, sourceCardName: card.name,
+      optional: bounce.optional, sourceCardName: card.name,
       resumeTiming: 'eventMain', resumeCardUid: card.uid,
     })) return;
   }
