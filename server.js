@@ -3809,5 +3809,28 @@ function _buildParsedEffectsCache() {
 }
 _buildParsedEffectsCache();
 
-const PORT = process.env.PORT || 3001;
-server.listen(PORT, () => console.log(`Boohawk TCG server running on port ${PORT}`));
+// Guard so `require('./server')` from a test doesn't start the HTTP server
+// or bind a port. The production entry point still runs `node server.js`
+// which leaves require.main === module true.
+if (require.main === module) {
+  const PORT = process.env.PORT || 3001;
+  server.listen(PORT, () => console.log(`Boohawk TCG server running on port ${PORT}`));
+}
+
+// Test surface — exported only for the node --test harness. Everything
+// here is already defined earlier in this file.
+module.exports = {
+  // Parser + cache
+  parseAbility, PARSED_EFFECTS,
+  // Catalog
+  CARD_DB, PRESET_DECKS,
+  // Deck + game construction
+  buildCustomDeck, buildDeckByName, createPlayerState, createGame,
+  // Action + phase helpers
+  handleAction, doRefresh, doDraw, doEnd, nextPhase,
+  // Keyword detectors
+  hasBlocker, hasRush, hasDoubleAttack, hasBanish,
+  counterValueOf,
+  // Broadcast plumbing (tests replace clients.get(id).send with a spy)
+  rooms, clients, send, broadcast, sendState,
+};
