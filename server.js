@@ -66,7 +66,7 @@ const CARD_DB = [
     ability:"[On Your Opponent's Attack] [Once Per Turn] DON!! -1: Select your Leader or 1 of your {Donquixote Pirates} type Characters. Change the attack target to the selected card." },
 
   { id:'OP10-065', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:1000, cost:1, counter:1000, image:IMG('OP10','OP10-065','jpg'),
+    power:1000, cost:1, counter:1000, image:IMG('OP10','OP10-065','jpg'), useNewPipeline:true,
     ability:'[Activate: Main] You may rest 1 of your DON!! and this Character: Look at the top 5 cards of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand. Place the rest at the bottom of your deck in any order.' },
 
   { id:'OP14-067', name:'Dellinger', type:'CHARACTER', color:'Purple', attribute:'Strike',
@@ -145,7 +145,7 @@ const CARD_DB = [
     ability:"[Once Per Turn] You may activate this effect when your opponent attacks. Give up to 1 of your opponent's leader or characters -1000 power for the turn." },
 
   { id:'OP09-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special',
-    power:2000, cost:1, counter:1000, image:IMG('OP09','OP09-002','jpg'),
+    power:2000, cost:1, counter:1000, image:IMG('OP09','OP09-002','jpg'), useNewPipeline:true,
     ability:"[On Play] Look at the top 5 cards of your deck, reveal up to 1 {Red Hair Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   { id:'OP01-006', name:'Otama', type:'CHARACTER', color:'Red', attribute:'Special',
@@ -245,7 +245,7 @@ const CARD_DB = [
     ability:"[Counter] Your Leader or up to 1 of your Characters gains +4000 power during this battle. Then, K.O. up to 1 of your opponent's Characters with 4000 power or less. [Trigger] Give up to 1 of your opponent's Leader or Characters -10000 power during this turn." },
 
   { id:'OP09-020', name:"Come on!! We'll fight you!!", type:'EVENT', color:'Red',
-    power:0, cost:1, counter:0, image:IMG('OP09','OP09-020','jpg'),
+    power:0, cost:1, counter:0, image:IMG('OP09','OP09-020','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] Look at the top 5 cards of your deck, reveal and add one {Red Hair Pirates} type card to your hand. Place the rest at the bottom of the deck in any order. [Trigger] Draw one card." },
 
   { id:'ST21-017', name:'Gum-Gum Mole Gun', type:'EVENT', color:'Red',
@@ -4097,8 +4097,9 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
 
   let m;
 
-  if ((m = seg.match(/^(?:[Dd]raw) (\d+) cards?/))) {
-    return { type: 'drawCards', count: parseInt(m[1]) };
+  if ((m = seg.match(/^(?:[Dd]raw) (one|\d+) cards?/))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'drawCards', count: n };
   }
 
   if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) (?:Active )?DON!!.*?(?:set it as active|active)/))) {
@@ -4151,13 +4152,18 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'placeAtBottom', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]) } };
   }
 
-  if ((m = seg.match(/[Ll]ook at.*?(\d+) cards? from the top/i))) {
+  // Phase 6/7 — scry matcher. Accepts both phrasings:
+  //   "Look at N cards from the top of your deck"      (existing)
+  //   "Look at the top N cards of your deck"            (Sugar / Uta / Come on!!)
+  // Reveal variants: "reveal up to N", "reveal up to one", "reveal and add one".
+  if ((m = seg.match(/[Ll]ook at(?: the top)?\s*(\d+)\s*cards?(?: from the top)?/i))) {
     const scry = { type: 'scry', count: parseInt(m[1]), placement: bodyPlacement };
-    const revealM  = seg.match(/reveal up to (\d+)/i);
+    const revealM  = seg.match(/reveal(?:\s+(?:up to|and add))?\s+(one|\d+)/i);
     const filterM  = seg.match(/\{([^}]+)\}\s*type\s*(Character|Event|Stage)?/i);
     const excludeM = seg.match(/other than \[([^\]]+)\]/i);
-    if (revealM) {
-      scry.reveal = { count: parseInt(revealM[1]), filter: {} };
+    if (/reveal/i.test(seg)) {
+      const rCount = revealM ? (revealM[1].toLowerCase() === 'one' ? 1 : parseInt(revealM[1])) : 1;
+      scry.reveal = { count: rCount, filter: {} };
       if (filterM) {
         scry.reveal.filter.affiliation = filterM[1];
         if (filterM[2]) scry.reveal.filter.type = filterM[2].toUpperCase();
