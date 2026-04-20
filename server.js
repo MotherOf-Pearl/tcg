@@ -126,7 +126,7 @@ const CARD_DB = [
     ability:"[Main] You may rest 5 of your DON!! cards: Give up to 1 of your opponent's Characters -8000 power during this turn. [Counter] You may trash 1 card from your hand: Up to 1 of your Leader or Character cards gains +3000 power during this battle." },
 
   { id:'OP07-076', name:'NoroNoro Beam Sword', type:'EVENT', color:'Purple',
-    power:0, cost:2, counter:0, image:IMG('OP07','OP07-076','png'),
+    power:0, cost:2, counter:0, image:IMG('OP07','OP07-076','png'), useNewPipeline:true,
     ability:"[Counter] DON!! -1: Give up to 1 of your Leader or Character cards +2000 power for this battle. Then, rest up to 1 of your opponent's Characters. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'OP14-078', name:'Bullet String', type:'EVENT', color:'Purple',
@@ -185,7 +185,7 @@ const CARD_DB = [
     ability:"[Your Turn] [On Play] K.O. up to 1 of your opponent's Characters with 3000 Power or less. [On K.O.] You may trash 1 Event card from your hand. Play this character from the trash as rested." },
 
   { id:'OP09-013', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged',
-    power:6000, cost:5, counter:1000, image:IMG('OP09','OP09-013','jpg'),
+    power:6000, cost:5, counter:1000, image:IMG('OP09','OP09-013','jpg'), useNewPipeline:true,
     ability:"[On Play] Up to one of your leaders gains +1000 power until the end of your opponent's next turn. [DON!! x1] [When Attacking] Up to one of your opponent's characters gets -1000 power for this turn." },
 
   { id:'ST15-005', name:'Portgas D. Ace', type:'CHARACTER', color:'Red', attribute:'Special',
@@ -229,7 +229,7 @@ const CARD_DB = [
     ability:"[Activate: Main] You may rest this stage: If your leader has the {Red Hair Pirates} type, give up to one of your opponent's characters -1000 power for this turn." },
 
   { id:'OP04-016', name:'Bad Manners Kick Course', type:'EVENT', color:'Red',
-    power:0, cost:1, counter:0, image:IMG('OP04','OP04-016','png'),
+    power:0, cost:1, counter:0, image:IMG('OP04','OP04-016','png'), useNewPipeline:true,
     ability:"[Counter] You may trash 1 card from your hand: Give up to 1 of your leaders or characters +3000 Power this battle. [Trigger] Give up to one of your opponent's leaders or characters -3000 power for this turn." },
 
   { id:'OP10-018', name:'Kamakura Jussoushi', type:'EVENT', color:'Red',
@@ -1148,7 +1148,16 @@ function handleAction(roomId, playerId, action) {
       // This is a no-op for character counter cards (they don't have [Counter] in ability).
       if (hasCounterAbility) {
         const oppOfDefender = game.players[Object.keys(game.players).find(id => id !== defenderId)];
-        parseAndApply('counter', game, defenderId, card, oppOfDefender);
+        // Phase-5 Priority-1 routing: new-pipeline counter events
+        // (NoroNoro Beam Sword, Bad Manners Kick Course) run their
+        // [Counter] block through runPipeline. Legacy cards stay on
+        // parseAndApply. The counter card has already been trashed and
+        // any event-cost DON already deducted above.
+        if (card.useNewPipeline) {
+          runPipeline('counter', game, defenderId, card);
+        } else {
+          parseAndApply('counter', game, defenderId, card, oppOfDefender);
+        }
       }
       break;
     }
@@ -1261,7 +1270,11 @@ function handleAction(roomId, playerId, action) {
       if (card.ability && card.ability.includes('[Counter]')) {
         const counterOppId = Object.keys(game.players).find(id => id !== playerId);
         const counterOpp = game.players[counterOppId];
-        parseAndApply('counter', game, playerId, card, counterOpp);
+        if (card.useNewPipeline) {
+          runPipeline('counter', game, playerId, card);
+        } else {
+          parseAndApply('counter', game, playerId, card, counterOpp);
+        }
       }
       break;
     }
@@ -1550,9 +1563,11 @@ function handleAction(roomId, playerId, action) {
       const w = game.playFromHandWindow;
       if (w.playerId !== playerId) return;
       const owner = game.players[playerId];
+      const pipelineResume = w.pipelineResume;  // capture before clear
       if (action.skip) {
         log(game, `${w.sourceCardName || 'Effect'}: choice skipped.`);
         game.playFromHandWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
       if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
@@ -1575,7 +1590,12 @@ function handleAction(roomId, playerId, action) {
       // Always fire [On Play] for the deployed card — same as the normal PLAY_CARD path.
       const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
       log(game, `${picked.name}: triggering [On Play].`);
-      parseAndApply('onPlay', game, playerId, picked, opp2);
+      if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
+      else parseAndApply('onPlay', game, playerId, picked, opp2);
+      // After the played card's own onPlay resolves, continue the chain
+      // for the effect that DISPATCHED the play (e.g. Snow Merchant's
+      // counter → playFromHand → caller's next effect, if any).
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -1735,6 +1755,31 @@ function handleAction(roomId, playerId, action) {
       target.rested = true;
       log(game, `${w.sourceCardName}: rested ${target.name}.`);
       finishWindow();
+      break;
+    }
+
+    // Phase-5 Priority-1 resolver: player picked a target for a temp
+    // ±power buff (NoroNoro Beam Sword, Bad Manners Kick Course,
+    // Yasopp). applyTempPower keeps the buff in tempPowerEffects with
+    // the chosen expiry; the renderer already uses that for overlays.
+    case 'POWER_BUFF_TARGET_SELECTED': {
+      if (!game.powerBuffTargetWindow || game.powerBuffTargetWindow.playerId !== playerId) return;
+      const w = game.powerBuffTargetWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target.'}); return; }
+        log(game, `${w.sourceCardName}: power buff skipped.`);
+        game.powerBuffTargetWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid target.'});
+        return;
+      }
+      applyTempPower(game, action.targetUid, w.amount, w.duration, w.sourceCardName);
+      game.powerBuffTargetWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -2005,7 +2050,8 @@ function autoPlayFromHand(p, costThreshold, game, cardName, typeFilter) {
 // targets a specific named card (e.g. ST04-002 references [Toad Wizzy]).
 function openPlayFromHand(game, playerId, opts) {
   const p = game.players[playerId];
-  const { costThreshold = 99, typeName = null, nameMatch = null, sourceCardName = '' } = opts || {};
+  const { costThreshold = 99, typeName = null, nameMatch = null, sourceCardName = '',
+          pipelineResume = null } = opts || {};
   const candidates = p.hand.filter(c => {
     if (c.type !== 'CHARACTER') return false;
     if ((c.cost || 0) > costThreshold) return false;
@@ -2030,6 +2076,9 @@ function openPlayFromHand(game, playerId, opts) {
     typeName: typeName || '',
     nameMatch: nameMatch || '',
     sourceCardName,
+    // Phase-5 chain resume — PLAY_FROM_HAND_RESOLVE routes through
+    // resumePipeline when set.
+    pipelineResume,
   };
   log(game, `${sourceCardName || 'Effect'}: choose a Character to play for free` +
             (typeName ? ` ({${typeName}})` : '') + ` (${candidates.length} option(s)).`);
@@ -3646,26 +3695,41 @@ function _splitIntoBlocks(text) {
   let m;
   while ((m = re.exec(text)) !== null) tokens.push({ raw: m[0], pos: m.index });
 
-  const blocks = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const t = tokens[i];
-    if (!TIMING_MAP[t.raw]) continue;
-    // Walk backward collecting contiguous MODIFIER brackets (any non-timing
-    // bracket, e.g. [DON!! xN], [Once Per Turn], [Blocker]). Stop as soon
-    // as we hit a timing marker OR non-whitespace between tokens. This
-    // guarantees preamble is only the modifiers glued to this timing, not
-    // the previous block's body text.
-    let preambleStart = t.pos;
-    for (let j = i - 1; j >= 0; j--) {
+  // Index of contiguous-modifier-preamble start for a given timing token.
+  // Walks backward over non-timing bracketed tokens; stops at either a
+  // timing marker or non-whitespace between tokens.
+  const preambleStartFor = (idx) => {
+    let start = tokens[idx].pos;
+    for (let j = idx - 1; j >= 0; j--) {
       const prev = tokens[j];
       if (TIMING_MAP[prev.raw]) break;
-      const between = text.substring(prev.pos + prev.raw.length, preambleStart);
+      const between = text.substring(prev.pos + prev.raw.length, start);
       if (!/^\s*$/.test(between)) break;
-      preambleStart = prev.pos;
+      start = prev.pos;
     }
+    return start;
+  };
+
+  // Collect timing token indices first so we know where the NEXT block
+  // starts (and therefore where the CURRENT block's body ends).
+  const timingIdx = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (TIMING_MAP[tokens[i].raw]) timingIdx.push(i);
+  }
+
+  const blocks = [];
+  for (let ti = 0; ti < timingIdx.length; ti++) {
+    const i = timingIdx[ti];
+    const t = tokens[i];
+    const preambleStart = preambleStartFor(i);
+    // Body ends at the next block's PREAMBLE start, not its timing
+    // marker. Otherwise modifier brackets sitting between two timings
+    // (e.g. Yasopp's "[On Play] …. [DON!! x1] [When Attacking] …")
+    // leak into the preceding block's body and get picked up as a
+    // spurious condition on the wrong block.
     let endPos = text.length;
-    for (let j = i + 1; j < tokens.length; j++) {
-      if (TIMING_MAP[tokens[j].raw]) { endPos = tokens[j].pos; break; }
+    if (ti + 1 < timingIdx.length) {
+      endPos = preambleStartFor(timingIdx[ti + 1]);
     }
     blocks.push({
       token:    t.raw,
@@ -4232,6 +4296,60 @@ function agentApplyEffect(effect, ctx, resume) {
       }
       return { status: 'applied' };
     }
+    // Phase-5 Priority-1 — powerBuff. target values produced by
+    // parseAbility: 'self' (apply to the source card), 'leader' /
+    // 'character' / 'leaderOrCharacter' (interactive pick from own side).
+    case 'powerBuff': {
+      if (effect.target === 'self') {
+        applyTempPower(ctx.game, ctx.card.uid, effect.value, effect.duration, ctx.card.name);
+        return { status: 'applied' };
+      }
+      const opened = openPowerBuffTarget(ctx.game, ctx.playerId, {
+        side: 'self',
+        targetKind: effect.target || 'leaderOrCharacter',
+        optional: ctx._blockOptional != null ? ctx._blockOptional : (effect.optional !== false),
+        sourceCardName: ctx.card.name,
+        amount: effect.value,
+        duration: effect.duration,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+    // Phase-5 Priority-1 — powerDebuff. target is 'opponentLeader' /
+    // 'opponentCharacter' / 'opponentLeaderOrCharacter'. amount is
+    // stored positive on the effect; we negate it before applyTempPower.
+    case 'powerDebuff': {
+      const t = effect.target || 'opponentCharacter';
+      const kind = t === 'opponentLeaderOrCharacter' ? 'leaderOrCharacter'
+                 : t === 'opponentLeader' ? 'leader'
+                 : 'character';
+      const opened = openPowerBuffTarget(ctx.game, ctx.playerId, {
+        side: 'opponent',
+        targetKind: kind,
+        optional: ctx._blockOptional != null ? ctx._blockOptional : (effect.optional !== false),
+        sourceCardName: ctx.card.name,
+        amount: -Math.abs(effect.value),
+        duration: effect.duration,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+    // Phase-5 Priority-2 — playFromHand. Delegates to the existing
+    // openPlayFromHand opener (which builds the candidate list from the
+    // player's hand and opens playFromHandWindow). filter fields come
+    // straight from the parsed effect shape.
+    case 'playFromHand': {
+      const filter = effect.filter || {};
+      const opened = openPlayFromHand(ctx.game, ctx.playerId, {
+        costThreshold: filter.maxCost != null ? filter.maxCost : 99,
+        typeName: filter.affiliation || null,
+        nameMatch: filter.name || null,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
     // Phase-4 Batch 3 — scry ("Look at N cards from the top…"). Builds
     // the scryWindow directly from the parsed effect shape so the
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
@@ -4352,6 +4470,42 @@ function resumePipeline(game, playerId, resume) {
     costsPaid: resume.costsPaid === true,
     isResume: true,
   });
+}
+
+// Phase-5 Priority-1 UI-agent surface — opens an interactive target
+// picker for powerBuff / powerDebuff effects. `side` is 'self' or
+// 'opponent'; `targetKind` is 'leader' | 'character' | 'leaderOrCharacter'.
+// `amount` is signed (positive = buff, negative = debuff). On pick, the
+// action handler applies a temp power effect to the chosen uid.
+function openPowerBuffTarget(game, playerId, opts) {
+  const me  = game.players[playerId];
+  const oppId = Object.keys(game.players).find(id => id !== playerId);
+  const opp = game.players[oppId];
+  const { targetKind = 'leaderOrCharacter', side = 'self', optional = true,
+          sourceCardName = '', amount = 0, duration = 'thisTurn',
+          pipelineResume = null } = opts || {};
+  const pool = side === 'opponent' ? opp : me;
+  const candidates = [];
+  if (targetKind === 'leader' || targetKind === 'leaderOrCharacter') {
+    if (pool.leader) candidates.push(pool.leader);
+  }
+  if (targetKind === 'character' || targetKind === 'leaderOrCharacter') {
+    candidates.push(...(pool.field || []).filter(c => c.type === 'CHARACTER'));
+  }
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName}: no valid ${side === 'opponent' ? 'opponent' : 'own'} ${targetKind} targets for power buff.`);
+    return false;
+  }
+  game.powerBuffTargetWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    optional, sourceCardName,
+    amount, duration, side, targetKind,
+    pipelineResume,
+  };
+  const sign = amount >= 0 ? '+' : '';
+  log(game, `${sourceCardName}: choose a ${side === 'opponent' ? "opponent's " : ''}target for ${sign}${amount} power (${candidates.length} option(s)).`);
+  return true;
 }
 
 // UI AGENT surface — opens the SELECT_BOTTOM_DECK_TARGET window on the

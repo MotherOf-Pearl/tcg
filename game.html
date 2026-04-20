@@ -1189,6 +1189,14 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div id="placeAtBottomHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Click a highlighted Character.</div>
         <button class="gb-pbtn gb-pbtn-sm" id="placeAtBottomSkip" onclick="skipPlaceAtBottom()" style="display:none;">Skip</button>
       </div>
+      <!-- Phase 5 Priority 1 — ±power target picker. NoroNoro Beam
+           Sword / Bad Manners Kick Course / Yasopp are the first
+           migrated cards that use this. -->
+      <div id="powerBuffTargetBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="powerBuffTargetTitle">Choose a target for power buff</div>
+        <div id="powerBuffTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Click a highlighted target.</div>
+        <button class="gb-pbtn gb-pbtn-sm" id="powerBuffTargetSkip" onclick="skipPowerBuffTarget()" style="display:none;">Skip</button>
+      </div>
       <!-- DON!! -N return-to-deck picker (interactive cost) -->
       <div id="donReturnBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="donReturnTitle">Return DON!! to deck</div>
@@ -1776,6 +1784,8 @@ function renderGame() {
       myId = game.restTargetWindow.playerId;
     } else if (game.placeAtBottomWindow) {
       myId = game.placeAtBottomWindow.playerId;
+    } else if (game.powerBuffTargetWindow) {
+      myId = game.powerBuffTargetWindow.playerId;
     } else if (game.koTargetWindow) {
       myId = game.koTargetWindow.playerId;
     } else if (game.donReturnWindow) {
@@ -2010,6 +2020,28 @@ function renderGame() {
   } else {
     rtwPanel.style.display = 'none';
     if (rtw) hint('Opponent is choosing a rest target…');
+  }
+
+  // Phase 5 Priority 1 — power-buff target picker (NoroNoro Beam Sword,
+  // Bad Manners Kick Course, Yasopp). Signed amount determines title
+  // wording; window.side decides which field to highlight.
+  const pbtw = game.powerBuffTargetWindow;
+  const pbtwPanel = document.getElementById('powerBuffTargetBtns');
+  if (pbtw && pbtw.playerId === myId) {
+    hideAllBtnGroups();
+    pbtwPanel.style.display = 'flex';
+    const sign = pbtw.amount >= 0 ? '+' : '';
+    document.getElementById('powerBuffTargetTitle').textContent =
+      `${pbtw.sourceCardName} — ${sign}${pbtw.amount} power`;
+    document.getElementById('powerBuffTargetHint').textContent =
+      `Click a highlighted ${pbtw.side === 'opponent' ? "opponent's " : ''}target.`;
+    document.getElementById('powerBuffTargetSkip').style.display = pbtw.optional ? 'block' : 'none';
+    requestAnimationFrame(() => {
+      pbtw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    pbtwPanel.style.display = 'none';
+    if (pbtw) hint('Opponent is choosing a power-buff target…');
   }
 
   // Phase 3 — SELECT_BOTTOM_DECK_TARGET picker (Noble Shlawger [On Block]
@@ -2267,6 +2299,12 @@ function _tryConsumeWindowClick(uid) {
   if (game?.placeAtBottomWindow?.playerId === myId
       && game.placeAtBottomWindow.candidateUids.includes(uid)) {
     act({ type: 'PLACE_AT_BOTTOM_SELECTED', targetUid: uid });
+    return true;
+  }
+  // Phase 5 Priority 1 — power buff / debuff target picker.
+  if (game?.powerBuffTargetWindow?.playerId === myId
+      && game.powerBuffTargetWindow.candidateUids.includes(uid)) {
+    act({ type: 'POWER_BUFF_TARGET_SELECTED', targetUid: uid });
     return true;
   }
   return false;
@@ -2970,7 +3008,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -3373,6 +3411,13 @@ function skipPlaceAtBottom() {
   if (!game?.placeAtBottomWindow) return;
   document.getElementById('placeAtBottomBtns').style.display = 'none';
   act({ type: 'PLACE_AT_BOTTOM_SELECTED', skip: true });
+}
+
+// ─── Phase 5 Priority 1 — POWER_BUFF_TARGET resolver (client) ───────────
+function skipPowerBuffTarget() {
+  if (!game?.powerBuffTargetWindow) return;
+  document.getElementById('powerBuffTargetBtns').style.display = 'none';
+  act({ type: 'POWER_BUFF_TARGET_SELECTED', skip: true });
 }
 
 // ─── ADD_FROM_TRASH resolver (client) ────────────────────────────────────
