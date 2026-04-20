@@ -256,7 +256,7 @@ const CARD_DB = [
   // BLACKBEARD DECK (Black/Multi)
   // ══════════════════════════════
   { id:'OP09-081', name:'Marshall D. Teach', type:'LEADER', color:'Black', attribute:'Special',
-    power:5000, life:5, cost:0, counter:0, image:IMG('OP09','OP09-081','jpg'),
+    power:5000, life:5, cost:0, counter:0, image:IMG('OP09','OP09-081','jpg'), useNewPipeline:true,
     ability:"Your [On Play] abilities don't activate. [Activate: Main] You may trash one card from your hand: Until the end of your opponent's next turn, your opponent's [On Play] abilities don't activate." },
 
   { id:'OP05-086', name:'Nefertari Vivi', type:'CHARACTER', color:'Black', attribute:'Wisdom',
@@ -669,6 +669,11 @@ function doEnd(game) {
     game.tempCostEffects = game.tempCostEffects.filter(e =>
       (e.expiresAtTurn == null) || e.expiresAtTurn >= game.turn);
   }
+  // Track-P — prune expired global onPlay suppressions.
+  if (Array.isArray(game._onPlaySuppressions) && game._onPlaySuppressions.length) {
+    game._onPlaySuppressions = game._onPlaySuppressions.filter(s =>
+      (s.expiresAtTurn == null) || s.expiresAtTurn >= game.turn);
+  }
   // Phase 5 Priority 8 — prune expired suppressions. Same expiry
   // semantics as tempPowerEffects: thisTurn-kind gets expiresAtTurn
   // equal to the turn they were applied on (now < game.turn → dropped).
@@ -897,8 +902,10 @@ function handleAction(roomId, playerId, action) {
         log(game, `${playerId.slice(0,6)} plays ${card.name} (${card.power} power).`);
         // P5/P8 — effects suppression gates the onPlay fire. The card
         // still enters play; only its triggered ability is muted.
-        if (isEffectsSuppressed(card)) {
-          log(game, `${card.name}: [On Play] suppressed by opponent effect.`);
+        // Track-P — Teach-style global [On Play] suppression takes
+        // precedence for the active player.
+        if (isEffectsSuppressed(card) || isOnPlaySuppressed(game, playerId)) {
+          log(game, `${card.name}: [On Play] suppressed.`);
         } else if (card.useNewPipeline) {
           // Phase-4 routing: new-pipeline characters run through runPipeline;
           // legacy characters stay on parseAndApply.
@@ -1708,9 +1715,13 @@ function handleAction(roomId, playerId, action) {
       game.playFromHandWindow = null;
       // Always fire [On Play] for the deployed card — same as the normal PLAY_CARD path.
       const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
-      log(game, `${picked.name}: triggering [On Play].`);
-      if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
-      else parseAndApply('onPlay', game, playerId, picked, opp2);
+      if (isOnPlaySuppressed(game, playerId)) {
+        log(game, `${picked.name}: [On Play] suppressed.`);
+      } else {
+        log(game, `${picked.name}: triggering [On Play].`);
+        if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
+        else parseAndApply('onPlay', game, playerId, picked, opp2);
+      }
       // After the played card's own onPlay resolves, continue the chain
       // for the effect that DISPATCHED the play (e.g. Snow Merchant's
       // counter → playFromHand → caller's next effect, if any).
@@ -1784,9 +1795,13 @@ function handleAction(roomId, playerId, action) {
       log(game, `${w.sourceCardName}: played ${picked.name} from trash${picked.rested ? ' (rested)' : ''}.`);
       game.playFromTrashWindow = null;
       const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
-      log(game, `${picked.name}: triggering [On Play].`);
-      if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
-      else parseAndApply('onPlay', game, playerId, picked, opp2);
+      if (isOnPlaySuppressed(game, playerId)) {
+        log(game, `${picked.name}: [On Play] suppressed.`);
+      } else {
+        log(game, `${picked.name}: triggering [On Play].`);
+        if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
+        else parseAndApply('onPlay', game, playerId, picked, opp2);
+      }
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2591,6 +2606,33 @@ function extractNameFilter(text) {
 // Jesse the Jester). Used everywhere battle math happens on the server
 // (DECLARE_ATTACK, USE_BLOCKER, RESOLVE_ATTACK) so passives affect actual
 // battle outcomes — not just the displayed power on the client.
+// Track-P — check whether [On Play] abilities are suppressed for a
+// given player. Returns true if:
+//   (a) the player's leader carries a passive onPlaySuppression
+//       (Teach OP09-081: "Your [On Play] abilities don't activate"), OR
+//   (b) a timed entry on game._onPlaySuppressions is still active.
+function isOnPlaySuppressed(game, playerId) {
+  if (!game || !game.players || !playerId) return false;
+  // Passive — check the player's own leader for self-suppression.
+  const me = game.players[playerId];
+  if (me && me.leader) {
+    const entries = PASSIVE_EFFECTS.get(me.leader.id) || [];
+    for (const e of entries) {
+      if (e.type === 'onPlaySuppression' && e.side === 'self') return true;
+    }
+  }
+  // Timed — prune as we read; entries with expiresAtTurn < current turn
+  // have lapsed (doEnd also prunes proactively).
+  const timed = game._onPlaySuppressions || [];
+  for (const s of timed) {
+    if (s.targetPlayerId === playerId &&
+        (s.expiresAtTurn == null || s.expiresAtTurn >= game.turn)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Track-P — effective cost of a card on field. Base c.cost plus any
 // active tempCostEffects (e.g. Stronger's -2 cost for the turn). Used
 // by target-filter checks that gate on "cost N or less".
@@ -4230,6 +4272,13 @@ function parsePassive(text) {
     out.push({ type: 'removalProtection', source: 'opponent', scope: 'anyRemoval' });
   }
 
+  // onPlaySuppression (Teach leader OP09-081, passive clause):
+  //   "Your [On Play] abilities don't activate" — disables all [On Play]
+  //   abilities of the player whose leader this is (Teach's tradeoff).
+  if (/[Yy]our \[On Play\] abilities don't activate/.test(text)) {
+    out.push({ type: 'onPlaySuppression', side: 'self', scope: 'always' });
+  }
+
   // selfSaveReplacement — "If this character would be removed from [play|the field]
   //   by (one of )your opponent's effect(s), (instead )you may give this character
   //   -N000 power (during|for) this turn (instead)."
@@ -4293,6 +4342,25 @@ function parseAbility(text) {
       const dur = /until/i.test(_m) ? 'opponentNextTurn' : 'thisTurn';
       return `\u00a7SUPPRESS_attack_${n}_${tk}_${cost}_${dur}\u00a7`;
     }
+  );
+
+  // Track-P partial — Teach (OP09-081) active suppression clause. The
+  // "[On Play]" brackets would be stripped by the body-level stripper;
+  // pre-process the whole "opponent's [On Play] abilities don't
+  // activate" phrase into a placeholder whose duration is captured
+  // separately from the preceding "until …" clause.
+  processed = processed.replace(
+    /[Yy]our opponent'?s? \[On Play\] abilities don't activate/g,
+    '\u00a7SUPPRESS_ONPLAY_OPPONENT\u00a7'
+  );
+
+  // Track-P partial — Teach passive clause. Strip "Your [On Play]
+  // abilities don't activate." entirely from the body so the [On Play]
+  // bracket doesn't look like a timing marker. The passive parser
+  // still sees it in the raw text (parsePassive uses the original).
+  processed = processed.replace(
+    /[Yy]our \[On Play\] abilities don't activate\.\s*/g,
+    ''
   );
 
   // Track-P partial — Doflamingo leader (OP14-060) attack redirect.
@@ -4918,6 +4986,15 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'grantKeyword', keyword: m[1].replace(/-/g, ' '), duration: m[2] };
   }
 
+  // Track-P partial — suppressOnPlay placeholder. Teach OP09-081. The
+  // duration is read from a surrounding "Until the end of your
+  // opponent's next turn" phrase in the same segment.
+  if (/\u00a7SUPPRESS_ONPLAY_OPPONENT\u00a7/.test(seg)) {
+    const duration = /[Uu]ntil the end of your opponent'?s?\s*next turn/.test(seg)
+      ? 'opponentNextTurn' : 'thisTurn';
+    return { type: 'suppressOnPlay', side: 'opponent', duration };
+  }
+
   // Track-P partial — redirectAttack placeholder. Doflamingo OP14-060.
   if ((m = seg.match(/\u00a7REDIRECT_([^\u00a7]+)\u00a7/))) {
     return { type: 'redirectAttack',
@@ -5431,6 +5508,20 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Track-P partial — suppressOnPlay (Teach OP09-081 active):
+    // pushes a timed suppression onto game._onPlaySuppressions so any
+    // future onPlay fire-site check returns true for the target player.
+    case 'suppressOnPlay': {
+      if (!Array.isArray(ctx.game._onPlaySuppressions)) ctx.game._onPlaySuppressions = [];
+      const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+      const targetPid = effect.side === 'opponent' ? oppId : ctx.playerId;
+      const expiresAtTurn = effect.duration === 'opponentNextTurn'
+        ? (ctx.game.turn + 1) : ctx.game.turn;
+      ctx.game._onPlaySuppressions.push({ targetPlayerId: targetPid, expiresAtTurn });
+      log(ctx.game, `${ctx.card.name}: opponent [On Play] abilities suppressed until turn ${expiresAtTurn}.`);
+      return { status: 'applied' };
+    }
+
     // Track-P partial — redirectAttack (Doflamingo OP14-060 leader):
     // opens a picker over the defender's own leader + filtered own
     // characters. On resolution, mutates battleState.targetUid to the
@@ -5915,6 +6006,7 @@ module.exports = {
   runPipeline, resumePipeline, triggerOnKO,
   // Phase-5 P8 suppression helpers
   isEffectsSuppressed, isAttackSuppressed, isBlockerAbilitySuppressed,
+  isOnPlaySuppressed,
   // Catalog
   CARD_DB, PRESET_DECKS,
   // Deck + game construction
