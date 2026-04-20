@@ -153,7 +153,7 @@ const CARD_DB = [
     ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
   { id:'OP09-008', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash',
-    power:2000, cost:1, counter:0, image:IMG('OP09','OP09-008','jpg'),
+    power:2000, cost:1, counter:0, image:IMG('OP09','OP09-008','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] You may place this character on the bottom of its owner's deck: Give up to one of your opponent's characters -3000 power for this turn." },
 
   { id:'OP09-011', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Strike',
@@ -264,7 +264,7 @@ const CARD_DB = [
     ability:"If your trash has 10 cards or more, this character gains [Blocker]." },
 
   { id:'OP09-095', name:'Laffitte', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:1000, cost:1, counter:1000, image:IMG('OP09','OP09-095','jpg'),
+    power:1000, cost:1, counter:1000, image:IMG('OP09','OP09-095','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] You may rest this character and one of your DON!!: Look at the top 5 cards of your deck, reveal up to one {Blackbeard Pirates} type card and put it into your hand. Place the rest at the bottom of your deck in any order." },
 
   { id:'OP11-083', name:'Caribou', type:'CHARACTER', color:'Black', attribute:'Special',
@@ -4801,10 +4801,23 @@ function _parseBlock(block, unparsed) {
   // For Activate: Main abilities this is the canonical cost; the game
   // engine auto-rests the source card as part of ACTIVATE_MAIN, so the
   // agent treats an already-rested card as "cost paid trivially".
-  const restSelf = body.match(/^You may rest this (Character|Stage|character|stage)\s*:\s*/i);
+  const restSelf = body.match(/^You may rest this (Character|Stage|character|stage)(?:\s+and one of your DON!!)?\s*:\s*/i);
   if (restSelf) {
     costs.push({ type: 'restSelf' });
+    // Track G — "rest this character and one of your DON!!" compound
+    // (Laffitte OP09-095): push a single-DON rest alongside.
+    if (/and one of your DON!!/i.test(restSelf[0])) {
+      costs.push({ type: 'restDon', count: 1 });
+    }
     body = body.substring(restSelf[0].length).trim();
+  }
+
+  // Track G — "You may place this character on the bottom of its
+  // owner's deck:" — new self-cost (Building Snake OP09-008).
+  const placeSelfBottom = body.match(/^You may place this character on the bottom of (?:its )?owner'?s? deck\s*:\s*/i);
+  if (placeSelfBottom) {
+    costs.push({ type: 'placeSelfBottom' });
+    body = body.substring(placeSelfBottom[0].length).trim();
   }
 
   // Phase 8 — "You may trash this (Character|Stage):" — self-trash cost
@@ -5421,6 +5434,21 @@ function agentPayCosts(costs, ctx, resume) {
           ctx.player.trash.push(ctx.card);
           log(ctx.game, `${ctx.card.name}: trashed as cost.`);
         }
+        break;
+      }
+      case 'placeSelfBottom': {
+        // Track G — synchronous cost: move source from field to the
+        // bottom of its owner's deck (Building Snake OP09-008).
+        const f = ctx.player.field;
+        const idx = f.findIndex(c => c.uid === ctx.card.uid);
+        if (idx === -1) return { status: 'unaffordable' };
+        const card = f.splice(idx, 1)[0];
+        card.rested = false;
+        card.attachedDon = 0;
+        card.usedThisTurn = false;
+        card.playedThisTurn = false;
+        ctx.player.deck.push(card);  // push = bottom
+        log(ctx.game, `${ctx.card.name}: placed on bottom of own deck as cost.`);
         break;
       }
       default:
