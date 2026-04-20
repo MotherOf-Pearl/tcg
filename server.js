@@ -149,7 +149,7 @@ const CARD_DB = [
     ability:"[On Play] Look at the top 5 cards of your deck, reveal up to 1 {Red Hair Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   { id:'OP01-006', name:'Otama', type:'CHARACTER', color:'Red', attribute:'Special',
-    power:0, cost:1, counter:2000, image:IMG('OP01','OP01-006','png'),
+    power:0, cost:1, counter:2000, image:IMG('OP01','OP01-006','png'), useNewPipeline:true,
     ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
   { id:'OP09-008', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash',
@@ -201,7 +201,7 @@ const CARD_DB = [
     ability:"[Once Per Turn] If this Character would be removed from the field by your opponent's effect, you may give this Character -2000 power during this turn instead. [When Attacking] Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
   { id:'OP09-009', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged',
-    power:7000, cost:7, counter:1000, image:IMG('OP09','OP09-009','jpg'),
+    power:7000, cost:7, counter:1000, image:IMG('OP09','OP09-009','jpg'), useNewPipeline:true,
     ability:"[On Play] K.O. up to 1 of your opponents Characters with a power of 6000 or less." },
 
   { id:'ST15-002', name:'Edward Newgate', type:'CHARACTER', color:'Red', attribute:'Special',
@@ -217,7 +217,7 @@ const CARD_DB = [
     ability:"If your opponent has a Character with 8000 base power or more, give this card in your hand -3 cost. [On Play] If your Leader has the {Red-Haired Pirates} type, your Leader gains +2000 power until the end of your opponent's next End Phase." },
 
   { id:'OP06-007', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
-    power:12000, cost:10, counter:0, image:IMG('OP06','OP06-007','png'),
+    power:12000, cost:10, counter:0, image:IMG('OP06','OP06-007','png'), useNewPipeline:true,
     ability:"[On Play] K.O. up to 1 of your opponent's characters with 10000 power or less." },
 
   { id:'OP09-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
@@ -359,7 +359,7 @@ const CARD_DB = [
     ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
 
   { id:'OP01-070', name:'Anna, Master of FiFi', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:9000, cost:9, counter:0, image:IMG('OP01','OP01-070','png'),
+    power:9000, cost:9, counter:0, image:IMG('OP01','OP01-070','png'), useNewPipeline:true,
     ability:"[On Play] Place up to 1 Character with a cost of 7 or less at the bottom of the owner's deck." },
 
   { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
@@ -418,7 +418,7 @@ const CARD_DB = [
     ability:"[Blocker] [On Play] DON!! -1: Draw 2 cards and trash 1 card from your hand." },
 
   { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:7000, cost:6, counter:0, image:IMG('ST04','ST04-004','png'),
+    power:7000, cost:6, counter:0, image:IMG('ST04','ST04-004','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 4 or less." },
 
   { id:'OP01-096', name:'Commander Sam', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -438,7 +438,7 @@ const CARD_DB = [
     ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
   { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
-    power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'), hasAlt:true,
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'), hasAlt:true, useNewPipeline:true,
     ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
 
   { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
