@@ -86,7 +86,7 @@ const CARD_DB = [
     ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] DON!! -1: Add up to 1 card from the top of your deck to the top of your Life cards.' },
 
   { id:'OP14-063', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-063','png'),
+    power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-063','png'), useNewPipeline:true,
     ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] If your opponent has 6 or more DON!! cards on their field, play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand." },
 
   { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Donquixote Pirates',
@@ -118,7 +118,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -3: Choose one: \u2022 If your Leader has the {Donquixote Pirates} type, K.O. up to 1 of your opponent's Characters with a cost of 8 or less. \u2022 Rest up to 3 of your opponent's Characters with a cost of 7 or less." },
 
   { id:'OP10-078', name:"I can never forgive anyone who laughs at my family...!!", type:'EVENT', color:'Purple',
-    power:0, cost:1, counter:0, image:IMG('OP10','OP10-078','jpg'),
+    power:0, cost:1, counter:0, image:IMG('OP10','OP10-078','jpg'), useNewPipeline:true,
     ability:"[Main] [Counter] Look at 3 cards from the top of your deck; reveal up to 1 {Donquixote Pirates} type card other than this card and add it to your hand. Place the rest at the bottom of your deck in any order." },
 
   { id:'OP13-076', name:'Divine Departure', type:'EVENT', color:'Purple',
@@ -371,7 +371,7 @@ const CARD_DB = [
     ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
 
   { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
-    power:0, cost:2, counter:0, image:IMG('ST03','ST03-017','png'),
+    power:0, cost:2, counter:0, image:IMG('ST03','ST03-017','png'), useNewPipeline:true,
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand." },
 
   { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
@@ -442,7 +442,7 @@ const CARD_DB = [
     ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
 
   { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
-    power:0, cost:2, counter:0, image:IMG('OP01','OP01-119','png'),
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-119','png'), useNewPipeline:true,
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, if you have 2 or less Life cards, add up to 1 DON!! card from your DON!! deck and rest it. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'ST04-015', name:'Blessed Thy Men', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
@@ -4550,6 +4550,14 @@ function parseAbility(text) {
     '$1. K.O. $2'
   );
 
+  // Track F — "[Main] [Counter] X" (adjacent timing markers sharing a
+  // single body, e.g. OP10-078 "I can never forgive…"). Duplicate the
+  // body so both blocks carry the same effects after the splitter.
+  processed = processed.replace(
+    /\[Main\]\s*\[Counter\]\s+(.+?)(?=\s*\[|$)/,
+    (_m, body) => `[Main] ${body.trim()} [Counter] ${body.trim()}`
+  );
+
   // Track F — Black Spiral counter compound "Nullify … and give them
   // -N power during this turn" splits into suppressTarget + powerDebuff.
   processed = processed.replace(
@@ -4725,16 +4733,26 @@ function _parseBlock(block, unparsed) {
     }
   }
 
-  // "If you have N or more DON!! cards" / "if you have N or less Life cards".
-  const donCountMin = body.match(/[Ii]f you have (\d+) or more DON!!\s*cards?/);
+  // Block-level conditions — anchored at start of body so mid-body
+  // "Then, if …" trailers don't bubble up to the whole block (those
+  // become per-effect conditionalEffect wrappers in _parseEffectSegment).
+  const donCountMin = body.match(/^[Ii]f you have (\d+) or more DON!!\s*cards?/);
   if (donCountMin) {
     conditions.push({ type: 'donCountMin', value: parseInt(donCountMin[1]) });
-    body = body.replace(donCountMin[0], '').trim();
+    body = body.substring(donCountMin[0].length).trim();
   }
-  const lifeCountMax = body.match(/[Ii]f you have (\d+) or less Life cards?/);
+  const lifeCountMax = body.match(/^[Ii]f you have (\d+) or less Life cards?/);
   if (lifeCountMax) {
     conditions.push({ type: 'lifeCountMax', value: parseInt(lifeCountMax[1]) });
-    body = body.replace(lifeCountMax[0], '').trim();
+    body = body.substring(lifeCountMax[0].length).trim();
+  }
+
+  // Track F — "If your opponent has N or more DON!! cards [on their
+  // field]" block-level condition (Sugar OP14-063).
+  const oppDonMin = body.match(/^[Ii]f your opponent has (\d+) or more DON!!\s*cards?(?:\s+on their field)?,?/i);
+  if (oppDonMin) {
+    conditions.push({ type: 'oppDonCountMin', value: parseInt(oppDonMin[1]) });
+    body = body.substring(oppDonMin[0].length).trim();
   }
 
   // Strip leftover stray [Keyword] tokens (they're already captured at
@@ -4884,6 +4902,27 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'conditionalEffect',
       condition: { type: 'lastTargetMaxCost', value: parseInt(condM[1]) },
       effect: { type: 'koLastTarget' } };
+  }
+  // Track F — "if you have N or less Life cards, <effect>" (Redpilled
+  // OP01-119 mid-block conditional that the anchored block-level
+  // extractor no longer swallows).
+  if ((condM = seg.match(/^[,\s]*if you have (\d+) or less [Ll]ife cards?,\s*(.+)$/i))) {
+    const inner = _parseEffectSegment(condM[2], unparsed, bodyPlacement);
+    if (inner) {
+      return { type: 'conditionalEffect',
+        condition: { type: 'lifeCountMax', value: parseInt(condM[1]) },
+        effect: inner };
+    }
+  }
+  // Track F — "<effect> if you have N or less cards in your hand"
+  // (Leave Me To My Studies ST03-017 — condition follows the effect).
+  if ((condM = seg.match(/^(.+?)\s+if you have (\d+) or less cards? in your hand$/i))) {
+    const inner = _parseEffectSegment(condM[1], unparsed, bodyPlacement);
+    if (inner) {
+      return { type: 'conditionalEffect',
+        condition: { type: 'handCountMax', value: parseInt(condM[2]) },
+        effect: inner };
+    }
   }
 
   // Phase 8 — mandatory "Trash N cards from your hand" as an EFFECT
@@ -5294,6 +5333,13 @@ function agentCheckConditions(conditions, ctx) {
       case 'donCountMin': {
         const total = (ctx.player.donActive || 0) + (ctx.player.donRested || 0) + (ctx.player.donDeck || 0);
         if (total < c.value) return { ok: false, reason: `needs ${c.value} DON (have ${total})` };
+        break;
+      }
+      case 'oppDonCountMin': {
+        const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+        const opp = ctx.game.players[oppId];
+        const total = (opp.donActive || 0) + (opp.donRested || 0);
+        if (total < c.value) return { ok: false, reason: `opp needs ${c.value} DON (has ${total})` };
         break;
       }
       case 'lifeCountMax':
@@ -5843,6 +5889,10 @@ function agentApplyEffect(effect, ctx, resume) {
       if (cond.type === 'ownCharacterPowerMin') {
         const powerOf = (c) => (c.power || 0) + (c.attachedDon || 0) * 1000;
         met = (ctx.player.field || []).some(c => c.type === 'CHARACTER' && powerOf(c) >= cond.value);
+      } else if (cond.type === 'lifeCountMax') {
+        met = (ctx.player.life || []).length <= cond.value;
+      } else if (cond.type === 'handCountMax') {
+        met = (ctx.player.hand || []).length <= cond.value;
       } else if (cond.type === 'lastTargetMaxCost') {
         const uid = ctx.game._lastPickedTargetUid;
         if (uid) {
