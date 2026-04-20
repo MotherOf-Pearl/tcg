@@ -3879,6 +3879,12 @@ wss.on('connection', (ws) => {
 //   Effect    = one of the shapes listed in EFFECT_CATALOG (see below).
 
 const PARSED_EFFECTS = new Map();
+// Track P Phase 1 — passive/continuous effects, keyed by card id. Each
+// entry is an array of typed passive records evaluated on every
+// effectivePowerOf / hasBlocker / handPlayCost / isRemovalProtected
+// read. Distinct from PARSED_EFFECTS (which drives event-timed
+// abilities) — passives don't fire, they modify state lookups.
+const PASSIVE_EFFECTS = new Map();
 
 const KEYWORD_MAP = {
   '[Blocker]'       : 'blocker',
@@ -3924,6 +3930,173 @@ const PASSIVE_SCOPE_MAP = {
 // scaledPowerBuff{per, amount, source}
 // playFromHand   {max, filter, free}
 // powerDebuff    {value, target}
+
+// Track P Phase 1 — passive/continuous effect parser. Scans the raw
+// ability text for continuous-effect shapes and emits typed entries.
+// These are cached in PASSIVE_EFFECTS and consulted at runtime by the
+// various evaluators (effectivePowerOf, hasBlocker, etc.). Each entry:
+//   { type, scope?, conditions?, ...payload }
+function parsePassive(text) {
+  const out = [];
+  if (!text) return out;
+
+  // scaledPowerBuff (Jesse the Jester):
+  //   "[DON!! xN] [Your Turn] [If your Leader has the {AFFIL} type,]
+  //    this Character gains +P power for every M Events in your trash"
+  let m = text.match(
+    /\[DON!!\s*x(\d+)\]\s*\[Your Turn\](.*?)(?:gains?|gets?)\s*\+(\d+)\s*power for every (\d+) Events?\s+in your trash/i
+  );
+  if (m) {
+    const entry = {
+      type: 'scaledPowerBuff',
+      scope: 'yourTurn',
+      conditions: [{ type: 'donAttached', value: parseInt(m[1]) }],
+      per: parseInt(m[4]),
+      amount: parseInt(m[3]),
+      source: 'eventsInTrash',
+    };
+    const affMatch = m[2].match(/\{([^}]+)\}\s*type/);
+    if (affMatch) entry.conditions.push({ type: 'leaderType', value: affMatch[1] });
+    out.push(entry);
+  }
+
+  // scaledPowerBuff (Burgess — "gets +1000 power for every 4 cards in your trash")
+  m = text.match(/gets?\s*\+(\d+)\s*power for every (\d+) cards? in your trash/i);
+  if (m) {
+    const entry = {
+      type: 'scaledPowerBuff',
+      scope: 'always',
+      conditions: [],
+      per: parseInt(m[2]),
+      amount: parseInt(m[1]),
+      source: 'trashCards',
+    };
+    const affMatch = text.match(/[Ii]f your leader has the \{([^}]+)\}\s*type/);
+    if (affMatch) entry.conditions.push({ type: 'leaderType', value: affMatch[1] });
+    out.push(entry);
+  }
+
+  // scopedPowerBuff (Chopper): "[Opponent's Turn] This character has +N power"
+  m = text.match(/\[Opponent's Turn\][^.\[]*?[Tt]his character has\s*\+(\d+)\s*power/i);
+  if (m) {
+    out.push({
+      type: 'scopedPowerBuff',
+      scope: 'opponentsTurn',
+      amount: parseInt(m[1]),
+    });
+  }
+  // Also match "[Your Turn] This character has +N power" if any card uses it.
+  m = text.match(/\[Your Turn\][^.\[]*?[Tt]his character has\s*\+(\d+)\s*power/i);
+  if (m) {
+    out.push({
+      type: 'scopedPowerBuff',
+      scope: 'yourTurn',
+      amount: parseInt(m[1]),
+    });
+  }
+
+  // globalPowerModifier (OP09-004 Shanks):
+  //   "All of your opponents characters have -N power"
+  m = text.match(/[Aa]ll of your opponent'?s?\s+characters have\s*-(\d+)\s*power/i);
+  if (m) {
+    out.push({
+      type: 'globalPowerModifier',
+      side: 'opponent',
+      target: 'characters',
+      amount: -parseInt(m[1]),
+    });
+  }
+
+  // conditionalKeyword — several shapes:
+  //   "If your trash has N cards or more, this character gains [KEYWORD]"
+  //   "If your Leader has the {X} type, this Character gains [KEYWORD]"
+  m = text.match(/[Ii]f your trash has (\d+) cards? or more,\s*this character gains \[([^\]]+)\]/i);
+  if (m) {
+    out.push({
+      type: 'conditionalKeyword',
+      conditions: [{ type: 'ownTrashCountMin', value: parseInt(m[1]) }],
+      keyword: m[2].toLowerCase(),
+    });
+  }
+  m = text.match(/[Ii]f your Leader has the \{([^}]+)\}\s*type,\s*this Character gains \[([^\]]+)\]/i);
+  if (m) {
+    out.push({
+      type: 'conditionalKeyword',
+      conditions: [{ type: 'leaderType', value: m[1] }],
+      keyword: m[2].toLowerCase(),
+    });
+  }
+  m = text.match(/[Ii]f you have a Character with (\d+) power or more,\s*this character gains \[([^\]]+)\]/i);
+  if (m) {
+    out.push({
+      type: 'conditionalKeyword',
+      conditions: [{ type: 'ownCharacterPowerMin', value: parseInt(m[1]) }],
+      keyword: m[2].toLowerCase(),
+    });
+  }
+
+  // handCostDiscount — "If <cond>, give this card in your hand -N cost"
+  //   Uta ST23-001: ownCharacterPowerMin
+  //   Shanks ST23-002: opponentCharacterPowerMin (base)
+  m = text.match(/[Ii]f you have a Character with (\d+) power or more,\s*give this card in your hand\s*-(\d+)\s*cost/i);
+  if (m) {
+    out.push({
+      type: 'handCostDiscount',
+      conditions: [{ type: 'ownCharacterPowerMin', value: parseInt(m[1]) }],
+      discount: parseInt(m[2]),
+    });
+  }
+  m = text.match(/[Ii]f your opponent has a Character with (\d+) (?:base )?power or more,\s*give this card in your hand\s*-(\d+)\s*cost/i);
+  if (m) {
+    out.push({
+      type: 'handCostDiscount',
+      conditions: [{ type: 'oppCharacterPowerMin', value: parseInt(m[1]) }],
+      discount: parseInt(m[2]),
+    });
+  }
+
+  // removalProtection —
+  //   "This character cannot be K.O'd by your opponent's effects" (Burgess)
+  //   "This Character cannot be removed from the field by your opponent's effects" (Kuzan)
+  if (/[Tt]his character cannot be K\.?O\.?'d by your opponent'?s? effects/i.test(text)) {
+    out.push({ type: 'removalProtection', source: 'opponent', scope: 'koOnly' });
+  }
+  if (/[Tt]his Character cannot be removed from the field by your opponent'?s? effects/i.test(text)) {
+    out.push({ type: 'removalProtection', source: 'opponent', scope: 'anyRemoval' });
+  }
+
+  // selfSaveReplacement — "If this character would be removed from [play|the field]
+  //   by (one of )your opponent's effect(s), (instead )you may give this character
+  //   -N000 power (during|for) this turn (instead)."
+  m = text.match(
+    /[Ii]f this [Cc]haracter would be removed from (?:play|the field) by (?:one of )?your opponent'?s? effects?,?\s*(?:instead\s*)?you may give this [Cc]haracter\s*-(\d+)(?:000)?\s*power\s*(?:during|for) this turn(?:\s+instead)?/i
+  );
+  if (m) {
+    out.push({
+      type: 'selfSaveReplacement',
+      replaceWith: 'powerDebuffSelf',
+      amount: parseInt(m[1]) * (m[1].length <= 2 ? 1000 : 1),
+      duration: 'thisTurn',
+      conditions: /\[Once Per Turn\]/i.test(text) ? [{ type: 'oncePerTurn' }] : [],
+    });
+  }
+  // Vergo variant: "you may return 1 DON!! card from your field to your DON!! deck instead"
+  m = text.match(
+    /[Ii]f your \{([^}]+)\}\s*type Character would be removed from the field by your opponent'?s? effect,?\s*you may return (\d+) DON!! card from your field to your DON!! deck instead/i
+  );
+  if (m) {
+    out.push({
+      type: 'selfSaveReplacement',
+      replaceWith: 'returnDon',
+      donCount: parseInt(m[2]),
+      scope: 'affiliation',
+      affiliation: m[1],
+      conditions: /\[Once Per Turn\]/i.test(text) ? [{ type: 'oncePerTurn' }] : [],
+    });
+  }
+
+  return out;
+}
 
 function parseAbility(text) {
   const out = { raw: text || '', keywords: [], effects: [], unparsedSegments: [] };
@@ -4571,14 +4744,21 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
 function _buildParsedEffectsCache() {
   let full = 0, partial = 0, empty = 0;
   const gaps = [];
+  let passiveCards = 0, passiveEntries = 0;
   for (const card of CARD_DB) {
     const parsed = parseAbility(card.ability || '');
     PARSED_EFFECTS.set(card.id, parsed);
+    const passives = parsePassive(card.ability || '');
+    if (passives.length > 0) {
+      PASSIVE_EFFECTS.set(card.id, passives);
+      passiveCards++; passiveEntries += passives.length;
+    }
     if (!card.ability) { empty++; continue; }
     if (parsed.unparsedSegments.length === 0) full++;
     else { partial++; gaps.push({ id: card.id, name: card.name, unparsed: parsed.unparsedSegments }); }
   }
   console.log(`[PARSE_ABILITY] ${CARD_DB.length} cards cached — ${full} full, ${partial} partial, ${empty} no-ability`);
+  console.log(`[PARSE_PASSIVE] ${passiveCards} cards carry ${passiveEntries} passive entries.`);
   if (gaps.length > 0) {
     console.log(`[PARSE_ABILITY] Coverage gaps (${gaps.length}):`);
     for (const g of gaps) console.log(`  ${g.id} ${g.name}: ${g.unparsed.map(s => JSON.stringify(s)).join(' | ')}`);
@@ -5417,6 +5597,7 @@ if (require.main === module) {
 module.exports = {
   // Parser + cache
   parseAbility, PARSED_EFFECTS,
+  parsePassive, PASSIVE_EFFECTS,
   // Phase-3/4 pipeline surface
   runPipeline, resumePipeline, triggerOnKO,
   // Phase-5 P8 suppression helpers
