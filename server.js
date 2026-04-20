@@ -82,7 +82,7 @@ const CARD_DB = [
     ability:"[On Play] You may discard 1 card from your hand: If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! from your DON!! deck and set it as active." },
 
   { id:'OP14-072', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-072','png'),
+    power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-072','png'), useNewPipeline:true,
     ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] DON!! -1: Add up to 1 card from the top of your deck to the top of your Life cards.' },
 
   { id:'OP14-063', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -3962,6 +3962,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'trashOpponentLife', count: parseInt(m[1]), triggerActivates: false };
   }
 
+  // Phase 5 Priority 6 — "Add [up to] N card(s) from the top of your
+  // deck to (the top of )?your Life cards?". Baby 5 (OP14-072) is the
+  // canonical case — a self-heal effect after KO.
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) cards? from the top of your deck to (?:the top of )?your Life cards?/i))) {
+    return { type: 'addLife', count: parseInt(m[1]) };
+  }
+
   // addFromTrash — "Add up to N [type] [card(s)] from your trash to your hand".
   // "card(s)" is optional because some ability texts omit it ("add up to 1
   // Event from your trash to your hand").
@@ -4314,6 +4321,19 @@ function agentApplyEffect(effect, ctx, resume) {
         ? { status: 'window-open' }
         : { status: 'abort-block', reason: 'no active opponent characters to rest' };
     }
+    // Phase 5 Priority 6 — move top N cards of player's deck to the top
+    // of their life stack. Symmetric opposite of trashOpponentLife.
+    case 'addLife': {
+      const want = Math.min(effect.count || 1, ctx.player.deck.length);
+      for (let i = 0; i < want; i++) {
+        const c = ctx.player.deck.shift();
+        if (!c) break;
+        ctx.player.life.push(c);  // life[.length-1] = top, matches pop() semantics in RESOLVE_ATTACK
+        log(ctx.game, `${ctx.card.name}: added a card to life (${ctx.player.life.length} total).`);
+      }
+      return { status: 'applied' };
+    }
+
     // Phase-4 Batch 3 — trash N life cards from opponent, bypassing
     // Trigger. Constable Jack leader's flagship effect.
     case 'trashOpponentLife': {
