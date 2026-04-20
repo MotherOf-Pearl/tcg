@@ -102,11 +102,11 @@ const CARD_DB = [
     ability:"[On Play] If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] Draw 2 cards and trash 1 card from your hand. Then, add up to 2 DON!! cards from your DON!! deck and rest them." },
 
   { id:'OP14-068', name:'Trebol', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:5000, cost:5, counter:2000, image:IMG('OP14','OP14-068','png'),
+    power:5000, cost:5, counter:2000, image:IMG('OP14','OP14-068','png'), useNewPipeline:true,
     ability:"[Opponent's Turn] [Once Per Turn] When a DON!! card on your field is returned to your DON!! deck, if your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and rest it." },
 
   { id:'OP10-071', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:9000, cost:8, counter:0, image:IMG('OP10','OP10-071','jpg'),
+    power:9000, cost:8, counter:0, image:IMG('OP10','OP10-071','jpg'), useNewPipeline:true,
     ability:"[On Play] DON!! -1: Play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand. [Opponent's Turn] [Once Per Turn] You may rest 1 of your DON!!: add up to 1 Active DON!! from your DON!! deck." },
 
   { id:'OP11-067', name:'Charlotte Katakuri', type:'CHARACTER', color:'Purple', attribute:'Strike',
@@ -141,7 +141,7 @@ const CARD_DB = [
   // SHANKS DECK (Red)
   // ══════════════════════════════
   { id:'OP09-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash',
-    power:5000, life:5, cost:0, counter:0, image:IMG('OP09','OP09-001','jpg'),
+    power:5000, life:5, cost:0, counter:0, image:IMG('OP09','OP09-001','jpg'), useNewPipeline:true,
     ability:"[Once Per Turn] You may activate this effect when your opponent attacks. Give up to 1 of your opponent's leader or characters -1000 power for the turn." },
 
   { id:'OP09-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special',
@@ -4241,6 +4241,14 @@ const TIMING_MAP = {
   '[Main]'                      : 'eventMain',
   '[Activate: Main]'            : 'activateMain',
   '[End of Your Turn]'          : 'endOfTurn',
+  // Track H — promote Your Turn / Opponent's Turn from scope to timing.
+  // Gives the splitter a boundary so cards like Doflamingo OP10-071
+  // split into two blocks instead of merging their on-play and
+  // opp-turn activation effects. Blocks with these timings are inert
+  // (no runPipeline hook wired yet) — player-activated abilities on
+  // opponent's turn need a dedicated client action to fire them.
+  '[Your Turn]'                 : 'yourTurn',
+  "[Opponent's Turn]"           : 'opponentsTurn',
 };
 
 const PASSIVE_SCOPE_MAP = {
@@ -4915,6 +4923,11 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   // silently so they don't show up as unparsed noise.
   if (/^\s*[Pp]lace the rest/.test(seg)) return null;
   if (/^\s*[Pp]ut the rest of the cards? (?:in)?to your trash/i.test(seg)) return null;
+  // Track H — passive power clauses inside [Your Turn] / [Opponent's
+  // Turn] blocks (Chopper: "This character has +2000 power") are
+  // handled by PASSIVE_EFFECTS / scopedPowerBuff; consume silently
+  // to avoid unparsed noise in the pipeline block.
+  if (/^\s*[Tt]his [Cc]haracter has\s*\+\d+\s*power\.?\s*$/i.test(seg)) return null;
 
   let m, condM;
 
