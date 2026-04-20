@@ -375,7 +375,7 @@ const CARD_DB = [
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand." },
 
   { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue', affiliation:'Duchess of Brittany',
-    power:0, cost:2, counter:0, image:IMG('OP01','OP01-087','png'),
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-087','png'), useNewPipeline:true,
     ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
 
   { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'', affiliation:'Duchess of Brittany',
