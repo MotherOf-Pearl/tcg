@@ -410,7 +410,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -1: Play up to 1 [Toad Wizzy] card with a cost of 4 or less from your hand." },
 
   { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:6000, cost:4, counter:1000, image:IMG('ST04','ST04-012','png'),
+    power:6000, cost:4, counter:1000, image:IMG('ST04','ST04-012','png'), hasAlt:true,
     ability:"" },
 
   { id:'ST04-005', name:'Sam the Tall', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
