@@ -292,7 +292,7 @@ const CARD_DB = [
     ability:"This Character cannot be removed from the field by your opponent's effects. [Activate: Main] You may trash this Character: Draw 1 card. Then, play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less other than [Kuzan] from your trash." },
 
   { id:'OP09-084', name:'Catarina Devon', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:6000, cost:5, counter:1000, image:IMG('OP09','OP09-084','jpg'),
+    power:6000, cost:5, counter:1000, image:IMG('OP09','OP09-084','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type, until the end of your opponent's next turn this character gains [Double Attack] and [Banish] or [Blocker]." },
 
   { id:'ST27-003', name:'Kuzan', type:'CHARACTER', color:'Blue', attribute:'Special',
@@ -4593,6 +4593,20 @@ function parseAbility(text) {
     return `other than \u00a7EXCLUDE_${name.replace(/\s+/g, '|')}\u00a7`;
   });
 
+  // Track J — Catarina Devon OP09-084 keyword-choose compound:
+  //   "until the end of your opponent's next turn this character gains
+  //    [Double Attack] and [Banish] or [Blocker]"
+  //   → "this character gains [A] <dur>. Choose one: • this character
+  //      gains [B] <dur> • this character gains [C] <dur>"
+  // The subsequent grantKeyword pre-processor then turns each "gains [X]"
+  // into a §GRANT§ placeholder; chooseOne parser picks up the "Choose
+  // one:" segment with bullet branches.
+  processed = processed.replace(
+    /(until the end of your opponent'?s?\s+next turn|during this turn|for this turn) this character gains \[([^\]]+)\] and \[([^\]]+)\] or \[([^\]]+)\]/gi,
+    (_m, dur, a, b, c) =>
+      `this Character gains [${a}] ${dur}. Choose one: \u2022 this Character gains [${b}] ${dur} \u2022 this Character gains [${c}] ${dur}`
+  );
+
   // Phase 7 — pre-process "This Character gains [KEYWORD] during this turn"
   // (and opponent-next-turn variant). Protects the bracketed keyword from
   // the body-level [tag] stripper that runs in _parseBlock, so the
@@ -4897,6 +4911,28 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   if (/^\s*[Pp]ut the rest of the cards? (?:in)?to your trash/i.test(seg)) return null;
 
   let m, condM;
+
+  // Track J — segment-level "Choose one:" detection. The block-level
+  // chooseOne in _parseEffectList only matches the whole body; this
+  // handles synthesised chooseOne segments (Catarina Devon) produced
+  // mid-body by pre-processing.
+  if (/^\s*Choose one\s*:/i.test(seg) && /\u2022/.test(seg)) {
+    const chooseM = seg.match(/^\s*Choose one\s*:?\s*(.+)$/i);
+    if (chooseM) {
+      const branches = chooseM[1].split(/\u2022/).map(s => s.trim()).filter(Boolean).map(bt => {
+        const conditions = [];
+        let bBody = bt;
+        const lt = bBody.match(/^If your Leader has the \{([^}]+)\}\s*type,?\s*/i);
+        if (lt) {
+          conditions.push({ type: 'leaderType', value: lt[1] });
+          bBody = bBody.substring(lt[0].length);
+        }
+        const effects = _parseEffectList(bBody, unparsed);
+        return { conditions, effects, text: bt };
+      });
+      return { type: 'chooseOne', branches };
+    }
+  }
 
   // Phase 8 — conditional effect wrappers must run BEFORE any effect
   // matcher that could match the inner clause (e.g. koTarget matches
