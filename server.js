@@ -122,7 +122,7 @@ const CARD_DB = [
     ability:"[Main] [Counter] Look at 3 cards from the top of your deck; reveal up to 1 {Donquixote Pirates} type card other than this card and add it to your hand. Place the rest at the bottom of your deck in any order." },
 
   { id:'OP13-076', name:'Divine Departure', type:'EVENT', color:'Purple',
-    power:0, cost:0, counter:0, image:IMG('OP13','OP13-076','png'),
+    power:0, cost:0, counter:0, image:IMG('OP13','OP13-076','png'), useNewPipeline:true,
     ability:"[Main] You may rest 5 of your DON!! cards: Give up to 1 of your opponent's Characters -8000 power during this turn. [Counter] You may trash 1 card from your hand: Up to 1 of your Leader or Character cards gains +3000 power during this battle." },
 
   { id:'OP07-076', name:'NoroNoro Beam Sword', type:'EVENT', color:'Purple',
@@ -237,7 +237,7 @@ const CARD_DB = [
     ability:"[Counter] Choose up to 1 of your leader or character, it gains +3000 during this battle. Afterwards, one of your opponent's leader or character gets -2000 during this turn. [Trigger] Choose up to 1 of your leader or character, it gets +1000 during this turn." },
 
   { id:'OP10-019', name:'Divine Departure', type:'EVENT', color:'Red',
-    power:0, cost:1, counter:0, image:IMG('OP10','OP10-019','jpg'),
+    power:0, cost:1, counter:0, image:IMG('OP10','OP10-019','jpg'), useNewPipeline:true,
     ability:"[Main] You may rest 5 DON!!: K.O. up to 1 of your opponent's characters with 8000 Power or less. [Counter] Up to 1 of your Leaders gains +3000 Power during this battle." },
 
   { id:'OP01-026', name:'Gum-Gum Red Hawk', type:'EVENT', color:'Red',
@@ -307,7 +307,7 @@ const CARD_DB = [
     power:0, cost:1, counter:0, image:IMG('OP09','OP09-096','jpg'), useNewPipeline:true,
     ability:"[Main] Look at the top 3 cards of your deck and reveal up to one {Blackbeard Pirates} type card other than [This is MY AGE!!!!] and put it into your hand. Then put the rest of the cards into your trash. [Trigger] Activate this card's [Main] effect." },
 
-  { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black',
+  { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black', useNewPipeline:true,
     power:0, cost:2, counter:0, image:IMG('OP09','OP09-097','jpg'),
     ability:"[Counter] Nullify the effects of up to 1 of your opponent's leader or character and give them -4000 power during this turn. [Trigger] Nullify the effects of up to 1 of your opponent's leader or character during this turn." },
 
@@ -316,7 +316,7 @@ const CARD_DB = [
     ability:"[Main] If your Leader has the {Blackbeard Pirates} type, negate the effect of up to 1 of your opponent's Characters during this turn. Then, if that Character has a cost of 4 or less, K.O. it. [Trigger] Negate the effect of up to 1 of your opponent's Leader or Character cards during this turn." },
 
   { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:'',
-    power:0, cost:1, counter:0, image:IMG('OP09','OP09-099','jpg'),
+    power:0, cost:1, counter:0, image:IMG('OP09','OP09-099','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] You may trash 1 card from your hand and rest this Stage: Look at 3 cards from the top of your deck; reveal up to 1 {Blackbeard Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   // ══════════════════════════════
@@ -4550,6 +4550,13 @@ function parseAbility(text) {
     '$1. K.O. $2'
   );
 
+  // Track F — Black Spiral counter compound "Nullify … and give them
+  // -N power during this turn" splits into suppressTarget + powerDebuff.
+  processed = processed.replace(
+    /([Nn]ullify the effects? of up to \d+ of your opponent'?s? leaders? or characters?) and give them\s*-(\d+)\s*power\s+during this turn/g,
+    (_m, pre, amt) => `${pre} during this turn. Give up to 1 of your opponent's leaders or characters -${amt} power during this turn`
+  );
+
   // Track F — mandatory hand-trash after Draw (Sam the Tall, Monet).
   //   "Draw N cards and trash M cards from your hand" → two segments:
   //   drawCards + trashFromHandEffect.
@@ -4747,7 +4754,7 @@ function _parseBlock(block, unparsed) {
   // of M or more] from your hand[ and this character]:"
   // Stronger OP09-089 adds an "and this character" suffix that pushes
   // a second trashSelf cost onto the stack.
-  const trash = body.match(/^You may (?:trash|discard) (one|\d+) (Character |Event )?cards? (?:with a power of (\d+) or more )?from your hand(?:\s+and this character)?\s*:\s*/i);
+  const trash = body.match(/^You may (?:trash|discard) (one|\d+) (Character |Event )?cards? (?:with a power of (\d+) or more )?from your hand(?:\s+and this character|\s+and rest this [Ss]tage)?\s*:\s*/i);
   if (trash) {
     const n = trash[1].toLowerCase() === 'one' ? 1 : parseInt(trash[1]);
     const c = { type: 'trashFromHand', count: n };
@@ -4757,15 +4764,18 @@ function _parseBlock(block, unparsed) {
     // so they run on the same agentPayCosts pass — after the async
     // cost opens its window, resume skips the cost agent entirely.
     if (/and this character/i.test(trash[0])) costs.push({ type: 'trashSelf' });
+    if (/and rest this [Ss]tage/i.test(trash[0])) costs.push({ type: 'restSelf' });
     costs.push(c);
     body = body.substring(trash[0].length).trim();
   }
 
-  // "You may rest N of your DON!! [and this Character]:"
-  const restDon = body.match(/^You may rest (\d+) of your DON!!(?:\s*and this Character)?\s*:\s*/i);
+  // "You may rest N [of your] DON!! [cards] [and this Character]:"
+  // Loosened for Divine Departure ("rest 5 DON!!:" / "rest 5 of your
+  // DON!! cards:"). Synchronous cost paid by turning active DON rested.
+  const restDon = body.match(/^You may rest (\d+) (?:of your )?DON!!(?:\s*cards?)?(?:\s*and this Character)?\s*:\s*/i);
   if (restDon) {
-    costs.push({ type: 'restDon', count: parseInt(restDon[1]) });
     if (/and this Character/i.test(restDon[0])) costs.push({ type: 'restSelf' });
+    costs.push({ type: 'restDon', count: parseInt(restDon[1]) });
     body = body.substring(restDon[0].length).trim();
   }
 
@@ -5343,6 +5353,17 @@ function agentPayCosts(costs, ctx, resume) {
         // the cost is met for free; otherwise rest the source now.
         if (!ctx.card.rested) ctx.card.rested = true;
         break;  // continue loop to any subsequent costs
+      }
+      case 'restDon': {
+        // Synchronous cost: rest N active DON!!. Divine Departure cards
+        // ("You may rest 5 DON!!:") pay here. If insufficient active
+        // DON, the cost is unaffordable and the effect aborts.
+        const n = c.count || 1;
+        if ((ctx.player.donActive || 0) < n) return { status: 'unaffordable' };
+        ctx.player.donActive -= n;
+        ctx.player.donRested += n;
+        log(ctx.game, `${ctx.card.name}: rested ${n} DON!! as cost.`);
+        break;
       }
       case 'trashSelf': {
         // Synchronous cost: move source from field to trash. ctx.card
