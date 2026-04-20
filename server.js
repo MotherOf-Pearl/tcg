@@ -3394,5 +3394,420 @@ wss.on('connection', (ws) => {
   });
 });
 
+// ═════════════════════════════════════════════════════════════════════════
+// PHASE 1 — Card effect ROUTER (parseAbility) + PARSED_EFFECTS cache.
+//
+// This is step 1 of the multi-agent migration. parseAbility(text) is a
+// pure function that converts an ability string into a structured effect
+// tree matching the schema the user specified. At server startup we run
+// it over every CARD_DB entry and cache the result in PARSED_EFFECTS.
+// Nothing in this block is called from runtime gameplay — parseAndApply
+// continues to own effect resolution. This phase only produces data and
+// a coverage report, so we can see which abilities parse cleanly and
+// which ones reveal regex gaps before we build Timing / Conditions /
+// Costs / Effects / Sequencer / UI agents.
+//
+// Schema produced by parseAbility(text):
+//
+//   {
+//     raw: "original ability text",
+//     keywords: string[],       // 'blocker' | 'rush' | 'doubleAttack' | 'banish'
+//     effects: EffectBlock[],   // one block per [Timing]
+//     unparsedSegments: string[] // diagnostic: effect text we didn't understand
+//   }
+//
+//   EffectBlock = {
+//     timing: string,            // 'onPlay' | 'onKO' | 'onBlock' | 'whenAttacking' |
+//                                //   'onYourOpponentsAttack' | 'trigger' | 'counter' |
+//                                //   'main' | 'activateMain' | 'endOfTurn'
+//     conditions: Condition[],
+//     costs: Cost[],
+//     effects: Effect[],
+//     optional: boolean,
+//     maxTargets: number | null
+//   }
+//
+//   Condition = { type: 'donAttached'|'leaderType'|'donCountMin'|'lifeCountMax'|
+//                       'scope'|'oncePerTurn', value?: any }
+//   Cost      = { type: 'returnDon'|'trashFromHand'|'restDon'|'restSelf'|'trashSelf',
+//                 count?: number, filterType?: string, filterPowerMin?: number }
+//   Effect    = one of the shapes listed in EFFECT_CATALOG (see below).
+
+const PARSED_EFFECTS = new Map();
+
+const KEYWORD_MAP = {
+  '[Blocker]'       : 'blocker',
+  '[Rush]'          : 'rush',
+  '[Double Attack]' : 'doubleAttack',
+  '[Banish]'        : 'banish',
+};
+
+// Timing markers we recognise. [Your Turn] / [Opponent's Turn] are
+// scopes, not timings — they get captured as a condition on whatever
+// timing is present.
+const TIMING_MAP = {
+  '[On Play]'                   : 'onPlay',
+  '[On K.O.]'                   : 'onKO',
+  '[On Block]'                  : 'onBlock',
+  '[When Attacking]'            : 'whenAttacking',
+  "[On Your Opponent's Attack]" : 'onYourOpponentsAttack',
+  '[Trigger]'                   : 'trigger',
+  '[Counter]'                   : 'counter',
+  '[Main]'                      : 'main',
+  '[Activate: Main]'            : 'activateMain',
+  '[End of Your Turn]'          : 'endOfTurn',
+};
+
+const PASSIVE_SCOPE_MAP = {
+  '[Your Turn]'       : 'yourTurn',
+  "[Opponent's Turn]" : 'opponentsTurn',
+};
+
+// Documentation-only: the set of Effect shapes parseAbility can emit.
+// Listed here so future agents (Cost / Effect / UI) can see the contract.
+// drawCards      {count}
+// addDon         {count, state: 'active'|'rested'}
+// aoeKO          {excludeSelf}
+// koTarget       {max, filter:{maxCost?, maxPower?, opponent}}
+// bounceTarget   {max, filter:{maxCost?, maxPower?, opponent}}
+// restTarget     {max, filter:{maxCost?, opponent}}
+// placeAtBottom  {max, filter:{maxCost?}}
+// scry           {count, placement:'top'|'bottom'|'either', reveal?:{count, filter}}
+// trashOpponentLife {count, triggerActivates}
+// addFromTrash   {max, filter?:{type}}
+// powerBuff      {target, value, duration}
+// scaledPowerBuff{per, amount, source}
+// playFromHand   {max, filter, free}
+// powerDebuff    {value, target}
+
+function parseAbility(text) {
+  const out = { raw: text || '', keywords: [], effects: [], unparsedSegments: [] };
+  if (!text) return out;
+
+  for (const [token, name] of Object.entries(KEYWORD_MAP)) {
+    if (text.includes(token)) out.keywords.push(name);
+  }
+
+  const blocks = _splitIntoBlocks(text);
+  for (const block of blocks) {
+    const parsed = _parseBlock(block, out.unparsedSegments);
+    if (parsed) out.effects.push(parsed);
+  }
+  return out;
+}
+
+// Walk every [bracketed] token; cut blocks between consecutive timing
+// markers. The "preamble" of a block is everything between the previous
+// timing marker (or start of string) and this marker — that's where
+// pre-marker modifiers like "[DON!! x1]" live (e.g. Noble Shlawger's
+// "[Blocker] [DON!! x1] [On Block] …"). The "body" is text after this
+// marker up to the next timing marker.
+function _splitIntoBlocks(text) {
+  const tokens = [];
+  const re = /\[[^\]]+\]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) tokens.push({ raw: m[0], pos: m.index });
+
+  const blocks = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const t = tokens[i];
+    if (!TIMING_MAP[t.raw]) continue;
+    // Walk backward collecting contiguous MODIFIER brackets (any non-timing
+    // bracket, e.g. [DON!! xN], [Once Per Turn], [Blocker]). Stop as soon
+    // as we hit a timing marker OR non-whitespace between tokens. This
+    // guarantees preamble is only the modifiers glued to this timing, not
+    // the previous block's body text.
+    let preambleStart = t.pos;
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = tokens[j];
+      if (TIMING_MAP[prev.raw]) break;
+      const between = text.substring(prev.pos + prev.raw.length, preambleStart);
+      if (!/^\s*$/.test(between)) break;
+      preambleStart = prev.pos;
+    }
+    let endPos = text.length;
+    for (let j = i + 1; j < tokens.length; j++) {
+      if (TIMING_MAP[tokens[j].raw]) { endPos = tokens[j].pos; break; }
+    }
+    blocks.push({
+      token:    t.raw,
+      preamble: text.substring(preambleStart, t.pos),
+      body:     text.substring(t.pos + t.raw.length, endPos),
+    });
+  }
+  return blocks;
+}
+
+function _parseBlock(block, unparsed) {
+  const timing = TIMING_MAP[block.token];
+  if (!timing) return null;
+  let body = (block.preamble + ' ' + block.body).trim();
+
+  const conditions = [];
+
+  // [DON!! xN] — either preamble or inline (Jesse the Jester has it in
+  // the body as "[DON!! x1] [Your Turn] …").
+  const donAttached = body.match(/\[DON!!\s*x(\d+)\]/);
+  if (donAttached) {
+    conditions.push({ type: 'donAttached', value: parseInt(donAttached[1]) });
+    body = body.replace(donAttached[0], '').trim();
+  }
+
+  // [Once Per Turn] keyword OR natural-language "Once per turn,?/:" prefix.
+  if (/\[Once Per Turn\]/i.test(body)) {
+    conditions.push({ type: 'oncePerTurn' });
+    body = body.replace(/\[Once Per Turn\]/i, '').trim();
+  }
+  const oprNat = body.match(/^Once per turn[,:]\s*/i);
+  if (oprNat) {
+    conditions.push({ type: 'oncePerTurn' });
+    body = body.substring(oprNat[0].length).trim();
+  }
+
+  for (const [token, scope] of Object.entries(PASSIVE_SCOPE_MAP)) {
+    if (body.includes(token)) {
+      conditions.push({ type: 'scope', value: scope });
+      body = body.replace(token, '').trim();
+    }
+  }
+
+  // "If your Leader has the {X} type," condition (consumed).
+  const leaderType = body.match(/If your Leader has the \{([^}]+)\}\s*type,?/i);
+  if (leaderType) {
+    conditions.push({ type: 'leaderType', value: leaderType[1] });
+    body = body.replace(leaderType[0], '').trim();
+  }
+
+  // "If you have N or more DON!! cards" / "if you have N or less Life cards".
+  const donCountMin = body.match(/[Ii]f you have (\d+) or more DON!!\s*cards?/);
+  if (donCountMin) {
+    conditions.push({ type: 'donCountMin', value: parseInt(donCountMin[1]) });
+    body = body.replace(donCountMin[0], '').trim();
+  }
+  const lifeCountMax = body.match(/[Ii]f you have (\d+) or less Life cards?/);
+  if (lifeCountMax) {
+    conditions.push({ type: 'lifeCountMax', value: parseInt(lifeCountMax[1]) });
+    body = body.replace(lifeCountMax[0], '').trim();
+  }
+
+  // Strip leftover stray [Keyword] tokens (they're already captured at
+  // the top level in parseAbility.keywords).
+  body = body.replace(/\[[^\]]+\]/g, ' ').replace(/\s+/g, ' ').trim();
+
+  const costs = [];
+
+  // "DON!! -N:" return-DON cost.
+  const donRet = body.match(/^DON!!\s*-(\d+)\s*:\s*/);
+  if (donRet) {
+    costs.push({ type: 'returnDon', count: parseInt(donRet[1]) });
+    body = body.substring(donRet[0].length).trim();
+  }
+
+  // "You may (trash|discard) N [Character|Event] card(s) [with a power of M or more] from your hand:"
+  const trash = body.match(/^You may (?:trash|discard) (\d+) (Character |Event )?cards? (?:with a power of (\d+) or more )?from your hand:\s*/i);
+  if (trash) {
+    const c = { type: 'trashFromHand', count: parseInt(trash[1]) };
+    if (trash[2]) c.filterType = trash[2].trim().toUpperCase();
+    if (trash[3]) c.filterPowerMin = parseInt(trash[3]);
+    costs.push(c);
+    body = body.substring(trash[0].length).trim();
+  }
+
+  // "You may rest N of your DON!! [and this Character]:"
+  const restDon = body.match(/^You may rest (\d+) of your DON!!(?:\s*and this Character)?\s*:\s*/i);
+  if (restDon) {
+    costs.push({ type: 'restDon', count: parseInt(restDon[1]) });
+    if (/and this Character/i.test(restDon[0])) costs.push({ type: 'restSelf' });
+    body = body.substring(restDon[0].length).trim();
+  }
+
+  const optional = /\b(?:you may|up to)\b/i.test(body);
+  const effects  = _parseEffectList(body, unparsed);
+  const withTarget = effects.find(e => e.max != null);
+  const maxTargets = withTarget ? withTarget.max : null;
+  return { timing, conditions, costs, effects, optional, maxTargets };
+}
+
+function _parseEffectList(body, unparsed) {
+  if (!body) return [];
+  // Protect "K.O." from the period-based splitter — its internal periods
+  // look exactly like sentence boundaries otherwise. Swap to a placeholder
+  // before splitting, restore after.
+  const KO_PLACEHOLDER = '\u0001KO\u0001';
+  const protectedBody = body.replace(/K\.O\./g, KO_PLACEHOLDER);
+  const segments = protectedBody
+    .split(/\.\s+Then,?\s*|,\s+then,?\s+|\.\s+|\s+Then,?\s+/i)
+    .map(s => s.replace(/\.$/, '').trim())
+    .map(s => s.replace(new RegExp(KO_PLACEHOLDER, 'g'), 'K.O.'))
+    .filter(Boolean);
+
+  // Placement for scry is often split across two segments — "Look at N …"
+  // in one and "place the rest at the bottom" in the next. Pre-scan the
+  // full body so we can attach placement to the scry effect regardless
+  // of segmentation.
+  const bodyPlacement =
+      /place the rest at the bottom/i.test(body) ? 'bottom'
+    : /top or bottom/i.test(body) ? 'either'
+    : 'top';
+
+  const out = [];
+  for (const seg of segments) {
+    const eff = _parseEffectSegment(seg, unparsed, bodyPlacement);
+    if (eff) out.push(eff);
+  }
+  return out;
+}
+
+function _parseEffectSegment(seg, unparsed, bodyPlacement) {
+  if (!seg) return null;
+  // Scry placement continuations are consumed via bodyPlacement — skip
+  // silently so they don't show up as unparsed noise.
+  if (/^\s*[Pp]lace the rest/.test(seg)) return null;
+
+  let m;
+
+  if ((m = seg.match(/^(?:[Dd]raw) (\d+) cards?/))) {
+    return { type: 'drawCards', count: parseInt(m[1]) };
+  }
+
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) (?:Active )?DON!!.*?(?:set it as active|active)/))) {
+    return { type: 'addDon', count: parseInt(m[1]), state: 'active' };
+  }
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) DON!!.*?rest/))) {
+    return { type: 'addDon', count: parseInt(m[1]), state: 'rested' };
+  }
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) DON!! card/))) {
+    return { type: 'addDon', count: parseInt(m[1]), state: 'rested' };
+  }
+
+  if (/K\.O\. all Characters other than this Character/i.test(seg)) {
+    return { type: 'aoeKO', excludeSelf: true };
+  }
+
+  if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?cost of (\d+) or less/i))) {
+    return { type: 'koTarget', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]), opponent: true } };
+  }
+  if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?(\d+)\s*power or less/i))) {
+    return { type: 'koTarget', max: parseInt(m[1]), filter: { maxPower: parseInt(m[2]), opponent: true } };
+  }
+  if ((m = seg.match(/K\.O\. (?:up to )?(\d+) of your opponent'?s? Character/i))) {
+    return { type: 'koTarget', max: parseInt(m[1]), filter: { opponent: true } };
+  }
+
+  if ((m = seg.match(/[Rr]eturn (?:up to )?(\d+)(?: of your opponent'?s?)? Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i))) {
+    return { type: 'bounceTarget', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]), opponent: /your opponent/i.test(seg) } };
+  }
+  if ((m = seg.match(/[Rr]eturn (?:up to )?(\d+)(?: of your opponent'?s?)? Character.*?(\d+)\s*power or less.*?(?:owner'?s? )?hand/i))) {
+    return { type: 'bounceTarget', max: parseInt(m[1]), filter: { maxPower: parseInt(m[2]), opponent: /your opponent/i.test(seg) } };
+  }
+  if ((m = seg.match(/[Rr]eturn (?:up to )?(\d+) Character to (?:its )?owner'?s? hand/i))) {
+    return { type: 'bounceTarget', max: parseInt(m[1]), filter: {} };
+  }
+
+  if ((m = seg.match(/[Rr]est (?:up to )?(\d+) of your opponent'?s? Character/i))) {
+    const costM = seg.match(/cost of (\d+) or less/i);
+    const filter = { opponent: true };
+    if (costM) filter.maxCost = parseInt(costM[1]);
+    return { type: 'restTarget', max: parseInt(m[1]), filter };
+  }
+
+  if ((m = seg.match(/[Pp]lace (?:up to )?(\d+) Character.*?cost of (\d+) or less.*?bottom of.*?deck/i))) {
+    return { type: 'placeAtBottom', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]) } };
+  }
+
+  if ((m = seg.match(/[Ll]ook at.*?(\d+) cards? from the top/i))) {
+    const scry = { type: 'scry', count: parseInt(m[1]), placement: bodyPlacement };
+    const revealM  = seg.match(/reveal up to (\d+)/i);
+    const filterM  = seg.match(/\{([^}]+)\}\s*type\s*(Character|Event|Stage)?/i);
+    const excludeM = seg.match(/other than \[([^\]]+)\]/i);
+    if (revealM) {
+      scry.reveal = { count: parseInt(revealM[1]), filter: {} };
+      if (filterM) {
+        scry.reveal.filter.affiliation = filterM[1];
+        if (filterM[2]) scry.reveal.filter.type = filterM[2].toUpperCase();
+      }
+      if (excludeM) scry.reveal.filter.excludeName = excludeM[1];
+    }
+    return scry;
+  }
+
+  if ((m = seg.match(/[Tt]rash (?:up to )?(\d+) of your opponent'?s? Life cards?/i))) {
+    return { type: 'trashOpponentLife', count: parseInt(m[1]), triggerActivates: false };
+  }
+
+  // addFromTrash — "Add up to N [type] [card(s)] from your trash to your hand".
+  // "card(s)" is optional because some ability texts omit it ("add up to 1
+  // Event from your trash to your hand").
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) (Event|Character)?\s*(?:cards?\s+)?from your trash to your hand/i))) {
+    const e = { type: 'addFromTrash', max: parseInt(m[1]) };
+    if (m[2]) e.filter = { type: m[2].toUpperCase() };
+    return e;
+  }
+
+  if ((m = seg.match(/gains?\s*\+(\d+)\s*power\s+for every (\d+)\s*Events?\s+in your trash/i))) {
+    return { type: 'scaledPowerBuff', per: parseInt(m[2]), amount: parseInt(m[1]), source: 'eventsInTrash' };
+  }
+
+  if ((m = seg.match(/(?:[Gg]ains?|[Hh]as|[Gg]ets?)\s*\+(\d+)\s*power\s+(until (?:the )?end of (?:your )?opponent'?s? next (?:turn|end phase)|during this turn|during this battle|for this turn|for this battle)/i))) {
+    const amount = parseInt(m[1]);
+    const when = m[2].toLowerCase();
+    const duration = when.includes('opponent') ? 'opponentNextTurn'
+                   : when.includes('battle')   ? 'thisBattle'
+                                                : 'thisTurn';
+    const lead = seg.substring(0, m.index).toLowerCase();
+    const target = /this character|this leader/.test(lead) ? 'self'
+                 : (/your leader/.test(lead) && !/character/.test(lead)) ? 'leader'
+                 : 'leaderOrCharacter';
+    return { type: 'powerBuff', target, value: amount, duration };
+  }
+
+  if ((m = seg.match(/[Pp]lay (?:up to )?(\d+).*?cost of (\d+) or less.*?hand/i))) {
+    const filter = { maxCost: parseInt(m[2]) };
+    const affM  = seg.match(/\{([^}]+)\}\s*type/i);
+    const nameM = seg.match(/\[([^\]]+)\]\s*card/i);
+    const typeM = seg.match(/\b(Character|Event|Stage)\s+card/i);
+    if (affM)  filter.affiliation = affM[1];
+    if (nameM) filter.name = nameM[1];
+    if (typeM) filter.type = typeM[1].toUpperCase();
+    return { type: 'playFromHand', max: parseInt(m[1]), filter, free: true };
+  }
+
+  if ((m = seg.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i))) {
+    return { type: 'powerDebuff', value: parseInt(m[1]), target: 'opponentCharacter' };
+  }
+
+  unparsed.push(seg);
+  return null;
+}
+
+// ── Cache builder + startup coverage report ──
+function _buildParsedEffectsCache() {
+  let full = 0, partial = 0, empty = 0;
+  const gaps = [];
+  for (const card of CARD_DB) {
+    const parsed = parseAbility(card.ability || '');
+    PARSED_EFFECTS.set(card.id, parsed);
+    if (!card.ability) { empty++; continue; }
+    if (parsed.unparsedSegments.length === 0) full++;
+    else { partial++; gaps.push({ id: card.id, name: card.name, unparsed: parsed.unparsedSegments }); }
+  }
+  console.log(`[PARSE_ABILITY] ${CARD_DB.length} cards cached — ${full} full, ${partial} partial, ${empty} no-ability`);
+  if (gaps.length > 0) {
+    console.log(`[PARSE_ABILITY] Coverage gaps (${gaps.length}):`);
+    for (const g of gaps) console.log(`  ${g.id} ${g.name}: ${g.unparsed.map(s => JSON.stringify(s)).join(' | ')}`);
+  }
+  // Phase-1 sanity dump for the user's 10 spec cards. Routers are only
+  // as good as their regex coverage; this prints the structured output
+  // for visual inspection against the spec.
+  const specIds = ['ST03-001','ST04-001','OP01-077','OP01-079','OP01-087','OP01-094','OP01-100','OP01-101','ST03-003','ST03-014','ST04-015'];
+  console.log('[PARSE_ABILITY] Spec-card dump:');
+  for (const id of specIds) {
+    const row = CARD_DB.find(c => c.id === id);
+    if (!row) continue;
+    console.log(`  ${id} ${row.name}: ${JSON.stringify(PARSED_EFFECTS.get(id))}`);
+  }
+}
+_buildParsedEffectsCache();
+
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => console.log(`Boohawk TCG server running on port ${PORT}`));
