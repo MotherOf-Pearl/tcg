@@ -323,11 +323,11 @@ const CARD_DB = [
   // ANNA OF BRITTANY DECK (Blue)
   // ══════════════════════════════
   { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'),
+    power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'), useNewPipeline:true,
     ability:"[Activate: Main] Once per turn: Rest 1 of your opponent's Characters. Draw 1 card." },
 
   { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'),
+    power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'), useNewPipeline:true,
     ability:"[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order." },
 
   { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -352,7 +352,7 @@ const CARD_DB = [
 
   { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:4000, cost:4, counter:1000, image:IMG('ST03','ST03-014','png'), useNewPipeline:true,
-    ability:"[On Play] Return up to 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
+    ability:"[On Play] Return 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
 
   { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'),
@@ -386,7 +386,7 @@ const CARD_DB = [
   // KAIDO RAMP DECK (Purple)
   // ══════════════════════════════
   { id:'ST04-001', name:'Constable Jack', type:'LEADER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:5000, life:5, cost:0, counter:0, image:IMG('ST04','ST04-001','png'),
+    power:5000, life:5, cost:0, counter:0, image:IMG('ST04','ST04-001','png'), useNewPipeline:true,
     ability:"[Activate: Main] [Once Per Turn] DON!! -7: Trash up to 1 of your opponent's Life cards." },
 
   { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
@@ -916,7 +916,11 @@ function handleAction(roomId, playerId, action) {
       card.usedThisTurn = true;
       card.rested = true;
       log(game, `${card.name}: [Activate: Main] activated.`);
-      parseAndApply('activateMain', game, playerId, card, opp);
+      if (card.useNewPipeline) {
+        runPipeline('activateMain', game, playerId, card);
+      } else {
+        parseAndApply('activateMain', game, playerId, card, opp);
+      }
       break;
     }
 
@@ -1292,6 +1296,7 @@ function handleAction(roomId, playerId, action) {
     case 'SCRY_RESOLVE': {
       if (!game.scryWindow || game.scryWindow.playerId !== playerId) return;
       const sw = game.scryWindow;
+      const pipelineResume = sw.pipelineResume;  // captured before clear
       const kept = action.keptIndices || []; // indices of cards to keep in hand
 
       // Validate keep count + filters
@@ -1363,6 +1368,10 @@ function handleAction(roomId, playerId, action) {
       }
 
       game.scryWindow = null;
+      // Phase-4 Batch 3: new-pipeline scry (FiFi Cat and future cards)
+      // chains to the next effect. Legacy scry from parseAndApply has
+      // no resume path and simply ends here.
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -1693,7 +1702,14 @@ function handleAction(roomId, playerId, action) {
       const finishWindow = () => {
         const resumeTiming  = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
+        const pipelineResume = w.pipelineResume;
         game.restTargetWindow = null;
+        // Phase-4 Batch 3: new-pipeline cards (Anna of Brittany) chain
+        // resume here; legacy cards still flow through parseAndApply.
+        if (pipelineResume) {
+          resumePipeline(game, playerId, pipelineResume);
+          return;
+        }
         if (resumeTiming && resumeCardUid) {
           const owner = game.players[playerId];
           const src = (owner.leader && owner.leader.uid === resumeCardUid) ? owner.leader
@@ -2089,7 +2105,7 @@ function openDonReturn(game, playerId, card, required, timing, opts = {}) {
 function openRestTargetWindow(game, playerId, opts) {
   const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
   const { sourceCardName = '', optional = false, resumeTiming = null, resumeCardUid = null,
-          costThreshold = null } = opts || {};
+          costThreshold = null, pipelineResume = null } = opts || {};
   const candidates = (opp.field || []).filter(c =>
     c.type === 'CHARACTER' && !c.rested &&
     (costThreshold == null || (c.cost || 0) <= costThreshold)
@@ -2104,6 +2120,7 @@ function openRestTargetWindow(game, playerId, opts) {
     optional,
     sourceCardName,
     resumeTiming, resumeCardUid,
+    pipelineResume,
   };
   log(game, `${sourceCardName}: choose an opponent Character to rest (${candidates.length} option(s)).`);
   return true;
@@ -4114,18 +4131,85 @@ function agentApplyEffect(effect, ctx, resume) {
       const filterKind  = filter.maxCost != null ? 'cost'
                         : filter.maxPower != null ? 'power' : 'any';
       const filterValue = filter.maxCost ?? filter.maxPower ?? '';
-      // Mandatory-vs-optional comes from the parseBlock-level `optional`
-      // flag upstream; the sequencer passes it through via `resume`'s
-      // surrounding block. We keep a conservative default of optional=true
-      // unless explicitly marked otherwise on the effect.
+      // Optional comes from the block-level flag the sequencer set on
+      // the effect. Default: true when unset. For Ball the Berserk post
+      // text change, the block has "up to" stripped → optional=false.
+      const optional = ctx._blockOptional != null ? ctx._blockOptional
+                     : (effect.optional !== false);
       const opened = openBounceTarget(ctx.game, ctx.playerId, {
         filterKind, filterValue,
-        optional: effect.optional !== false,
+        optional,
         scope,
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
       });
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+    // Phase-4 Batch 3 — sync draw. drawCards(p, n, game, name) already
+    // handles empty-deck short-circuits + logging.
+    case 'drawCards': {
+      drawCards(ctx.player, effect.count || 1, ctx.game, ctx.card.name);
+      return { status: 'applied' };
+    }
+    // Phase-4 Batch 3 — rest opponent character. Per the user's
+    // BUG-5/6 spec, when no active opponent character exists the WHOLE
+    // activation is blocked (not a silent skip). The handler returns
+    // 'abort-block' in that case so the sequencer stops instead of
+    // running any follow-up effects (Anna's draw must NOT fire if rest
+    // can't resolve).
+    case 'restTarget': {
+      const filter = effect.filter || {};
+      const opened = openRestTargetWindow(ctx.game, ctx.playerId, {
+        sourceCardName: ctx.card.name,
+        optional: ctx._blockOptional != null ? ctx._blockOptional : (effect.optional !== false),
+        costThreshold: filter.maxCost != null ? filter.maxCost : null,
+        pipelineResume: resume || null,
+      });
+      return opened
+        ? { status: 'window-open' }
+        : { status: 'abort-block', reason: 'no active opponent characters to rest' };
+    }
+    // Phase-4 Batch 3 — trash N life cards from opponent, bypassing
+    // Trigger. Constable Jack leader's flagship effect.
+    case 'trashOpponentLife': {
+      const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+      const opp = ctx.game.players[oppId];
+      const want = Math.min(effect.count || 1, opp.life.length);
+      for (let i = 0; i < want; i++) {
+        const lifeCard = opp.life.pop();
+        if (!lifeCard) break;
+        opp.trash.push(lifeCard);
+        log(ctx.game, `${ctx.card.name}: trashed opponent's life card ${lifeCard.name}. ${opp.life.length} life remaining.`);
+      }
+      return { status: 'applied' };
+    }
+    // Phase-4 Batch 3 — scry ("Look at N cards from the top…"). Builds
+    // the scryWindow directly from the parsed effect shape so the
+    // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
+    // resume threads through for any card that adds extra steps after
+    // the placement.
+    case 'scry': {
+      const p = ctx.player;
+      const lookCount = Math.min(effect.count || 0, p.deck.length);
+      if (lookCount <= 0) {
+        log(ctx.game, `${ctx.card.name}: deck empty, scry skipped.`);
+        return { status: 'applied' };
+      }
+      const reveal = effect.reveal || {};
+      const rFilter = reveal.filter || {};
+      ctx.game.scryWindow = {
+        playerId:       ctx.playerId,
+        cards:          p.deck.splice(0, lookCount),
+        keepCount:      reveal.count || 0,
+        keepFilter:     rFilter.affiliation || null,
+        keepCardType:   rFilter.type || null,
+        keepExcludeName: rFilter.excludeName || null,
+        cardName:       ctx.card.name,
+        placement:      effect.placement || 'top',
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: looking at top ${lookCount} cards…`);
+      return { status: 'window-open' };
     }
     default:
       console.log('[AGENT-EFFECT] Effect type not yet in new pipeline:', effect.type, `(card ${ctx.card.name})`);
@@ -4173,6 +4257,11 @@ function runPipeline(timing, game, playerId, card, opts = {}) {
       const paid = agentPayCosts(block.costs, ctx, costResume);
       if (paid.status !== 'paid') return paid;
     }
+    // Thread block-level metadata into ctx so individual effect handlers
+    // (bounceTarget / restTarget) can read their optionality from the
+    // parsed "you may / up to" signal at the block boundary rather than
+    // inferring it per effect.
+    ctx._blockOptional = block.optional;
     const startEI = (bi === resumeBI ? resumeEI : 0);
     for (let ei = startEI; ei < (block.effects || []).length; ei++) {
       // Build the resume continuation BEFORE calling the effect agent so
@@ -4183,6 +4272,13 @@ function runPipeline(timing, game, playerId, card, opts = {}) {
       const res = agentApplyEffect(block.effects[ei], ctx, resume);
       if (res.status === 'window-open') return res;
       if (res.status === 'unsupported') return res;
+      // 'abort-block' — an effect signaled that the entire block should
+      // stop (e.g. Anna of Brittany's restTarget when no opponent
+      // character is active, per the "block activation entirely" spec).
+      // Distinct from 'no-targets' which is a silent no-op that allows
+      // subsequent effects to continue (Blessed Thy Men's koTarget →
+      // addDon chain).
+      if (res.status === 'abort-block') return res;
     }
   }
   return { status: 'done' };

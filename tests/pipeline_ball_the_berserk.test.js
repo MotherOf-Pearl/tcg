@@ -1,14 +1,11 @@
-// Phase-4 Batch 2 — Ball the Berserk (ST03-014) migrated.
-//   [On Play] Return up to 1 of your opponent's Characters with a cost
-//   of 3 or less to the owner's hand.
+// Phase-4 Batch 2/3 — Ball the Berserk (ST03-014) migrated.
+//   [On Play] Return 1 of your opponent's Characters with a cost of 3
+//   or less to the owner's hand.
 //
+// Text updated in Batch 3 to drop "up to" → bounce is MANDATORY
+// (optional=false). Skip action is rejected by the server.
 // Verifies: opponent-only scope (own field is NOT a candidate), filter
-// enforcement by cost, skip path. Per the parsed `optional:true` flag
-// (from "up to" in text), the bounce IS skippable — this contradicts
-// the user's Phase-4 note that Ball should be "mandatory". Following
-// their own "you may/up to → optional" rule from prior batches, Ball
-// stays optional. If they want mandatory, the ability text must drop
-// "up to" (separate change).
+// enforcement by cost, mandatory behavior.
 const { test, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
 const { srv, resetWorld, twoPlayerGame } = require('./helpers');
@@ -72,14 +69,29 @@ test('selecting a target returns it to opponent hand', () => {
   assert.equal(game.players[p2].hand.length, handLenBefore + 1);
 });
 
-test('skip path (optional per "up to 1" text) closes window, no bounce', () => {
-  const { roomId, p1, p2, game } = twoPlayerGame();
+test('mandatory: bounce window is non-optional (optional=false on the window)', () => {
+  const { p1, p2, game } = twoPlayerGame();
   const ball = placeBall(game, p1);
-  const victim = { ...srv.CARD_DB.find(c => c.id === 'OP01-077'), uid: 'opp-keep', cost: 2, rested: false, attachedDon: 0 };
-  game.players[p2].field.push(victim);
+  game.players[p2].field.push({ ...srv.CARD_DB.find(c => c.id === 'OP01-077'),
+    uid: 'opp-mandatory', cost: 2, rested: false, attachedDon: 0 });
+  srv.runPipeline('onPlay', game, p1, ball);
+  assert.ok(game.bounceTargetWindow);
+  assert.equal(game.bounceTargetWindow.optional, false,
+    'post-text-change Ball: no "up to" → optional:false (mandatory)');
+});
+
+test('skip action on a mandatory window is rejected — window stays, no bounce', () => {
+  const { roomId, p1, p2, p1ws, game } = twoPlayerGame();
+  const ball = placeBall(game, p1);
+  game.players[p2].field.push({ ...srv.CARD_DB.find(c => c.id === 'OP01-077'),
+    uid: 'opp-keep', cost: 2, rested: false, attachedDon: 0 });
   srv.runPipeline('onPlay', game, p1, ball);
   assert.ok(game.bounceTargetWindow);
   srv.handleAction(roomId, p1, { type: 'BOUNCE_TARGET_SELECTED', skip: true });
-  assert.equal(game.bounceTargetWindow, null);
+  assert.ok(game.bounceTargetWindow, 'mandatory window survives a skip attempt');
   assert.ok(game.players[p2].field.some(c => c.uid === 'opp-keep'), 'target stays on field');
+  // Server sends an ERROR explaining why skip failed.
+  const errs = p1ws._sent.filter(m => m.type === 'ERROR');
+  assert.ok(errs.length > 0);
+  assert.match(errs[errs.length - 1].msg, /Must select a target/i);
 });
