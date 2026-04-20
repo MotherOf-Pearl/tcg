@@ -426,7 +426,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -2: K.O. up to 1 of your opponent's Characters with a cost of 3 or less and up to 1 of your opponent's Characters with a cost of 2 or less." },
 
   { id:'ST04-003', name:'Gee, Infernal Hound-Shlawg', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:10000, cost:9, counter:0, image:IMG('ST04','ST04-003','png'),
+    power:10000, cost:9, counter:0, image:IMG('ST04','ST04-003','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -5: K.O. up to 1 of your opponent's Characters with a cost of 6 or less. This Character gains [Rush] during this turn." },
 
   { id:'OP01-094', name:'Jack, Master of Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -654,10 +654,16 @@ function doEnd(game) {
     if (!card || !Array.isArray(card.suppressions) || card.suppressions.length === 0) return;
     card.suppressions = card.suppressions.filter(s => (s.expiresAtTurn == null) || s.expiresAtTurn >= game.turn);
   };
+  // Phase 7 — temp keyword grants expire identically.
+  const pruneTempKeywords = (card) => {
+    if (!card || !Array.isArray(card.tempKeywords) || card.tempKeywords.length === 0) return;
+    card.tempKeywords = card.tempKeywords.filter(k => (k.expiresAtTurn == null) || k.expiresAtTurn >= game.turn);
+  };
   for (const pid of Object.keys(game.players)) {
     const pl = game.players[pid];
     pruneSuppressions(pl.leader);
-    (pl.field || []).forEach(pruneSuppressions);
+    pruneTempKeywords(pl.leader);
+    (pl.field || []).forEach(c => { pruneSuppressions(c); pruneTempKeywords(c); });
   }
   doRefresh(game);
 }
@@ -2138,9 +2144,13 @@ function hasBanish(card) {
   return card.ability && card.ability.includes('[Banish]');
 }
 
-// Helper: check if card has [Rush]
+// Helper: check if card has [Rush]. Phase 7 — also considers temporary
+// keyword grants from grantKeyword effects (Gee, Infernal Hound-Shlawg).
 function hasRush(card) {
-  return card.ability && card.ability.includes('[Rush]');
+  if (card && card.ability && card.ability.includes('[Rush]')) return true;
+  if (card && Array.isArray(card.tempKeywords)
+      && card.tempKeywords.some(k => k.keyword === 'rush')) return true;
+  return false;
 }
 
 // Helper: numeric counter value of a card. Characters use card.counter; events
@@ -3848,6 +3858,18 @@ function parseAbility(text) {
     }
   );
 
+  // Phase 7 — pre-process "This Character gains [KEYWORD] during this turn"
+  // (and opponent-next-turn variant). Protects the bracketed keyword from
+  // the body-level [tag] stripper that runs in _parseBlock, so the
+  // grantKeyword effect can carry the keyword through to the agent.
+  processed = processed.replace(
+    /[Tt]his [Cc]haracter gains \[([^\]]+)\](?:\s+(until the end of your opponent'?s?\s+next turn|during this turn|for this turn|until the end of this turn))?/g,
+    (_m, kw, durText) => {
+      const dur = durText && /opponent/i.test(durText) ? 'opponentNextTurn' : 'thisTurn';
+      return `\u00a7GRANT_${kw.toLowerCase().replace(/\s+/g, '-')}_${dur}\u00a7`;
+    }
+  );
+
   // Phase 5 Priority 8 — pre-process "cannot activate [Blocker]" (Limejuice).
   // This ALSO protects the inline [Blocker] bracket from the keyword scan
   // that would otherwise falsely tag Limejuice as a [Blocker] card.
@@ -4295,6 +4317,11 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'suppressTarget', kind: 'attack',
              max: parseInt(m[1]), targetKind: m[2], filter, duration: m[4] };
   }
+  // Phase 7 — keyword grant placeholder. Set by parseAbility pre-processing.
+  if ((m = seg.match(/\u00a7GRANT_([a-z0-9-]+)_([a-zA-Z]+)\u00a7/))) {
+    return { type: 'grantKeyword', keyword: m[1].replace(/-/g, ' '), duration: m[2] };
+  }
+
   // Phase 5 Priority 8 — blocker-ability suppression placeholder.
   // Set by parseAbility pre-processing for Limejuice-style "cannot
   // activate [Blocker]" lines.
@@ -4765,6 +4792,18 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 7 — keyword grant. Pushes a { keyword, expiresAtTurn } entry
+    // onto ctx.card.tempKeywords; hasRush / other keyword checks read
+    // this list. doEnd prunes expired entries.
+    case 'grantKeyword': {
+      const expiresAtTurn = effect.duration === 'opponentNextTurn'
+        ? (ctx.game.turn + 1) : ctx.game.turn;
+      if (!Array.isArray(ctx.card.tempKeywords)) ctx.card.tempKeywords = [];
+      ctx.card.tempKeywords.push({ keyword: effect.keyword, expiresAtTurn });
+      log(ctx.game, `${ctx.card.name}: gains [${effect.keyword}] until turn ${expiresAtTurn}.`);
+      return { status: 'applied' };
+    }
+
     case 'scry': {
       const p = ctx.player;
       const lookCount = Math.min(effect.count || 0, p.deck.length);
