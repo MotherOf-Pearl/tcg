@@ -90,7 +90,7 @@ const CARD_DB = [
     ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] If your opponent has 6 or more DON!! cards on their field, play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand." },
 
   { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Donquixote Pirates',
-    power:7000, cost:5, counter:0, image:IMG('OP14','OP14-061','png'),
+    power:7000, cost:5, counter:0, image:IMG('OP14','OP14-061','png'), useNewPipeline:true,
     ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead. [When Attacking] DON!! -1: Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
   { id:'OP10-072', name:'Donquixote Rosinante', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -173,7 +173,7 @@ const CARD_DB = [
     ability:"[Blocker] [On K.O.] If your Leader has the {Red Hair Pirates} type, K.O. up to 1 of your opponent's Characters with an original power of 6000 or less." },
 
   { id:'OP10-011', name:'Tony Tony Chopper', type:'CHARACTER', color:'Yellow', attribute:'Strike',
-    power:4000, cost:4, counter:2000, image:IMG('OP10','OP10-011','jpg'),
+    power:4000, cost:4, counter:2000, image:IMG('OP10','OP10-011','jpg'), useNewPipeline:true,
     ability:"[Blocker] [Opponent's Turn] This character has +2000 power." },
 
   { id:'PRB02-003', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged',
@@ -189,15 +189,15 @@ const CARD_DB = [
     ability:"[On Play] Up to one of your leaders gains +1000 power until the end of your opponent's next turn. [DON!! x1] [When Attacking] Up to one of your opponent's characters gets -1000 power for this turn." },
 
   { id:'ST15-005', name:'Portgas D. Ace', type:'CHARACTER', color:'Red', attribute:'Special',
-    power:6000, cost:5, counter:1000, image:IMG('ST15','ST15-005','png'),
+    power:6000, cost:5, counter:1000, image:IMG('ST15','ST15-005','png'), useNewPipeline:true,
     ability:"[Once Per Turn] If this character would be removed from play by one of your opponent's effects, instead you may give this character -2000 power for this turn." },
 
   { id:'ST23-001', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special',
-    power:4000, cost:6, counter:2000, image:IMG('ST23','ST23-001','jpg'),
+    power:4000, cost:6, counter:2000, image:IMG('ST23','ST23-001','jpg'), useNewPipeline:true,
     ability:"If you have a Character with 10000 power or more, give this card in your hand -4 cost. [Blocker]" },
 
   { id:'PRB02-002', name:'Trafalgar Law', type:'CHARACTER', color:'Red', attribute:'Slash',
-    power:7000, cost:6, counter:1000, image:IMG('PRB02','PRB02-002','jpg'),
+    power:7000, cost:6, counter:1000, image:IMG('PRB02','PRB02-002','jpg'), useNewPipeline:true,
     ability:"[Once Per Turn] If this Character would be removed from the field by your opponent's effect, you may give this Character -2000 power during this turn instead. [When Attacking] Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
   { id:'OP09-009', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged',
@@ -213,7 +213,7 @@ const CARD_DB = [
     ability:"[On Play] Choose up to two of your opponents characters: Until the end of your opponents next turn, give one -3000 power and the other -2000 power. After this, K.O. up to one of your opponents characters with a power of 3000 or lower." },
 
   { id:'ST23-002', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
-    power:10000, cost:9, counter:0, image:IMG('ST23','ST23-002','jpg'),
+    power:10000, cost:9, counter:0, image:IMG('ST23','ST23-002','jpg'), useNewPipeline:true,
     ability:"If your opponent has a Character with 8000 base power or more, give this card in your hand -3 cost. [On Play] If your Leader has the {Red-Haired Pirates} type, your Leader gains +2000 power until the end of your opponent's next End Phase." },
 
   { id:'OP06-007', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
@@ -221,7 +221,7 @@ const CARD_DB = [
     ability:"[On Play] K.O. up to 1 of your opponent's characters with 10000 power or less." },
 
   { id:'OP09-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
-    power:12000, cost:10, counter:0, image:IMG('OP09','OP09-004','jpg'),
+    power:12000, cost:10, counter:0, image:IMG('OP09','OP09-004','jpg'), useNewPipeline:true,
     ability:"All of your opponents characters have -1000 power. [Rush]" },
 
   { id:'OP09-021', name:'Red Force', type:'STAGE', color:'Red', attribute:'',
@@ -260,7 +260,7 @@ const CARD_DB = [
     ability:"Your [On Play] abilities don't activate. [Activate: Main] You may trash one card from your hand: Until the end of your opponent's next turn, your opponent's [On Play] abilities don't activate." },
 
   { id:'OP05-086', name:'Nefertari Vivi', type:'CHARACTER', color:'Black', attribute:'Wisdom',
-    power:1000, cost:1, counter:1000, image:IMG('OP05','OP05-086','png'),
+    power:1000, cost:1, counter:1000, image:IMG('OP05','OP05-086','png'), useNewPipeline:true,
     ability:"If your trash has 10 cards or more, this character gains [Blocker]." },
 
   { id:'OP09-095', name:'Laffitte', type:'CHARACTER', color:'Purple', attribute:'Strike',
@@ -280,11 +280,11 @@ const CARD_DB = [
     ability:"[DON!! x1] [When Attacking] You may trash 2 cards from your hand: Draw 2 cards." },
 
   { id:'OP09-086', name:'Jesus Burgess', type:'CHARACTER', color:'Purple', attribute:'Strike',
-    power:5000, cost:4, counter:1000, image:IMG('OP09','OP09-086','jpg'),
+    power:5000, cost:4, counter:1000, image:IMG('OP09','OP09-086','jpg'), useNewPipeline:true,
     ability:"This character cannot be K.O'd by your opponents effects. If your leader has the {Blackbeard Pirates} type, this character gets +1000 power for every 4 cards in your trash." },
 
   { id:'PRB02-015', name:'Shiryu', type:'CHARACTER', color:'Black', attribute:'Slash',
-    power:5000, cost:4, counter:1000, image:IMG('PRB02','PRB02-015','jpg'),
+    power:5000, cost:4, counter:1000, image:IMG('PRB02','PRB02-015','jpg'), useNewPipeline:true,
     ability:"If your Leader has the {Blackbeard Pirates} type, this Character gains [Blocker]. [On K.O.] If your Leader has the {Blackbeard Pirates} type, K.O. up to 1 of your opponent's Characters with a base cost of 4 or less." },
 
   { id:'OP10-082', name:'Kuzan', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -335,7 +335,7 @@ const CARD_DB = [
     ability:"[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand." },
 
   { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-083','png'),
+    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-083','png'), useNewPipeline:true,
     ability:"[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash." },
 
   { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -355,7 +355,7 @@ const CARD_DB = [
     ability:"[On Play] Return 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
 
   { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'),
+    power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'), useNewPipeline:true,
     ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
 
   { id:'OP01-070', name:'Anna, Master of FiFi', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
