@@ -1043,6 +1043,7 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
       <div id="scryConfirm" style="display:none;gap:6px;">
         <button class="gb-pbtn gb-pbtn-sm" id="scryPlaceTop"    onclick="confirmScry('top')">Place at the top</button>
         <button class="gb-pbtn gb-pbtn-sm" id="scryPlaceBottom" onclick="confirmScry('bottom')">Place at the bottom</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="scryEitherConfirm" style="display:none;" onclick="confirmScry('either')">Confirm</button>
       </div>
       <button class="gb-pbtn gb-pbtn-sm" id="scrySkip" onclick="skipScry()" style="display:none;">Skip</button>
     </div>
@@ -1244,6 +1245,22 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
      MULLIGAN-phase GAME_STATE arrives in multiplayer. Auto-hides. -->
 <div id="firstPlayerBanner" style="display:none;position:fixed;inset:0;z-index:10000;pointer-events:none;align-items:center;justify-content:center;">
   <div id="firstPlayerBannerText" style="font-family:'Cinzel',serif;font-size:2.2rem;color:#f0d896;text-shadow:0 2px 12px rgba(0,0,0,.85),0 0 22px rgba(240,200,96,.45);padding:18px 36px;background:rgba(12,8,4,.82);border:2px solid #8b6914;border-radius:10px;letter-spacing:.08em;">You go first!</div>
+</div>
+
+<!-- Bug-1 reveal overlay. Shown for ~2s when any REVEAL_CARD message
+     arrives (any player, any scry-keep). Auto-hides. -->
+<div id="revealOverlay" style="display:none;position:fixed;inset:0;z-index:10001;pointer-events:none;align-items:center;justify-content:center;">
+  <div style="background:rgba(12,8,4,.9);border:2px solid #8b6914;border-radius:12px;padding:22px 28px;text-align:center;box-shadow:0 0 36px rgba(240,200,96,.35);">
+    <div id="revealOverlayLabel" style="font-family:'Cinzel',serif;color:#f0d896;font-size:1.05rem;letter-spacing:.06em;margin-bottom:10px;"></div>
+    <img id="revealOverlayImg" alt="" style="width:260px;height:auto;border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.6);display:block;margin:0 auto;">
+    <div id="revealOverlayName" style="font-family:'Cinzel',serif;color:#f0d896;font-size:1.15rem;margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- Bug-2 attack outcome banner. Shown for ~3s after any ATTACK_OUTCOME
+     broadcast. Role-specific wording is built client-side. Auto-hides. -->
+<div id="attackOutcomeOverlay" style="display:none;position:fixed;left:50%;top:56px;transform:translateX(-50%);z-index:10000;pointer-events:none;">
+  <div id="attackOutcomeText" style="font-family:'Cinzel',serif;font-size:1.2rem;color:#f0d896;text-shadow:0 2px 10px rgba(0,0,0,.85);padding:12px 24px;background:rgba(12,8,4,.9);border:2px solid #8b6914;border-radius:8px;letter-spacing:.05em;white-space:nowrap;max-width:90vw;"></div>
 </div>
 
 <!-- ADD_FROM_TRASH browser — horizontal strip pinned to bottom of viewport,
@@ -1562,6 +1579,12 @@ function handleMsg(msg) {
     case 'CHAT':
       addLog(`💬 ${msg.from}: ${msg.text}`);
       break;
+    case 'REVEAL_CARD':
+      showRevealCard(msg);
+      break;
+    case 'ATTACK_OUTCOME':
+      showAttackOutcome(msg);
+      break;
   }
 }
 
@@ -1589,6 +1612,79 @@ function showFirstPlayerBanner(iAmFirst) {
   txt.textContent = iAmFirst ? 'You go first!' : 'Opponent goes first!';
   el.style.display = 'flex';
   setTimeout(() => { el.style.display = 'none'; }, 2000);
+}
+
+// ─── BUG 1 — reveal overlay ─────────────────────────────────────────────
+// Fires on every REVEAL_CARD broadcast. Both actor and spectator see the
+// card; the label differentiates. 2-second auto-dismiss; a follow-up
+// reveal resets the timer (clearTimeout on the cached handle).
+function showRevealCard(msg) {
+  const el = document.getElementById('revealOverlay');
+  const img = document.getElementById('revealOverlayImg');
+  const lbl = document.getElementById('revealOverlayLabel');
+  const nm  = document.getElementById('revealOverlayName');
+  if (!el || !img || !lbl || !nm || !msg || !msg.card) return;
+  const mine = msg.revealedBy === myId;
+  lbl.textContent = mine
+    ? `${msg.source || 'Effect'} revealed:`
+    : `Opponent revealed:`;
+  img.src = msg.card.image || '';
+  img.alt = msg.card.name || '';
+  nm.textContent = msg.card.name || '';
+  el.style.display = 'flex';
+  clearTimeout(showRevealCard._t);
+  showRevealCard._t = setTimeout(() => { el.style.display = 'none'; }, 2000);
+}
+
+// ─── BUG 2 — attack outcome banner ──────────────────────────────────────
+// Fires on every ATTACK_OUTCOME broadcast. Role-specific wording: attacker
+// / defender / third-party. 3-second auto-dismiss. Also hides the SVG
+// battle arrow immediately (belt-and-suspenders with renderGame's
+// hideBattleArrow — covers the brief window before the next GAME_STATE
+// lands).
+function showAttackOutcome(msg) {
+  hideBattleArrow();
+  const el = document.getElementById('attackOutcomeOverlay');
+  const txt = document.getElementById('attackOutcomeText');
+  if (!el || !txt || !msg) return;
+  const iAmAttacker = msg.attackerId === myId;
+  const iAmDefender = msg.defenderId === myId;
+  let text = '';
+  switch (msg.outcome) {
+    case 'leader_hit':
+      if (iAmAttacker) {
+        text = msg.doubleAttack
+          ? `Hit! Opponent's leader took damage [Double Attack]. Life remaining: ${msg.lifeRemaining}`
+          : `Hit! Opponent's leader took 1 damage. Life remaining: ${msg.lifeRemaining}`;
+      } else if (iAmDefender) {
+        text = `Your leader took damage! Life remaining: ${msg.lifeRemaining}`;
+      } else {
+        text = `${msg.attackerName} hit the leader — life remaining: ${msg.lifeRemaining}.`;
+      }
+      break;
+    case 'character_koed':
+      text = iAmAttacker
+        ? `${msg.targetName} was KO'd!`
+        : (iAmDefender ? `${msg.targetName} was KO'd!` : `${msg.targetName} was KO'd.`);
+      break;
+    case 'attack_failed':
+      text = iAmAttacker ? `Attack failed — defender wins!` : `Attack blocked!`;
+      break;
+    case 'blocked':
+      text = iAmAttacker
+        ? `Blocked! ${msg.targetName} survives.`
+        : `Attack blocked!`;
+      break;
+    case 'game_won':
+      text = iAmAttacker ? `Victory! Final blow landed.` : `Defeat — no life remaining.`;
+      break;
+    default:
+      text = 'Attack resolved.';
+  }
+  txt.textContent = text;
+  el.style.display = 'block';
+  clearTimeout(showAttackOutcome._t);
+  showAttackOutcome._t = setTimeout(() => { el.style.display = 'none'; }, 3000);
 }
 
 // ─── MULLIGAN ───
@@ -2397,6 +2493,10 @@ function handleDonAttach(uid) {
 let scryOrder = [];
 let scryKeep = [];
 let scryCards = [];
+// BUG 3 — split-placement mode ('either'): each non-kept card is assigned
+// independently to the top pile or the bottom pile in click order.
+let scryTopOrder = [];
+let scryBottomOrder = [];
 
 function renderScry() {
   const left = document.querySelector('.gb-left');
@@ -2409,6 +2509,8 @@ function renderScry() {
   scryCards = sw.cards;
   scryOrder = [];
   scryKeep = [];
+  scryTopOrder = [];
+  scryBottomOrder = [];
   const overlay = document.getElementById('scryOverlay');
   overlay.style.display = 'flex';
   if (left) left.classList.add('scry-active');
@@ -2419,8 +2521,12 @@ function renderScry() {
     if (sw.keepCardType) label += ` (${sw.keepCardType.charAt(0) + sw.keepCardType.slice(1).toLowerCase()} only)`;
     if (sw.keepFilter)   label += ` ({${sw.keepFilter}})`;
     if (sw.keepExcludeName) label += ` — not [${sw.keepExcludeName}]`;
-    label += `, then order the rest (1 = ${sw.placement === 'top' ? 'top' : 'top of bottom'})`;
+    if (sw.placement === 'either')      label += `; then assign the rest to Top or Bottom (1 = first)`;
+    else if (sw.placement === 'bottom') label += `; then order the rest (1 = top of bottom pile)`;
+    else                                 label += `; then order the rest (1 = top)`;
     title.textContent = label;
+  } else if (sw.placement === 'either') {
+    title.textContent = `Assign each card to Top or Bottom of deck (1 = first)`;
   } else {
     title.textContent = `Click cards in the order to place on ${sw.placement || 'top'} of deck (1 = top of stack)`;
   }
@@ -2437,6 +2543,8 @@ function renderScry() {
     return true;
   };
 
+  const isEither = sw.placement === 'either';
+
   const container = document.getElementById('scryCards');
   container.innerHTML = '';
   sw.cards.forEach((card, idx) => {
@@ -2448,9 +2556,19 @@ function renderScry() {
     el.innerHTML = imgSrc
       ? `<img src="${imgSrc}" onerror="this.parentElement.style.background='var(--card-back)';">`
       : '';
-    el.addEventListener('click', () => scryCardClick(idx, sw.keepCount, isKeepEligible(card)));
+    el.addEventListener('click', () => scryCardClick(idx, sw.keepCount, isKeepEligible(card), isEither));
     el.addEventListener('mouseenter', e => showTooltip(card, e));
     el.addEventListener('mouseleave', hideTooltip);
+    if (isEither) {
+      // BUG 3 — per-card Top/Bottom assignment buttons.
+      const tb = document.createElement('div');
+      tb.className = 'scry-tb-buttons';
+      tb.style.cssText = 'display:flex;gap:4px;justify-content:center;margin-top:4px;';
+      tb.innerHTML =
+        `<button class="gb-pbtn gb-pbtn-sm" style="padding:2px 8px;font-size:.65rem;" onclick="event.stopPropagation();scryAssignTop(${idx})">Top</button>` +
+        `<button class="gb-pbtn gb-pbtn-sm" style="padding:2px 8px;font-size:.65rem;" onclick="event.stopPropagation();scryAssignBottom(${idx})">Bottom</button>`;
+      el.appendChild(tb);
+    }
     container.appendChild(el);
   });
   document.getElementById('scryConfirm').style.display = 'none';
@@ -2459,30 +2577,44 @@ function renderScry() {
   // (e.g. Schola Montis Belli must place the rest at the bottom in any order).
   const canSkip = sw.keepCount > 0 && !sw.placement && !sw.keepFilter;
   document.getElementById('scrySkip').style.display = canSkip ? 'block' : 'none';
-  // Placement buttons mirror sw.placement: show only the forced direction when set,
-  // otherwise show both for player choice.
+  // Placement buttons mirror sw.placement. In 'either' mode we hide both
+  // bottom-bar buttons (per-card T/B in the cards does the assignment) and
+  // show a single "Confirm" once everything is assigned.
   const topBtn = document.getElementById('scryPlaceTop');
   const botBtn = document.getElementById('scryPlaceBottom');
-  if (sw.placement === 'top')         { topBtn.style.display = ''; botBtn.style.display = 'none'; }
+  if (isEither)                       { topBtn.style.display = 'none'; botBtn.style.display = 'none'; }
+  else if (sw.placement === 'top')    { topBtn.style.display = ''; botBtn.style.display = 'none'; }
   else if (sw.placement === 'bottom') { topBtn.style.display = 'none'; botBtn.style.display = ''; }
   else                                { topBtn.style.display = ''; botBtn.style.display = ''; }
 }
 
-function scryCardClick(idx, keepCount, keepEligible) {
-  // If keep mode and haven't kept enough, AND this card matches the filter — toggle keep.
+function scryCardClick(idx, keepCount, keepEligible, isEither) {
+  // In 'either' mode, clicking the card body only toggles keep. Ordering
+  // for deck placement is driven by the per-card Top/Bottom buttons.
+  if (isEither) {
+    if (keepCount > 0 && keepEligible && scryKeep.length < keepCount && !scryKeep.includes(idx)) {
+      // Moving into keep — clear any top/bottom assignment.
+      scryTopOrder = scryTopOrder.filter(i => i !== idx);
+      scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
+      scryKeep.push(idx);
+    } else if (scryKeep.includes(idx)) {
+      scryKeep = scryKeep.filter(i => i !== idx);
+    }
+    updateScryDisplay();
+    return;
+  }
+  // Forced-placement modes (existing behavior).
   if (keepCount > 0 && keepEligible && scryKeep.length < keepCount
       && !scryKeep.includes(idx) && !scryOrder.includes(idx)) {
     scryKeep.push(idx);
     updateScryDisplay();
     return;
   }
-  // If already kept, un-keep
   if (scryKeep.includes(idx)) {
     scryKeep = scryKeep.filter(i => i !== idx);
     updateScryDisplay();
     return;
   }
-  // Otherwise toggle order
   if (scryOrder.includes(idx)) {
     scryOrder = scryOrder.filter(i => i !== idx);
   } else {
@@ -2491,10 +2623,29 @@ function scryCardClick(idx, keepCount, keepEligible) {
   updateScryDisplay();
 }
 
+// BUG 3 — per-card placement in 'either' mode. Top and Bottom are
+// mutually exclusive; Kept trumps both. Clicking the same assignment
+// twice un-assigns (removes from the pile).
+function scryAssignTop(idx) {
+  scryKeep = scryKeep.filter(i => i !== idx);
+  scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
+  if (scryTopOrder.includes(idx)) scryTopOrder = scryTopOrder.filter(i => i !== idx);
+  else scryTopOrder.push(idx);
+  updateScryDisplay();
+}
+function scryAssignBottom(idx) {
+  scryKeep = scryKeep.filter(i => i !== idx);
+  scryTopOrder = scryTopOrder.filter(i => i !== idx);
+  if (scryBottomOrder.includes(idx)) scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
+  else scryBottomOrder.push(idx);
+  updateScryDisplay();
+}
+
 function updateScryDisplay() {
+  const sw = game && game.scryWindow;
+  const isEither = sw && sw.placement === 'either';
   const cards = document.querySelectorAll('#scryCards .scry-card');
   cards.forEach((el, idx) => {
-    // Remove existing badges
     el.querySelectorAll('.scry-order').forEach(b => b.remove());
     el.classList.remove('kept');
 
@@ -2505,6 +2656,18 @@ function updateScryDisplay() {
       badge.textContent = '✓';
       badge.style.background = 'rgba(20,80,20,.85)';
       el.appendChild(badge);
+    } else if (isEither && scryTopOrder.includes(idx)) {
+      const badge = document.createElement('div');
+      badge.className = 'scry-order';
+      badge.textContent = `T${scryTopOrder.indexOf(idx) + 1}`;
+      badge.style.background = 'rgba(30,90,150,.9)';
+      el.appendChild(badge);
+    } else if (isEither && scryBottomOrder.includes(idx)) {
+      const badge = document.createElement('div');
+      badge.className = 'scry-order';
+      badge.textContent = `B${scryBottomOrder.indexOf(idx) + 1}`;
+      badge.style.background = 'rgba(150,60,30,.9)';
+      el.appendChild(badge);
     } else if (scryOrder.includes(idx)) {
       const pos = scryOrder.indexOf(idx) + 1;
       const badge = document.createElement('div');
@@ -2513,17 +2676,41 @@ function updateScryDisplay() {
       el.appendChild(badge);
     }
   });
-  // Show placement buttons when all non-kept cards have been ordered
-  const remaining = scryCards.length - scryKeep.length;
-  document.getElementById('scryConfirm').style.display =
-    scryOrder.length === remaining ? 'flex' : 'none';
+
+  const remainingCount = scryCards.length - scryKeep.length;
+  const confirm = document.getElementById('scryConfirm');
+  const eitherBtn = document.getElementById('scryEitherConfirm');
+  const topBtn = document.getElementById('scryPlaceTop');
+  const botBtn = document.getElementById('scryPlaceBottom');
+  if (isEither) {
+    const allAssigned = (scryTopOrder.length + scryBottomOrder.length) === remainingCount;
+    confirm.style.display = allAssigned ? 'flex' : 'none';
+    if (eitherBtn) eitherBtn.style.display = allAssigned ? '' : 'none';
+    if (topBtn) topBtn.style.display = 'none';
+    if (botBtn) botBtn.style.display = 'none';
+  } else {
+    if (eitherBtn) eitherBtn.style.display = 'none';
+    confirm.style.display = scryOrder.length === remainingCount ? 'flex' : 'none';
+  }
 }
 
 function confirmScry(placement) {
-  // Map scryOrder indices to the remaining (non-kept) card positions
+  const sw = game && game.scryWindow;
   const remainingIndices = scryCards.map((_, i) => i).filter(i => !scryKeep.includes(i));
+  if (placement === 'either' || (sw && sw.placement === 'either')) {
+    // Split placement — map each assignment list into remaining-index space.
+    const topOrder    = scryTopOrder.map(idx => remainingIndices.indexOf(idx));
+    const bottomOrder = scryBottomOrder.map(idx => remainingIndices.indexOf(idx));
+    act({
+      type: 'SCRY_RESOLVE',
+      keptIndices: scryKeep,
+      topOrder,
+      bottomOrder,
+    });
+    closeScry();
+    return;
+  }
   const orderedRemaining = scryOrder.map(idx => remainingIndices.indexOf(idx));
-
   act({
     type: 'SCRY_RESOLVE',
     keptIndices: scryKeep,
@@ -2552,6 +2739,8 @@ function closeScry() {
   if (left) left.classList.remove('scry-active');
   scryOrder = [];
   scryKeep = [];
+  scryTopOrder = [];
+  scryBottomOrder = [];
   scryCards = [];
 }
 

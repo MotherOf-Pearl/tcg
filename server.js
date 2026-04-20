@@ -1127,17 +1127,36 @@ function handleAction(roomId, playerId, action) {
         ? bs.attackerPower >  totalDefense
         : bs.attackerPower >= totalDefense;
 
+      // Outcome payload assembled as we resolve — broadcast after so both
+      // clients can render a role-specific transient banner (BUG 2) and
+      // immediately drop the battle arrow.
+      const outcome = {
+        type: 'ATTACK_OUTCOME',
+        attackerId: bs.attackerId,
+        defenderId,
+        attackerName: bs.attackerName,
+        targetName: bs.targetName,
+        targetIsLeader: !!bs.targetIsLeader,
+        attackerWins,
+        outcome: 'blocked',   // will be overwritten below
+        lifeRemaining: defender.life.length,
+        doubleAttack: !!(attackerCard && hasDoubleAttack(attackerCard)),
+      };
+
       if (attackerWins) {
         if (bs.targetIsLeader) {
           // Hit the leader. If defender has 0 life left, they lose.
           if (defender.life.length === 0) {
             game.winner = bs.attackerId;
             log(game, `\uD83C\uDFC6 ${bs.attackerName} hits the leader with no life left — ${bs.attackerId.slice(0,6)} WINS!`);
+            outcome.outcome = 'game_won';
           } else {
             const lifeCard = defender.life.pop();
             defender.hand.push(lifeCard);
             log(game, `\uD83D\uDCA5 ${bs.attackerName} hits the leader! Life card ${lifeCard.name} \u2192 hand. ${defender.life.length} life remaining.`);
             applyTriggerEffect(game, defenderId, lifeCard);
+            outcome.outcome = 'leader_hit';
+            outcome.lifeRemaining = defender.life.length;
           }
         } else {
           // Hit a character (the original target or the chosen blocker) — KO it.
@@ -1148,10 +1167,12 @@ function handleAction(roomId, playerId, action) {
             dropTempEffectsFor(game, target.uid);
             log(game, `\uD83D\uDC80 ${target.name} K.O.'d! (${bs.attackerPower} vs ${totalDefense})`);
             triggerOnKO(game, defenderId, target, bs.attackerId);
+            outcome.outcome = 'character_koed';
           }
         }
       } else {
         log(game, `\uD83D\uDEE1\uFE0F ${bs.targetName} survives the attack (${bs.attackerPower} vs ${totalDefense}).`);
+        outcome.outcome = bs.targetIsLeader ? 'attack_failed' : 'blocked';
         // Blocker that wins stays on board, but remains rested (already rested by USE_BLOCKER).
       }
 
@@ -1162,6 +1183,7 @@ function handleAction(roomId, playerId, action) {
       }
       game.battleState = null;
       game.phase = 'MAIN';
+      broadcast(roomId, outcome);
       break;
     }
 
@@ -1215,8 +1237,6 @@ function handleAction(roomId, playerId, action) {
       if (!game.scryWindow || game.scryWindow.playerId !== playerId) return;
       const sw = game.scryWindow;
       const kept = action.keptIndices || []; // indices of cards to keep in hand
-      const order = action.order || []; // ordered indices for cards going back to deck
-      const placement = action.placement === 'top' ? 'top' : (sw.placement === 'top' ? 'top' : 'bottom');
 
       // Validate keep count + filters
       if (kept.length > (sw.keepCount || 0)) {
@@ -1243,21 +1263,48 @@ function handleAction(roomId, playerId, action) {
         }
       }
 
-      // Add kept cards to hand
+      // Add kept cards to hand — and broadcast each one as a REVEAL so the
+      // opponent sees what was picked. Scales to every scry effect: Schola
+      // Montis Belli, Queen Victoria, and any future card whose resolver
+      // flows through SCRY_RESOLVE.
       kept.forEach(idx => {
-        if (sw.cards[idx]) p.hand.push(sw.cards[idx]);
+        const c = sw.cards[idx];
+        if (!c) return;
+        p.hand.push(c);
+        broadcast(roomId, {
+          type: 'REVEAL_CARD',
+          card: { id: c.id, name: c.name, image: c.image || '', ability: c.ability || '' },
+          revealedBy: playerId,
+          source: sw.cardName,
+        });
       });
       if (kept.length > 0) log(game, `${sw.cardName}: added ${kept.length} card(s) to hand.`);
 
-      // Cards returning to the deck in the player's chosen order (first = top of that placement)
+      // Placement — two modes:
+      //   split mode ('either'): client sends topOrder + bottomOrder; we
+      //     unshift the top pile (first = deepest top) and push the bottom
+      //     pile (first = nearest to existing bottom).
+      //   single mode ('top' / 'bottom'): client sends order + placement
+      //     override; existing behavior.
       const remaining = sw.cards.filter((_, idx) => !kept.includes(idx));
-      const ordered = order.length > 0
-        ? order.map(idx => remaining[idx]).filter(Boolean)
-        : remaining;
-      // deck[0] = top of deck; unshift places on top, push places on bottom
-      if (placement === 'top') p.deck.unshift(...ordered);
-      else p.deck.push(...ordered);
-      log(game, `${sw.cardName}: returned ${ordered.length} card(s) to ${placement} of deck.`);
+      if (sw.placement === 'either' && (action.topOrder || action.bottomOrder)) {
+        const topCards = (action.topOrder    || []).map(i => remaining[i]).filter(Boolean);
+        const botCards = (action.bottomOrder || []).map(i => remaining[i]).filter(Boolean);
+        // deck[0] = top; unshift(a,b,c) → deck becomes [a,b,c,...], so first in topCards
+        // lands at deck[0] (the very top), matching "first clicked = top".
+        if (topCards.length) p.deck.unshift(...topCards);
+        if (botCards.length) p.deck.push(...botCards);
+        log(game, `${sw.cardName}: returned ${topCards.length} to top, ${botCards.length} to bottom.`);
+      } else {
+        const order = action.order || [];
+        const placement = action.placement === 'top' ? 'top' : (sw.placement === 'top' ? 'top' : 'bottom');
+        const ordered = order.length > 0
+          ? order.map(idx => remaining[idx]).filter(Boolean)
+          : remaining;
+        if (placement === 'top') p.deck.unshift(...ordered);
+        else p.deck.push(...ordered);
+        log(game, `${sw.cardName}: returned ${ordered.length} card(s) to ${placement} of deck.`);
+      }
 
       game.scryWindow = null;
       break;
@@ -1893,7 +1940,15 @@ function tryOpenScryFromEffect(game, playerId, card, effect) {
   // "other than [Name]" — exclude from keep candidates by name.
   const otherThanMatch = effect.match(/other than \[([^\]]+)\]/i);
   const keepExcludeName = otherThanMatch ? otherThanMatch[1].trim() : null;
-  const placement = /place the rest at the bottom/i.test(effect) ? 'bottom' : 'top';
+  // placement is one of:
+  //   'bottom' — forced bottom ("place the rest at the bottom")
+  //   'either' — player assigns each remaining card to top or bottom
+  //              ("return them to the top or bottom of the deck in any order")
+  //   'top'    — forced top (fallback / legacy)
+  let placement;
+  if (/place the rest at the bottom/i.test(effect)) placement = 'bottom';
+  else if (/top or bottom/i.test(effect)) placement = 'either';
+  else placement = 'top';
   game.scryWindow = {
     playerId,
     cards: p.deck.splice(0, lookCount),
