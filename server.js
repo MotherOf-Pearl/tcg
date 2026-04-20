@@ -880,7 +880,8 @@ function handleAction(roomId, playerId, action) {
         donActive: game.players[playerId].donActive,
       });
       if (idx === -1) return;
-      const cardCost = Number(card.cost) || 0;
+      // Track-P Phase 4 — honour handCostDiscount passives (Uta, Shanks).
+      const cardCost = handPlayCostFor(p, card, game);
       const activeDonCount = p.donActive;
       if (activeDonCount < cardCost) { send(playerId, {type:'ERROR', msg:'Not enough DON!!'}); return; }
       // Deduct EXACTLY card.cost from the active player (playerId is the sender and must equal game.activePlayer here).
@@ -1166,7 +1167,7 @@ function handleAction(roomId, playerId, action) {
       const defender = game.players[defenderId];
       const blocker = defender.field.find(c => c.uid === action.blockerUid);
       if (!blocker) { send(playerId, {type:'ERROR', msg:'Invalid blocker'}); return; }
-      if (!blocker.ability || !blocker.ability.includes('[Blocker]')) {
+      if (!hasBlocker(blocker, game)) {
         send(playerId, {type:'ERROR', msg:'That card has no [Blocker]'}); return;
       }
       if (blocker.rested) { send(playerId, {type:'ERROR', msg:'Blocker is rested'}); return; }
@@ -1390,7 +1391,7 @@ function handleAction(roomId, playerId, action) {
     case 'BLOCK': {
       if (!game.counterWindow || game.counterWindow.defenderId !== playerId) return;
       const blocker = p.field.find(c => c.uid === action.blockerUid && !c.rested);
-      if (!blocker || !blocker.ability || !blocker.ability.includes('[Blocker]')) {
+      if (!blocker || !hasBlocker(blocker, game)) {
         send(playerId, {type:'ERROR', msg:'Invalid blocker'});
         return;
       }
@@ -2292,8 +2293,22 @@ function checkDonRequirement(card, text) {
 }
 
 // Helper: check if card has [Blocker]
-function hasBlocker(card) {
-  return card.ability && card.ability.includes('[Blocker]');
+function hasBlocker(card, game) {
+  if (!card) return false;
+  // Track-P Phase 3 — if a conditional [Blocker] passive exists, defer
+  // to its evaluation; the literal "[Blocker]" in the ability text is
+  // the embedded bracket inside the conditional phrase (PRB02-015),
+  // not a static grant.
+  const passives = (game && PASSIVE_EFFECTS) ? (PASSIVE_EFFECTS.get(card.id) || []) : [];
+  const conditionalBlocker = passives.find(p => p.type === 'conditionalKeyword' && p.keyword === 'blocker');
+  if (conditionalBlocker) {
+    if (!game) return false;
+    const owner = findCardOwner(game, card.uid);
+    if (!owner) return false;
+    return _passiveConditionsOk(conditionalBlocker.conditions, card, game, owner);
+  }
+  if (card.ability && card.ability.includes('[Blocker]')) return true;
+  return false;
 }
 
 // Helper: check if card has [Double Attack]
@@ -2631,6 +2646,28 @@ function isOnPlaySuppressed(game, playerId) {
     }
   }
   return false;
+}
+
+// Track-P Phase 4 — effective hand-play cost for a card. Base card.cost
+// minus any handCostDiscount passive entries whose conditions evaluate
+// true in the current game state (Uta ST23-001: own char ≥10k power;
+// Shanks ST23-002: opp char ≥8k base power).
+function handPlayCostFor(player, card, game) {
+  if (!card) return 0;
+  let cost = Number(card.cost) || 0;
+  if (!game) return Math.max(0, cost);
+  const passives = PASSIVE_EFFECTS.get(card.id) || [];
+  if (passives.length === 0) return Math.max(0, cost);
+  // Locate the player's id so condition helpers can reach across.
+  const playerId = Object.keys(game.players).find(id => game.players[id] === player);
+  const owner = { playerId, player };
+  for (const p of passives) {
+    if (p.type !== 'handCostDiscount') continue;
+    if (_passiveConditionsOk(p.conditions, card, game, owner)) {
+      cost -= (p.discount || 0);
+    }
+  }
+  return Math.max(0, cost);
 }
 
 // Track-P — effective cost of a card on field. Base c.cost plus any
@@ -6015,7 +6052,7 @@ module.exports = {
   handleAction, doRefresh, doDraw, doEnd, nextPhase,
   // Keyword detectors
   hasBlocker, hasRush, hasDoubleAttack, hasBanish,
-  effectivePowerOf, effectiveCostOf,
+  effectivePowerOf, effectiveCostOf, handPlayCostFor,
   counterValueOf,
   // Broadcast plumbing (tests replace clients.get(id).send with a spy)
   rooms, clients, send, broadcast, sendState,
