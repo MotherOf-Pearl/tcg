@@ -438,7 +438,7 @@ const CARD_DB = [
     ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
   { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
-    power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'),
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'), hasAlt:true,
     ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
 
   { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
