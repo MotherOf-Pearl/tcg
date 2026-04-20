@@ -78,7 +78,7 @@ const CARD_DB = [
     ability:"[On Play] If you have 8 or more DON!! cards, rest up to 1 of your opponent's Characters with a cost of 5 or less." },
 
   { id:'OP10-076', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special',
-    power:1000, cost:3, counter:2000, image:IMG('OP10','OP10-076','jpg'),
+    power:1000, cost:3, counter:2000, image:IMG('OP10','OP10-076','jpg'), useNewPipeline:true,
     ability:"[On Play] You may discard 1 card from your hand: If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! from your DON!! deck and set it as active." },
 
   { id:'OP14-072', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -130,7 +130,7 @@ const CARD_DB = [
     ability:"[Counter] DON!! -1: Give up to 1 of your Leader or Character cards +2000 power for this battle. Then, rest up to 1 of your opponent's Characters. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'OP14-078', name:'Bullet String', type:'EVENT', color:'Purple',
-    power:0, cost:2, counter:0, image:IMG('OP14','OP14-078','png'),
+    power:0, cost:2, counter:0, image:IMG('OP14','OP14-078','png'), useNewPipeline:true,
     ability:"[Counter] DON!! -1: If your Leader has the {Donquixote Pirates} type, up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
   { id:'OP10-079', name:'God Thread', type:'EVENT', color:'Purple',
@@ -169,7 +169,7 @@ const CARD_DB = [
     ability:"[Blocker] [On Your Opponent's Attack] [Once Per Turn] You may trash 1 card from your hand: Give up to 1 of your opponent's Leader or Characters -2000 power during this turn." },
 
   { id:'OP09-015', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged',
-    power:5000, cost:4, counter:1000, image:IMG('OP09','OP09-015','jpg'),
+    power:5000, cost:4, counter:1000, image:IMG('OP09','OP09-015','jpg'), useNewPipeline:true,
     ability:"[Blocker] [On K.O.] If your Leader has the {Red Hair Pirates} type, K.O. up to 1 of your opponent's Characters with an original power of 6000 or less." },
 
   { id:'OP10-011', name:'Tony Tony Chopper', type:'CHARACTER', color:'Yellow', attribute:'Strike',
@@ -3890,6 +3890,11 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'koTarget', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]), opponent: true } };
   }
   if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?(\d+)\s*power or less/i))) {
+    return { type: 'koTarget', max: parseInt(m[1]), filter: { maxPower: parseInt(m[2]), opponent: true } };
+  }
+  // Phase 5 Priority 3 — alternate word order: "power of N or less"
+  // (Lucky Roux: "Characters with an original power of 6000 or less").
+  if ((m = seg.match(/K\.O\. (?:up to )?(\d+).*?power of (\d+) or less/i))) {
     return { type: 'koTarget', max: parseInt(m[1]), filter: { maxPower: parseInt(m[2]), opponent: true } };
   }
   if ((m = seg.match(/K\.O\. (?:up to )?(\d+) of your opponent'?s? Character/i))) {
