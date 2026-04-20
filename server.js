@@ -351,7 +351,7 @@ const CARD_DB = [
     ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
 
   { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:4000, cost:4, counter:1000, image:IMG('ST03','ST03-014','png'),
+    power:4000, cost:4, counter:1000, image:IMG('ST03','ST03-014','png'), useNewPipeline:true,
     ability:"[On Play] Return up to 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
 
   { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -398,7 +398,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 3 or less. [Trigger] Play this card." },
 
   { id:'OP01-101', name:'Shawn the Whimsical', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-101','png'),
+    power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-101','png'), useNewPipeline:true,
     ability:"[DON!! x1] [When Attacking] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and rest it." },
 
   { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -430,7 +430,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -5: K.O. up to 1 of your opponent's Characters with a cost of 6 or less. This Character gains [Rush] during this turn." },
 
   { id:'OP01-094', name:'Jack, Master of Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:12000, cost:10, counter:0, image:IMG('OP01','OP01-094','png'),
+    power:12000, cost:10, counter:0, image:IMG('OP01','OP01-094','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -6: If your Leader has the {Holy Roman Empire} type, K.O. all Characters other than this Character." },
 
   { id:'ST04-016', name:'Off to the Market', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
@@ -842,7 +842,13 @@ function handleAction(roomId, playerId, action) {
         p.field.push(card);
         card.playedThisTurn = true;
         log(game, `${playerId.slice(0,6)} plays ${card.name} (${card.power} power).`);
-        parseAndApply('onPlay', game, playerId, card, opp);
+        // Phase-4 routing: new-pipeline characters run their [On Play]
+        // through runPipeline; legacy characters stay on parseAndApply.
+        if (card.useNewPipeline) {
+          runPipeline('onPlay', game, playerId, card);
+        } else {
+          parseAndApply('onPlay', game, playerId, card, opp);
+        }
       } else if (card.type === 'STAGE') {
         card.rested = false;
         p.field.push(card);
@@ -952,7 +958,8 @@ function handleAction(roomId, playerId, action) {
       log(game, `\u2694\uFE0F ${attacker.name} (${attackPower}) attacks ${defender.name} (${defendPower})!`);
 
       // Trigger [When Attacking] effects
-      parseAndApply('whenAttacking', game, playerId, attacker, opp);
+      if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
+      else parseAndApply('whenAttacking', game, playerId, attacker, opp);
 
       game.counterWindow = {
         attackerUid: attacker.uid, defenderUid: defender.uid,
@@ -998,7 +1005,8 @@ function handleAction(roomId, playerId, action) {
       // parser checks any [DON!! xN] gate and may open trash-from-hand / DON-cost
       // / KO target windows. If the effect modifies attacker power (e.g. +N self
       // boost), refresh battleState.attackerPower so the overlay/arrow reflect it.
-      parseAndApply('whenAttacking', game, playerId, attacker, opp);
+      if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
+      else parseAndApply('whenAttacking', game, playerId, attacker, opp);
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
       break;
     }
@@ -1481,10 +1489,20 @@ function handleAction(roomId, playerId, action) {
       log(game, `${w.sourceCardName}: returned ${w.required} DON!! to deck.`);
 
       // Resume the original effect with cost-already-paid.
-      const sourceCard = (owner.leader.uid === w.sourceCardUid) ? owner.leader
-                       : owner.field.find(c => c.uid === w.sourceCardUid);
+      const pipelineResume = w.pipelineResume;
       const timing = w.timing;
+      const sourceCardUid = w.sourceCardUid;
       game.donReturnWindow = null;
+      // Phase-4: new-pipeline cards get their own resume path.
+      if (pipelineResume) {
+        resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      // Legacy parseAndApply resume — checks leader/field only (events in
+      // trash are a known miss in the legacy flow; pipeline cards don't
+      // have that bug).
+      const sourceCard = (owner.leader.uid === sourceCardUid) ? owner.leader
+                       : owner.field.find(c => c.uid === sourceCardUid);
       if (sourceCard) {
         const oppOfSource = game.players[Object.keys(game.players).find(id => id !== playerId)];
         parseAndApply(timing, game, playerId, sourceCard, oppOfSource, { donCostPaid: true });
@@ -1561,9 +1579,16 @@ function handleAction(roomId, playerId, action) {
       const finishWindow = (paid) => {
         const resumeTiming = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
+        const pipelineResume = w.pipelineResume;
         const sourceName = w.sourceCardName;
         game.trashFromHandWindow = null;
-        if (paid && resumeTiming && resumeCardUid) {
+        if (!paid) return;
+        // Phase-4: new-pipeline cards take precedence.
+        if (pipelineResume) {
+          resumePipeline(game, playerId, pipelineResume);
+          return;
+        }
+        if (resumeTiming && resumeCardUid) {
           const src = findSourceCard(owner, resumeCardUid);
           if (src) {
             const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
@@ -1613,7 +1638,13 @@ function handleAction(roomId, playerId, action) {
       const finishWindow = () => {
         const resumeTiming = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
+        const pipelineResume = w.pipelineResume;
         game.bounceTargetWindow = null;
+        // Phase-4: new-pipeline path first.
+        if (pipelineResume) {
+          resumePipeline(game, playerId, pipelineResume);
+          return;
+        }
         if (resumeTiming && resumeCardUid) {
           const owner = game.players[playerId];
           const src = findSourceCard(owner, resumeCardUid);
@@ -2011,7 +2042,7 @@ function extractCardTypeFilter(text) {
 // player will pick which DON to send back to the deck (active/rested/attached).
 // Returns true if the window opened, false if the player can't afford the cost
 // (sum of donActive + donRested + every attachedDon < required).
-function openDonReturn(game, playerId, card, required, timing) {
+function openDonReturn(game, playerId, card, required, timing, opts = {}) {
   const p = game.players[playerId];
   const attachedSources = [];
   if (p.leader && (p.leader.attachedDon || 0) > 0) {
@@ -2039,6 +2070,9 @@ function openDonReturn(game, playerId, card, required, timing) {
       donRested: p.donRested,
       attachedDon: attachedSources,
     },
+    // Phase-4 chain resume (Batch 2) — RETURN_DON hands off to the
+    // pipeline resumer when this is set, instead of calling parseAndApply.
+    pipelineResume: opts.pipelineResume || null,
   };
   log(game, `${card.name}: choose ${required} DON!! to return to deck.`);
   return true;
@@ -2327,7 +2361,8 @@ function parseTempPowerBuff(effect) {
 function openTrashFromHand(game, playerId, opts) {
   const p = game.players[playerId];
   const { count, optional = true, filterType = null, filterPowerMin = null,
-          sourceCardName = '', resumeTiming = null, resumeCardUid = null } = opts || {};
+          sourceCardName = '', resumeTiming = null, resumeCardUid = null,
+          pipelineResume = null } = opts || {};
   if (!count || count <= 0) return false;
   // Eligibility: card must match filterType + filterPowerMin.
   const isEligible = (c) => {
@@ -2346,6 +2381,8 @@ function openTrashFromHand(game, playerId, opts) {
     filterType, filterPowerMin,
     resumeTiming, resumeCardUid,
     candidateUids: candidates.map(c => c.uid),
+    // Phase-4 chain resume (Batch 2) — set by agentPayCosts.
+    pipelineResume,
   };
   log(game, `${sourceCardName}: trash ${count} ${filterType ? filterType.toLowerCase() + ' ' : ''}card${count===1?'':'s'} from hand to fire effect.`);
   return true;
@@ -2406,7 +2443,8 @@ function openBounceTarget(game, playerId, opts) {
   const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
   const me  = game.players[playerId];
   const { filterKind, filterValue, optional = true, sourceCardName = '',
-          resumeTiming = null, resumeCardUid = null, scope = 'any' } = opts || {};
+          resumeTiming = null, resumeCardUid = null, scope = 'any',
+          pipelineResume = null } = opts || {};
   const matches = (c) => {
     if (c.type !== 'CHARACTER') return false;
     if (filterKind === 'cost') return (c.cost || 0) <= filterValue;
@@ -2428,6 +2466,7 @@ function openBounceTarget(game, playerId, opts) {
     candidateUids: candidates.map(c => c.uid),
     filterKind, filterValue, optional, sourceCardName,
     resumeTiming, resumeCardUid,
+    pipelineResume,
   };
   log(game, `${sourceCardName}: choose a Character to return (${candidates.length} option(s)).`);
   return true;
@@ -3940,13 +3979,45 @@ function agentCheckConditions(conditions, ctx) {
   return { ok: true };
 }
 
-// AGENT 4 — COSTS: resolve a list of costs. Phase 3 has no cards with
-// costs routed through the pipeline; `unsupported` aborts loud so
-// useNewPipeline can't be flipped on a card we haven't migrated yet.
-function agentPayCosts(costs, ctx) {
+// AGENT 4 — COSTS: resolve a list of costs. Phase-4 Batch 2 supports
+// trashFromHand and returnDon — both open an interactive window and
+// hand off to the sequencer via `resume` (set to effectIndex:0 of the
+// current block, with costsPaid:true).
+//
+// Returns:
+//   { status: 'paid' }            — all costs paid synchronously
+//   { status: 'window-open' }     — player input required (window set)
+//   { status: 'unaffordable' }    — can't pay; block aborts
+//   { status: 'unsupported' }     — cost type not yet implemented
+function agentPayCosts(costs, ctx, resume) {
   for (const c of (costs || [])) {
-    console.log('[AGENT-COST] Not yet supported in new pipeline:', c.type, `(card ${ctx.card.name})`);
-    return { status: 'unsupported' };
+    switch (c.type) {
+      case 'trashFromHand': {
+        const opened = openTrashFromHand(ctx.game, ctx.playerId, {
+          count: c.count,
+          optional: true,  // "You may" prefix — player can skip; skip = block aborts
+          filterType: c.filterType || null,
+          filterPowerMin: c.filterPowerMin || null,
+          sourceCardName: ctx.card.name,
+          pipelineResume: resume || null,
+        });
+        if (!opened) return { status: 'unaffordable' };
+        return { status: 'window-open' };
+      }
+      case 'returnDon': {
+        // openDonReturn signature keeps its legacy `timing` param (used by
+        // parseAndApply callers). We pass the resume timing string there
+        // so the window also works in legacy flow if ever inspected.
+        const opened = openDonReturn(ctx.game, ctx.playerId, ctx.card, c.count,
+          resume ? resume.timing : null,
+          { pipelineResume: resume || null });
+        if (!opened) return { status: 'unaffordable' };
+        return { status: 'window-open' };
+      }
+      default:
+        console.log('[AGENT-COST] Not yet supported in new pipeline:', c.type, `(card ${ctx.card.name})`);
+        return { status: 'unsupported' };
+    }
   }
   return { status: 'paid' };
 }
@@ -4016,6 +4087,46 @@ function agentApplyEffect(effect, ctx, resume) {
       });
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
     }
+    // Phase-4 Batch 2 — AOE K.O. ("K.O. all Characters other than this
+    // Character"). Synchronous: trashes every opponent CHARACTER except
+    // the source, firing each victim's [On K.O.] via triggerOnKO.
+    case 'aoeKO': {
+      const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+      const opp = ctx.game.players[oppId];
+      const victims = (opp.field || []).filter(c =>
+        c.type === 'CHARACTER' && c.uid !== ctx.card.uid);
+      for (const target of victims) {
+        opp.field = opp.field.filter(c => c.uid !== target.uid);
+        opp.trash.push(target);
+        dropTempEffectsFor(ctx.game, target.uid);
+        log(ctx.game, `\uD83D\uDC80 ${target.name} K.O.'d by ${ctx.card.name}!`);
+        triggerOnKO(ctx.game, oppId, target, ctx.playerId);
+      }
+      return { status: 'applied' };
+    }
+    // Phase-4 Batch 2 — bounce target picker. Scope is derived from the
+    // parsed filter.opponent flag: true → opponent field only (Ball the
+    // Berserk), false/undefined → either field (default TCG Character
+    // targeting).
+    case 'bounceTarget': {
+      const filter = effect.filter || {};
+      const scope = filter.opponent ? 'opponent' : 'any';
+      const filterKind  = filter.maxCost != null ? 'cost'
+                        : filter.maxPower != null ? 'power' : 'any';
+      const filterValue = filter.maxCost ?? filter.maxPower ?? '';
+      // Mandatory-vs-optional comes from the parseBlock-level `optional`
+      // flag upstream; the sequencer passes it through via `resume`'s
+      // surrounding block. We keep a conservative default of optional=true
+      // unless explicitly marked otherwise on the effect.
+      const opened = openBounceTarget(ctx.game, ctx.playerId, {
+        filterKind, filterValue,
+        optional: effect.optional !== false,
+        scope,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
     default:
       console.log('[AGENT-EFFECT] Effect type not yet in new pipeline:', effect.type, `(card ${ctx.card.name})`);
       return { status: 'unsupported' };
@@ -4039,19 +4150,27 @@ function runPipeline(timing, game, playerId, card, opts = {}) {
   const ctx = { game, playerId, card, player };
   const resumeBI = opts.blockIndex ?? 0;
   const resumeEI = opts.effectIndex ?? 0;
+  const costsPaid = opts.costsPaid === true;
   if (!opts.isResume) console.log(`[AGENT-TRACE] ${card.name} pipeline firing for timing=${timing}`);
-  else console.log(`[AGENT-TRACE] ${card.name} pipeline resuming at block=${resumeBI} effect=${resumeEI}`);
+  else console.log(`[AGENT-TRACE] ${card.name} pipeline resuming at block=${resumeBI} effect=${resumeEI} costsPaid=${costsPaid}`);
   for (let bi = resumeBI; bi < parsed.effects.length; bi++) {
     const block = parsed.effects[bi];
     if (!agentCheckTiming(block, timing)) continue;
-    const skipGates = (bi === resumeBI && resumeEI > 0);
+    // Skip condition/cost gates when we're resuming into this same block
+    // mid-chain (effectIndex > 0) OR right after paying the cost
+    // (costsPaid=true, effectIndex===0). New blocks always re-run gates.
+    const skipGates = (bi === resumeBI && (resumeEI > 0 || costsPaid));
     if (!skipGates) {
       const cond = agentCheckConditions(block.conditions, ctx);
       if (!cond.ok) {
         console.log(`[AGENT-TRACE] ${card.name} ${timing} condition failed: ${cond.reason}`);
         continue;
       }
-      const paid = agentPayCosts(block.costs, ctx);
+      // Cost agent gets a resume pointing at this block's first effect
+      // with costsPaid:true, so the window resolver can jump straight
+      // to effects on player input.
+      const costResume = { timing, cardUid: card.uid, blockIndex: bi, effectIndex: 0, costsPaid: true };
+      const paid = agentPayCosts(block.costs, ctx, costResume);
       if (paid.status !== 'paid') return paid;
     }
     const startEI = (bi === resumeBI ? resumeEI : 0);
@@ -4085,6 +4204,7 @@ function resumePipeline(game, playerId, resume) {
   return runPipeline(resume.timing, game, playerId, src, {
     blockIndex: resume.blockIndex,
     effectIndex: resume.effectIndex,
+    costsPaid: resume.costsPaid === true,
     isResume: true,
   });
 }
