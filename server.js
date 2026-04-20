@@ -347,7 +347,7 @@ const CARD_DB = [
     ability:"[On Play] If your Leader has the {Duchess of Brittany} type, select up to 1 of your opponent's Characters with a cost of 4 or less. The selected Character cannot attack until the end of your opponent's next turn." },
 
   { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:6000, cost:5, counter:0, image:IMG('ST03','ST03-003','png'),
+    power:6000, cost:5, counter:0, image:IMG('ST03','ST03-003','png'), useNewPipeline:true,
     ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
 
   { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -1064,6 +1064,13 @@ function handleAction(roomId, playerId, action) {
       game.battleState.counterBonus = 0;
       game.phase = 'COUNTER_STEP';
       log(game, `\uD83D\uDEE1\uFE0F ${blocker.name} blocks the attack! (power: ${game.battleState.targetPower})`);
+      // Phase 3 opt-in — cards flagged useNewPipeline route their
+      // [On Block] effect through the multi-agent pipeline. Every other
+      // card's [On Block] still depends on parseAndApply (which doesn't
+      // currently wire onBlock at all — that's the point of the migration).
+      if (blocker.useNewPipeline) {
+        runPipeline('onBlock', game, defenderId, blocker);
+      }
       break;
     }
 
@@ -1665,6 +1672,45 @@ function handleAction(roomId, playerId, action) {
       target.rested = true;
       log(game, `${w.sourceCardName}: rested ${target.name}.`);
       finishWindow();
+      break;
+    }
+
+    // Phase 3 UI-agent resolver: player picked a character to place at the
+    // bottom of its owner's deck (Noble Shlawger's [On Block]). Mirrors
+    // the bounce-target flow but pushes to deck instead of hand. The card
+    // loses attached DON / rested / played-this-turn flags on the way out,
+    // and any temp power effects targeting it are dropped.
+    case 'PLACE_AT_BOTTOM_SELECTED': {
+      if (!game.placeAtBottomWindow || game.placeAtBottomWindow.playerId !== playerId) return;
+      const w = game.placeAtBottomWindow;
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target.'}); return; }
+        log(game, `${w.sourceCardName}: place-at-bottom skipped.`);
+        game.placeAtBottomWindow = null;
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid target.'});
+        return;
+      }
+      let ownerOfTarget = null;
+      for (const pid of Object.keys(game.players)) {
+        if (game.players[pid].field.some(c => c.uid === action.targetUid)) {
+          ownerOfTarget = game.players[pid];
+          break;
+        }
+      }
+      if (!ownerOfTarget) { send(playerId, {type:'ERROR', msg:'Target no longer on field.'}); return; }
+      const idx = ownerOfTarget.field.findIndex(c => c.uid === action.targetUid);
+      const target = ownerOfTarget.field[idx];
+      ownerOfTarget.field.splice(idx, 1);
+      target.attachedDon = 0;
+      target.rested = false;
+      target.playedThisTurn = false;
+      dropTempEffectsFor(game, target.uid);
+      ownerOfTarget.deck.push(target);
+      log(game, `${w.sourceCardName}: placed ${target.name} at the bottom of its owner's deck.`);
+      game.placeAtBottomWindow = null;
       break;
     }
 
@@ -3808,6 +3854,149 @@ function _buildParsedEffectsCache() {
   }
 }
 _buildParsedEffectsCache();
+
+// ═════════════════════════════════════════════════════════════════════════
+// PHASE 3 — Multi-agent effect pipeline (per-card opt-in via useNewPipeline
+// on the CARD_DB entry). Noble Shlawger is the first card routed through
+// this pipeline; every other card still flows through parseAndApply
+// untouched. Agents are small, named functions so future phases can unit-
+// test them in isolation and swap one out without touching the others.
+
+// AGENT 2 — TIMING: does this parsed block fire on the given timing tag?
+function agentCheckTiming(block, timing) { return block.timing === timing; }
+
+// AGENT 3 — CONDITIONS: evaluate a list of { type, value } gates. Returns
+// { ok: true } or { ok: false, reason: string }. Conditions unknown in this
+// phase short-circuit true (non-fatal — the sequencer still advances).
+function agentCheckConditions(conditions, ctx) {
+  for (const c of (conditions || [])) {
+    switch (c.type) {
+      case 'donAttached':
+        if ((ctx.card.attachedDon || 0) < c.value) {
+          return { ok: false, reason: `needs ${c.value} attached DON (have ${ctx.card.attachedDon || 0})` };
+        }
+        break;
+      case 'leaderType': {
+        const aff = ((ctx.player.leader && ctx.player.leader.affiliation) || '').toLowerCase();
+        if (!aff.includes(c.value.toLowerCase())) {
+          return { ok: false, reason: `leader affiliation not {${c.value}}` };
+        }
+        break;
+      }
+      case 'donCountMin': {
+        const total = (ctx.player.donActive || 0) + (ctx.player.donRested || 0) + (ctx.player.donDeck || 0);
+        if (total < c.value) return { ok: false, reason: `needs ${c.value} DON (have ${total})` };
+        break;
+      }
+      case 'lifeCountMax':
+        if ((ctx.player.life || []).length > c.value) {
+          return { ok: false, reason: `needs ≤${c.value} life (have ${ctx.player.life.length})` };
+        }
+        break;
+      case 'oncePerTurn':
+      case 'scope':
+        // TODO(phase-4): once-per-turn tracking, passive scope filters.
+        break;
+      default:
+        console.log('[AGENT-CONDITION] Unknown condition type:', c.type);
+    }
+  }
+  return { ok: true };
+}
+
+// AGENT 4 — COSTS: resolve a list of costs. Phase 3 has no cards with
+// costs routed through the pipeline; `unsupported` aborts loud so
+// useNewPipeline can't be flipped on a card we haven't migrated yet.
+function agentPayCosts(costs, ctx) {
+  for (const c of (costs || [])) {
+    console.log('[AGENT-COST] Not yet supported in new pipeline:', c.type, `(card ${ctx.card.name})`);
+    return { status: 'unsupported' };
+  }
+  return { status: 'paid' };
+}
+
+// AGENT 5 — EFFECT: dispatch one effect object. Phase 3 implements
+// placeAtBottom only; other types log and return 'unsupported' so a test
+// flipping useNewPipeline on the wrong card surfaces immediately.
+function agentApplyEffect(effect, ctx) {
+  switch (effect.type) {
+    case 'placeAtBottom': {
+      const opened = openPlaceAtBottomWindow(ctx.game, ctx.playerId, {
+        sourceCardName: ctx.card.name,
+        sourceCardUid:  ctx.card.uid,
+        filter:         effect.filter || {},
+        max:            effect.max || 1,
+        optional:       effect.optional !== false,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+    default:
+      console.log('[AGENT-EFFECT] Effect type not yet in new pipeline:', effect.type, `(card ${ctx.card.name})`);
+      return { status: 'unsupported' };
+  }
+}
+
+// AGENT 6 — SEQUENCER: look up the parsed blocks, run the matching timing
+// through Conditions → Costs → each Effect. Stops at the first window-
+// opener (effect continuation happens in the window's resolve handler
+// via a resumePipeline call — unused by Noble Shlawger since it has one
+// effect and no chain).
+function runPipeline(timing, game, playerId, card) {
+  const parsed = PARSED_EFFECTS.get(card.id);
+  if (!parsed) {
+    console.log(`[AGENT-TRACE] ${card.name}: no parsed entry`);
+    return { status: 'no-parsed-data' };
+  }
+  const player = game.players[playerId];
+  const ctx = { game, playerId, card, player };
+  console.log(`[AGENT-TRACE] ${card.name} pipeline firing for timing=${timing}`);
+  for (const block of (parsed.effects || [])) {
+    if (!agentCheckTiming(block, timing)) continue;
+    const cond = agentCheckConditions(block.conditions, ctx);
+    if (!cond.ok) {
+      console.log(`[AGENT-TRACE] ${card.name} ${timing} condition failed: ${cond.reason}`);
+      continue;
+    }
+    const paid = agentPayCosts(block.costs, ctx);
+    if (paid.status !== 'paid') return paid;
+    for (const eff of (block.effects || [])) {
+      const res = agentApplyEffect(eff, ctx);
+      if (res.status === 'window-open') return res;
+      if (res.status === 'unsupported') return res;
+    }
+  }
+  return { status: 'done' };
+}
+
+// UI AGENT surface — opens the SELECT_BOTTOM_DECK_TARGET window on the
+// game state so both clients receive it through the normal GAME_STATE
+// broadcast. Candidates are CHARACTER cards on EITHER field that pass
+// the filter (maxCost etc.) — target 'any' per the current parsed
+// effect shape.
+function openPlaceAtBottomWindow(game, playerId, opts) {
+  const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
+  const me  = game.players[playerId];
+  const { filter = {}, optional = true, sourceCardName = '', sourceCardUid = null, max = 1 } = opts || {};
+  const matches = (c) => {
+    if (c.type !== 'CHARACTER') return false;
+    if (filter.maxCost != null && (c.cost || 0) > filter.maxCost) return false;
+    return true;
+  };
+  const candidates = [...me.field.filter(matches), ...opp.field.filter(matches)];
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName}: no valid targets to place at bottom of deck.`);
+    return false;
+  }
+  game.placeAtBottomWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    max, optional,
+    sourceCardName, sourceCardUid,
+    filter,
+  };
+  log(game, `${sourceCardName}: choose a Character to place at the bottom of its owner's deck (${candidates.length} option(s)).`);
+  return true;
+}
 
 // Guard so `require('./server')` from a test doesn't start the HTTP server
 // or bind a port. The production entry point still runs `node server.js`

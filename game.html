@@ -1182,6 +1182,13 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="restTargetTitle">Rest an opponent character</div>
         <div id="restTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Click a highlighted opponent character.</div>
       </div>
+      <!-- Phase 3 UI-agent: SELECT_BOTTOM_DECK_TARGET. Noble Shlawger
+           [On Block] is the first card to use this picker. -->
+      <div id="placeAtBottomBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="placeAtBottomTitle">Place character at bottom of deck</div>
+        <div id="placeAtBottomHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Click a highlighted Character.</div>
+        <button class="gb-pbtn gb-pbtn-sm" id="placeAtBottomSkip" onclick="skipPlaceAtBottom()" style="display:none;">Skip</button>
+      </div>
       <!-- DON!! -N return-to-deck picker (interactive cost) -->
       <div id="donReturnBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="donReturnTitle">Return DON!! to deck</div>
@@ -1767,6 +1774,8 @@ function renderGame() {
       myId = game.addFromTrashWindow.playerId;
     } else if (game.restTargetWindow) {
       myId = game.restTargetWindow.playerId;
+    } else if (game.placeAtBottomWindow) {
+      myId = game.placeAtBottomWindow.playerId;
     } else if (game.koTargetWindow) {
       myId = game.koTargetWindow.playerId;
     } else if (game.donReturnWindow) {
@@ -2003,6 +2012,28 @@ function renderGame() {
     if (rtw) hint('Opponent is choosing a rest target…');
   }
 
+  // Phase 3 — SELECT_BOTTOM_DECK_TARGET picker (Noble Shlawger [On Block]
+  // and any card migrated to the new agent pipeline that emits a
+  // placeAtBottom effect).
+  const pabw = game.placeAtBottomWindow;
+  const pabwPanel = document.getElementById('placeAtBottomBtns');
+  if (pabw && pabw.playerId === myId) {
+    hideAllBtnGroups();
+    pabwPanel.style.display = 'flex';
+    document.getElementById('placeAtBottomTitle').textContent =
+      `${pabw.sourceCardName} — bottom of deck`;
+    let hintBits = 'Click a highlighted Character';
+    if (pabw.filter && pabw.filter.maxCost != null) hintBits += ` (≤ ${pabw.filter.maxCost} cost)`;
+    document.getElementById('placeAtBottomHint').textContent = hintBits + '. Goes to its owner\'s deck bottom.';
+    document.getElementById('placeAtBottomSkip').style.display = pabw.optional ? 'block' : 'none';
+    requestAnimationFrame(() => {
+      pabw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    pabwPanel.style.display = 'none';
+    if (pabw) hint('Opponent is choosing a bottom-deck target…');
+  }
+
   // Bug 5 — TRASH_FROM_HAND_COST resolver. Highlights only the eligible hand
   // cards (filtered by filterType / filterPowerMin); player toggles a selection,
   // counter shows N/M, Confirm enabled at exact match. Optional → Skip allowed.
@@ -2229,6 +2260,13 @@ function _tryConsumeWindowClick(uid) {
   if (game?.restTargetWindow?.playerId === myId
       && game.restTargetWindow.candidateUids.includes(uid)) {
     act({ type: 'REST_TARGET_SELECTED', targetUid: uid });
+    return true;
+  }
+  // Phase 3 — place-at-bottom picker (Noble Shlawger [On Block] and every
+  // other card that migrates through the new pipeline with placeAtBottom).
+  if (game?.placeAtBottomWindow?.playerId === myId
+      && game.placeAtBottomWindow.candidateUids.includes(uid)) {
+    act({ type: 'PLACE_AT_BOTTOM_SELECTED', targetUid: uid });
     return true;
   }
   return false;
@@ -2932,7 +2970,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -3328,6 +3366,13 @@ function skipBounceTarget() {
   if (!game?.bounceTargetWindow) return;
   document.getElementById('bounceTargetBtns').style.display = 'none';
   act({ type: 'BOUNCE_TARGET_SELECTED', skip: true });
+}
+
+// ─── Phase 3 — SELECT_BOTTOM_DECK_TARGET resolver (client) ──────────────
+function skipPlaceAtBottom() {
+  if (!game?.placeAtBottomWindow) return;
+  document.getElementById('placeAtBottomBtns').style.display = 'none';
+  act({ type: 'PLACE_AT_BOTTOM_SELECTED', skip: true });
 }
 
 // ─── ADD_FROM_TRASH resolver (client) ────────────────────────────────────
