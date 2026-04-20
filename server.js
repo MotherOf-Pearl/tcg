@@ -89,7 +89,7 @@ const CARD_DB = [
     power:1000, cost:4, counter:1000, image:IMG('OP14','OP14-063','png'),
     ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] If your opponent has 6 or more DON!! cards on their field, play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand." },
 
-  { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike',
+  { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Donquixote Pirates',
     power:7000, cost:5, counter:0, image:IMG('OP14','OP14-061','png'),
     ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead. [When Attacking] DON!! -1: Give up to 1 of your opponent's Characters -2000 power during this turn." },
 
@@ -674,6 +674,8 @@ function doEnd(game) {
     game._onPlaySuppressions = game._onPlaySuppressions.filter(s =>
       (s.expiresAtTurn == null) || s.expiresAtTurn >= game.turn);
   }
+  // Track-P Phase 6 — clear per-turn self-save slots.
+  if (game._selfSaveUsedThisTurn) game._selfSaveUsedThisTurn.clear();
   // Phase 5 Priority 8 — prune expired suppressions. Same expiry
   // semantics as tempPowerEffects: thisTurn-kind gets expiresAtTurn
   // equal to the turn they were applied on (now < game.turn → dropped).
@@ -1561,6 +1563,13 @@ function handleAction(roomId, playerId, action) {
       if (!target || !w.candidateUids.includes(action.targetUid)) {
         send(playerId, {type:'ERROR', msg:'Invalid K.O. target.'});
         return;
+      }
+      // Track-P Phase 6 — self-save passives (Ace, Law, Vergo). If the
+      // target card carries a selfSaveReplacement and its once-per-turn
+      // slot is open, auto-apply the alternative and skip the K.O.
+      if (tryAutoSelfSave(target, playerId, game, w.sourceCardName)) {
+        finishWindow();
+        break;
       }
       oppOfActor.field = oppOfActor.field.filter(c => c.uid !== action.targetUid);
       oppOfActor.trash.push(target);
@@ -2539,7 +2548,10 @@ function openRestTargetWindow(game, playerId, opts) {
 
 function openKoTargetWindow(game, playerId, opts) {
   const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
-  const candidates = opp.field.filter(c => c.type === 'CHARACTER' && opts.filter(c));
+  // Track-P Phase 5 — exclude opponent's KO-protected characters.
+  const candidates = opp.field.filter(c =>
+    c.type === 'CHARACTER' && opts.filter(c) &&
+    !isRemovalProtected(c, playerId, game, 'ko'));
   if (candidates.length === 0) {
     log(game, `${opts.sourceCardName}: no valid K.O. targets.`);
     return false;
@@ -2621,6 +2633,73 @@ function extractNameFilter(text) {
 // Jesse the Jester). Used everywhere battle math happens on the server
 // (DECLARE_ATTACK, USE_BLOCKER, RESOLVE_ATTACK) so passives affect actual
 // battle outcomes — not just the displayed power on the client.
+// Track-P Phase 6 — self-save replacement. Checks whether a card
+// about to be removed by opponent-sourced effect carries a
+// selfSaveReplacement passive and a once-per-turn slot is available.
+// On match, applies the alternative in place of removal and returns
+// true (caller skips the removal step). Simplification: auto-applies
+// without player confirmation — a proper picker UI is future work.
+// Supports:
+//   powerDebuffSelf  (Ace, Law) — give self -N power for the turn
+//   returnDon        (Vergo) — return 1 own DON from field to deck
+function tryAutoSelfSave(card, removerPlayerId, game, sourceCardName) {
+  if (!card || !game) return false;
+  const passives = PASSIVE_EFFECTS.get(card.id) || [];
+  const save = passives.find(p => p.type === 'selfSaveReplacement');
+  if (!save) return false;
+  const owner = findCardOwner(game, card.uid);
+  if (!owner || owner.playerId === removerPlayerId) return false;
+  // Vergo's save is affiliation-gated — only fires when THE card being
+  // removed matches the affiliation clause.
+  if (save.scope === 'affiliation' && save.affiliation) {
+    const aff = (card.affiliation || '').toLowerCase();
+    if (!aff.includes(save.affiliation.toLowerCase())) return false;
+  }
+  if (!game._selfSaveUsedThisTurn) game._selfSaveUsedThisTurn = new Set();
+  const hasOnceGate = (save.conditions || []).some(c => c.type === 'oncePerTurn');
+  if (hasOnceGate && game._selfSaveUsedThisTurn.has(card.uid)) return false;
+  // Apply the alternative.
+  if (save.replaceWith === 'powerDebuffSelf') {
+    applyTempPower(game, card.uid, -Math.abs(save.amount || 0),
+      save.duration || 'thisTurn', sourceCardName);
+  } else if (save.replaceWith === 'returnDon') {
+    // Return 1 DON from field (prefer active) back to deck.
+    if ((owner.player.donActive || 0) > 0) {
+      owner.player.donActive--;
+      owner.player.donDeck++;
+    } else if ((owner.player.donRested || 0) > 0) {
+      owner.player.donRested--;
+      owner.player.donDeck++;
+    } else {
+      return false;  // no DON available — save can't pay its cost
+    }
+  } else {
+    return false;
+  }
+  if (hasOnceGate) game._selfSaveUsedThisTurn.add(card.uid);
+  log(game, `${card.name}: self-save applied (${save.replaceWith}) instead of removal.`);
+  return true;
+}
+
+// Track-P Phase 5 — removal protection check. Returns true if `card`
+// carries a removalProtection passive (koOnly or anyRemoval) AND the
+// would-be-remover belongs to a different player (opponent-sourced).
+//   scope: 'ko' | 'bounce' | 'placeBottom' | 'any'
+// A 'koOnly' passive only applies when scope==='ko'; 'anyRemoval'
+// applies to all scopes. Cards whose owner is the remover (self-
+// triggered removals) bypass the gate.
+function isRemovalProtected(card, removerPlayerId, game, scope) {
+  if (!card || !game) return false;
+  const owner = findCardOwner(game, card.uid);
+  if (!owner || owner.playerId === removerPlayerId) return false;
+  for (const p of (PASSIVE_EFFECTS.get(card.id) || [])) {
+    if (p.type !== 'removalProtection' || p.source !== 'opponent') continue;
+    if (p.scope === 'anyRemoval') return true;
+    if (p.scope === 'koOnly' && scope === 'ko') return true;
+  }
+  return false;
+}
+
 // Track-P — check whether [On Play] abilities are suppressed for a
 // given player. Returns true if:
 //   (a) the player's leader carries a passive onPlaySuppression
@@ -3017,9 +3096,14 @@ function openBounceTarget(game, playerId, opts) {
   // BUG 2 (this batch) — scope decides which fields contribute candidates.
   // 'opponent' = opp only; 'any' = both sides. Unchanged from prior when
   // scope defaults to 'any'.
+  // Track-P Phase 5 — exclude opponent-side removal-protected cards
+  // (Kuzan OP10-082 anyRemoval). Burgess (koOnly) is not protected
+  // from bounce — only from KO.
+  const protectedOk = (c) => !isRemovalProtected(c, playerId, game, 'bounce');
   const candidates = scope === 'opponent'
-    ? opp.field.filter(matches)
-    : [...me.field.filter(matches), ...opp.field.filter(matches)];
+    ? opp.field.filter(c => matches(c) && protectedOk(c))
+    : [...me.field.filter(matches),
+       ...opp.field.filter(c => matches(c) && protectedOk(c))];
   if (candidates.length === 0) {
     log(game, `${sourceCardName}: no valid bounce targets.`);
     return false;
@@ -5317,6 +5401,13 @@ function agentApplyEffect(effect, ctx, resume) {
       const victims = (opp.field || []).filter(c =>
         c.type === 'CHARACTER' && c.uid !== ctx.card.uid);
       for (const target of victims) {
+        // Track-P Phase 5 — skip protected cards.
+        if (isRemovalProtected(target, ctx.playerId, ctx.game, 'ko')) {
+          log(ctx.game, `${target.name}: immune to K.O. from opponent effects.`);
+          continue;
+        }
+        // Track-P Phase 6 — offer self-save first.
+        if (tryAutoSelfSave(target, ctx.playerId, ctx.game, ctx.card.name)) continue;
         opp.field = opp.field.filter(c => c.uid !== target.uid);
         opp.trash.push(target);
         dropTempEffectsFor(ctx.game, target.uid);
@@ -5721,6 +5812,13 @@ function agentApplyEffect(effect, ctx, resume) {
         const pl = ctx.game.players[pid];
         const idx = (pl.field || []).findIndex(c => c.uid === uid);
         if (idx !== -1) {
+          const target = pl.field[idx];
+          // Track-P Phases 5/6 — protection + self-save gates.
+          if (isRemovalProtected(target, ctx.playerId, ctx.game, 'ko')) {
+            log(ctx.game, `${target.name}: immune to K.O. (follow-up).`);
+            break;
+          }
+          if (tryAutoSelfSave(target, ctx.playerId, ctx.game, ctx.card.name)) break;
           const koed = pl.field.splice(idx, 1)[0];
           pl.trash.push(koed);
           log(ctx.game, `${ctx.card.name}: K.O.'d ${koed.name} (follow-up).`);
@@ -6008,7 +6106,10 @@ function openPlaceAtBottomWindow(game, playerId, opts) {
     if (filter.maxCost != null && (c.cost || 0) > filter.maxCost) return false;
     return true;
   };
-  const candidates = [...me.field.filter(matches), ...opp.field.filter(matches)];
+  // Track-P Phase 5 — opponent-side anyRemoval protection filters out
+  // Kuzan-style protected cards; Burgess (koOnly) is NOT protected here.
+  const candidates = [...me.field.filter(matches),
+    ...opp.field.filter(c => matches(c) && !isRemovalProtected(c, playerId, game, 'placeBottom'))];
   if (candidates.length === 0) {
     log(game, `${sourceCardName}: no valid targets to place at bottom of deck.`);
     return false;
@@ -6043,7 +6144,7 @@ module.exports = {
   runPipeline, resumePipeline, triggerOnKO,
   // Phase-5 P8 suppression helpers
   isEffectsSuppressed, isAttackSuppressed, isBlockerAbilitySuppressed,
-  isOnPlaySuppressed,
+  isOnPlaySuppressed, isRemovalProtected,
   // Catalog
   CARD_DB, PRESET_DECKS,
   // Deck + game construction
