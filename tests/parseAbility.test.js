@@ -110,14 +110,14 @@ test('Shawn the Whimsical — donAttached condition + trashFromHand cost + addDo
   assert.deepEqual(block.effects, [{ type: 'addDon', count: 1, state: 'rested' }]);
 });
 
-test('Blessed Thy Men — two blocks: main (koTarget + addDon active) and trigger (addDon active)', () => {
+test('Blessed Thy Men — two blocks: eventMain (koTarget + addDon active) and trigger (addDon active)', () => {
   const out = parseAbility(
     "[Main] K.O. up to 1 of your opponent's Characters with a cost of 6 or less, then add up to 1 DON!! card from your DON!! deck and set it as active. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active."
   );
   assert.deepEqual(out.unparsedSegments, []);
   assert.equal(out.effects.length, 2);
   const [mainBlk, trigBlk] = out.effects;
-  assert.equal(mainBlk.timing, 'main');
+  assert.equal(mainBlk.timing, 'eventMain');
   assert.deepEqual(mainBlk.effects, [
     { type: 'koTarget', max: 1, filter: { maxCost: 6, opponent: true } },
     { type: 'addDon', count: 1, state: 'active' },

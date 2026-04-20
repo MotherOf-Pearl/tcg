@@ -331,7 +331,7 @@ const CARD_DB = [
     ability:"[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order." },
 
   { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:1000, cost:3, counter:1000, image:IMG('OP01','OP01-079','png'),
+    power:1000, cost:3, counter:1000, image:IMG('OP01','OP01-079','png'), useNewPipeline:true,
     ability:"[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand." },
 
   { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -390,7 +390,7 @@ const CARD_DB = [
     ability:"[Activate: Main] [Once Per Turn] DON!! -7: Trash up to 1 of your opponent's Life cards." },
 
   { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
-    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-100','png'),
+    power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-100','png'), useNewPipeline:true,
     ability:"[Blocker] [On K.O.] Add 1 DON!! card from your DON!! deck and rest it." },
 
   { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -446,7 +446,7 @@ const CARD_DB = [
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, if you have 2 or less Life cards, add up to 1 DON!! card from your DON!! deck and rest it. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'ST04-015', name:'Blessed Thy Men', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
-    power:0, cost:6, counter:0, image:IMG('ST04','ST04-015','png'),
+    power:0, cost:6, counter:0, image:IMG('ST04','ST04-015','png'), useNewPipeline:true,
     ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 6 or less, then add up to 1 DON!! card from your DON!! deck and set it as active. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:'', affiliation:'Holy Roman Empire',
@@ -848,14 +848,23 @@ function handleAction(roomId, playerId, action) {
         p.field.push(card);
         log(game, `${playerId.slice(0,6)} plays stage ${card.name}.`);
       } else if (card.type === 'EVENT') {
-        // Bug 1 — fire the [Main] effect BEFORE moving to trash so any interactive
-        // window (DON return / trash-from-hand / bounce / KO picker) opens against
-        // an in-flight event. Push to trash unconditionally afterward — the event's
-        // own card object is already off the player's hand and held by reference,
-        // so any pending resume window keeps a valid `card`.
         log(game, `${playerId.slice(0,6)} plays event ${card.name}.`);
-        parseAndApply('eventMain', game, playerId, card, opp);
-        p.trash.push(card);
+        if (card.useNewPipeline) {
+          // Push to trash FIRST so resumePipeline's leader/field/trash
+          // lookup finds the event by uid when its windows resolve. The
+          // legacy parseAndApply path stays in the else branch with the
+          // original ordering so existing event cards are unaffected.
+          p.trash.push(card);
+          runPipeline('eventMain', game, playerId, card);
+        } else {
+          // Bug 1 — fire the [Main] effect BEFORE moving to trash so any
+          // interactive window opens against an in-flight event. Push to
+          // trash unconditionally afterward — the event's own card object
+          // is already off the player's hand and held by reference, so
+          // any pending resume window keeps a valid `card`.
+          parseAndApply('eventMain', game, playerId, card, opp);
+          p.trash.push(card);
+        }
       }
       break;
     }
@@ -1373,7 +1382,14 @@ function handleAction(roomId, playerId, action) {
       const finishWindow = () => {
         const resumeTiming  = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
+        const pipelineResume = w.pipelineResume;
         game.koTargetWindow = null;
+        // Phase-4: new-pipeline cards take precedence — the pipeline's
+        // own chain state is authoritative.
+        if (pipelineResume) {
+          resumePipeline(game, playerId, pipelineResume);
+          return;
+        }
         if (resumeTiming && resumeCardUid) {
           const owner = game.players[playerId];
           const src = (owner.leader && owner.leader.uid === resumeCardUid) ? owner.leader
@@ -1683,10 +1699,12 @@ function handleAction(roomId, playerId, action) {
     case 'PLACE_AT_BOTTOM_SELECTED': {
       if (!game.placeAtBottomWindow || game.placeAtBottomWindow.playerId !== playerId) return;
       const w = game.placeAtBottomWindow;
+      const pipelineResume = w.pipelineResume;  // captured before window clears
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target.'}); return; }
         log(game, `${w.sourceCardName}: place-at-bottom skipped.`);
         game.placeAtBottomWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
       if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
@@ -1711,6 +1729,7 @@ function handleAction(roomId, playerId, action) {
       ownerOfTarget.deck.push(target);
       log(game, `${w.sourceCardName}: placed ${target.name} at the bottom of its owner's deck.`);
       game.placeAtBottomWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -1720,10 +1739,12 @@ function handleAction(roomId, playerId, action) {
       if (!game.addFromTrashWindow || game.addFromTrashWindow.playerId !== playerId) return;
       const w = game.addFromTrashWindow;
       const owner = game.players[playerId];
+      const pipelineResume = w.pipelineResume;  // captured before the window is cleared
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a card from trash.'}); return; }
         log(game, `${w.sourceCardName}: add-from-trash skipped.`);
         game.addFromTrashWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
       if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
@@ -1736,6 +1757,7 @@ function handleAction(roomId, playerId, action) {
       owner.hand.push(picked);
       log(game, `${w.sourceCardName}: added ${picked.name} from trash to hand.`);
       game.addFromTrashWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
   }
@@ -2071,6 +2093,9 @@ function openKoTargetWindow(game, playerId, opts) {
     filterValue: opts.filterValue || '',
     resumeTiming:  opts.resumeTiming  || null,
     resumeCardUid: opts.resumeCardUid || null,
+    // Phase-4 chain resume — when set, the KO_TARGET_SELECTED finishWindow
+    // routes through resumePipeline instead of parseAndApply.
+    pipelineResume: opts.pipelineResume || null,
   };
   log(game, `${opts.sourceCardName}: choose a K.O. target (${candidates.length} option(s)).`);
   return true;
@@ -2354,7 +2379,8 @@ function leaderAffiliationGatePasses(effect, player) {
 // eligible card exists the window doesn't open and the effect simply logs.
 function openAddFromTrash(game, playerId, opts) {
   const p = game.players[playerId];
-  const { count = 1, filterType = null, optional = true, sourceCardName = '' } = opts || {};
+  const { count = 1, filterType = null, optional = true, sourceCardName = '',
+          pipelineResume = null } = opts || {};
   const isEligible = (c) => !filterType || c.type === filterType;
   const candidates = (p.trash || []).filter(isEligible);
   if (candidates.length === 0) {
@@ -2365,6 +2391,9 @@ function openAddFromTrash(game, playerId, opts) {
   game.addFromTrashWindow = {
     playerId, max: count, optional, sourceCardName, filterType,
     candidateUids: candidates.map(c => c.uid),
+    // Phase-4 chain resume — ADD_FROM_TRASH_SELECTED hands off to
+    // resumePipeline when this is set.
+    pipelineResume,
   };
   const what = filterType ? `an ${filterType.toLowerCase()}` : 'a card';
   log(game, `${sourceCardName}: choose ${what} from your trash to add to your hand.`);
@@ -3374,6 +3403,13 @@ function triggerOnKO(game, ownerId, card, killerId) {
   const owner = game.players[ownerId];
   const opp = game.players[killerId];
   if (!owner || !opp) return;
+  // Phase-4 routing: cards migrated to the new pipeline handle their own
+  // onKO via runPipeline. parseAndApply stays authoritative for everyone
+  // else.
+  if (card.useNewPipeline) {
+    runPipeline('onKO', game, ownerId, card);
+    return;
+  }
   parseAndApply('onKO', game, ownerId, card, opp);
 }
 
@@ -3499,7 +3535,7 @@ const TIMING_MAP = {
   "[On Your Opponent's Attack]" : 'onYourOpponentsAttack',
   '[Trigger]'                   : 'trigger',
   '[Counter]'                   : 'counter',
-  '[Main]'                      : 'main',
+  '[Main]'                      : 'eventMain',
   '[Activate: Main]'            : 'activateMain',
   '[End of Your Turn]'          : 'endOfTurn',
 };
@@ -3915,10 +3951,16 @@ function agentPayCosts(costs, ctx) {
   return { status: 'paid' };
 }
 
-// AGENT 5 — EFFECT: dispatch one effect object. Phase 3 implements
-// placeAtBottom only; other types log and return 'unsupported' so a test
-// flipping useNewPipeline on the wrong card surfaces immediately.
-function agentApplyEffect(effect, ctx) {
+// AGENT 5 — EFFECT: dispatch one effect object. Grows one case at a time
+// as cards are migrated to the new pipeline; 'unsupported' for everything
+// else so a test flipping useNewPipeline on an un-migrated card surfaces
+// immediately.
+//
+// The third argument, `resume`, is the continuation to attach to any
+// window this effect opens. The sequencer populates it before each call;
+// window openers stash it on the window object so the action handler
+// can call resumePipeline() after the player responds.
+function agentApplyEffect(effect, ctx, resume) {
   switch (effect.type) {
     case 'placeAtBottom': {
       const opened = openPlaceAtBottomWindow(ctx.game, ctx.playerId, {
@@ -3927,6 +3969,50 @@ function agentApplyEffect(effect, ctx) {
         filter:         effect.filter || {},
         max:            effect.max || 1,
         optional:       effect.optional !== false,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+    // Phase-4 Batch 1 — synchronous effect. No window, no resume needed.
+    case 'addDon': {
+      const count = effect.count || 1;
+      const rested = effect.state !== 'active';
+      addDonFromDeck(ctx.player, count, rested, ctx.game, ctx.card.name);
+      return { status: 'applied' };
+    }
+    // Phase-4 Batch 1 — opens addFromTrashWindow. Chain resume via
+    // pipelineResume on the window.
+    case 'addFromTrash': {
+      const filter = effect.filter || {};
+      const opened = openAddFromTrash(ctx.game, ctx.playerId, {
+        count: effect.max || 1,
+        filterType: filter.type || null,
+        optional: effect.optional !== false,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+    // Phase-4 Batch 1 — koTarget via existing openKoTargetWindow. Chain
+    // resume carries through the window so Blessed Thy Men's addDon
+    // fires after the KO resolves.
+    case 'koTarget': {
+      const filter = effect.filter || {};
+      const matches = (c) => {
+        if (filter.maxCost != null && (c.cost || 0) > filter.maxCost) return false;
+        if (filter.maxPower != null && ((c.power || 0) + (c.attachedDon || 0) * 1000) > filter.maxPower) return false;
+        return true;
+      };
+      const filterKind  = filter.maxCost != null ? 'cost'
+                        : filter.maxPower != null ? 'power' : 'any';
+      const filterValue = filter.maxCost ?? filter.maxPower ?? '';
+      const opened = openKoTargetWindow(ctx.game, ctx.playerId, {
+        filter: matches,
+        sourceCardName: ctx.card.name,
+        count: effect.max || 1,
+        optional: effect.optional !== false,
+        filterKind, filterValue,
+        pipelineResume: resume || null,
       });
       return opened ? { status: 'window-open' } : { status: 'no-targets' };
     }
@@ -3936,12 +4022,14 @@ function agentApplyEffect(effect, ctx) {
   }
 }
 
-// AGENT 6 — SEQUENCER: look up the parsed blocks, run the matching timing
-// through Conditions → Costs → each Effect. Stops at the first window-
-// opener (effect continuation happens in the window's resolve handler
-// via a resumePipeline call — unused by Noble Shlawger since it has one
-// effect and no chain).
-function runPipeline(timing, game, playerId, card) {
+// AGENT 6 — SEQUENCER. Supports mid-chain resume via opts.blockIndex /
+// opts.effectIndex. When resuming mid-block (effectIndex > 0), we skip
+// condition/cost re-evaluation for that block — those ran on the first
+// pass. New blocks always re-run conditions/costs.
+//
+// When an effect opens a window, `resume` encodes the NEXT effect's
+// position so resumePipeline picks up exactly where we left off.
+function runPipeline(timing, game, playerId, card, opts = {}) {
   const parsed = PARSED_EFFECTS.get(card.id);
   if (!parsed) {
     console.log(`[AGENT-TRACE] ${card.name}: no parsed entry`);
@@ -3949,23 +4037,56 @@ function runPipeline(timing, game, playerId, card) {
   }
   const player = game.players[playerId];
   const ctx = { game, playerId, card, player };
-  console.log(`[AGENT-TRACE] ${card.name} pipeline firing for timing=${timing}`);
-  for (const block of (parsed.effects || [])) {
+  const resumeBI = opts.blockIndex ?? 0;
+  const resumeEI = opts.effectIndex ?? 0;
+  if (!opts.isResume) console.log(`[AGENT-TRACE] ${card.name} pipeline firing for timing=${timing}`);
+  else console.log(`[AGENT-TRACE] ${card.name} pipeline resuming at block=${resumeBI} effect=${resumeEI}`);
+  for (let bi = resumeBI; bi < parsed.effects.length; bi++) {
+    const block = parsed.effects[bi];
     if (!agentCheckTiming(block, timing)) continue;
-    const cond = agentCheckConditions(block.conditions, ctx);
-    if (!cond.ok) {
-      console.log(`[AGENT-TRACE] ${card.name} ${timing} condition failed: ${cond.reason}`);
-      continue;
+    const skipGates = (bi === resumeBI && resumeEI > 0);
+    if (!skipGates) {
+      const cond = agentCheckConditions(block.conditions, ctx);
+      if (!cond.ok) {
+        console.log(`[AGENT-TRACE] ${card.name} ${timing} condition failed: ${cond.reason}`);
+        continue;
+      }
+      const paid = agentPayCosts(block.costs, ctx);
+      if (paid.status !== 'paid') return paid;
     }
-    const paid = agentPayCosts(block.costs, ctx);
-    if (paid.status !== 'paid') return paid;
-    for (const eff of (block.effects || [])) {
-      const res = agentApplyEffect(eff, ctx);
+    const startEI = (bi === resumeBI ? resumeEI : 0);
+    for (let ei = startEI; ei < (block.effects || []).length; ei++) {
+      // Build the resume continuation BEFORE calling the effect agent so
+      // the window opener can stash it. effectIndex + 1 points at the
+      // next effect (or past-the-end, which a resume will treat as a
+      // block boundary and advance to bi+1).
+      const resume = { timing, cardUid: card.uid, blockIndex: bi, effectIndex: ei + 1 };
+      const res = agentApplyEffect(block.effects[ei], ctx, resume);
       if (res.status === 'window-open') return res;
       if (res.status === 'unsupported') return res;
     }
   }
   return { status: 'done' };
+}
+
+// Resume the pipeline after a window resolves. Looks up the source card
+// in leader/field/trash (event cards live in trash after play; onKO
+// sources are in trash after KO).
+function resumePipeline(game, playerId, resume) {
+  const owner = game.players[playerId];
+  if (!owner) return;
+  const src = (owner.leader && owner.leader.uid === resume.cardUid) ? owner.leader
+           : (owner.field || []).find(c => c.uid === resume.cardUid)
+           || (owner.trash || []).find(c => c.uid === resume.cardUid);
+  if (!src) {
+    console.log('[AGENT-TRACE] resumePipeline — source card not found by uid', resume.cardUid);
+    return;
+  }
+  return runPipeline(resume.timing, game, playerId, src, {
+    blockIndex: resume.blockIndex,
+    effectIndex: resume.effectIndex,
+    isResume: true,
+  });
 }
 
 // UI AGENT surface — opens the SELECT_BOTTOM_DECK_TARGET window on the
@@ -3976,7 +4097,8 @@ function runPipeline(timing, game, playerId, card) {
 function openPlaceAtBottomWindow(game, playerId, opts) {
   const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
   const me  = game.players[playerId];
-  const { filter = {}, optional = true, sourceCardName = '', sourceCardUid = null, max = 1 } = opts || {};
+  const { filter = {}, optional = true, sourceCardName = '', sourceCardUid = null,
+          max = 1, pipelineResume = null } = opts || {};
   const matches = (c) => {
     if (c.type !== 'CHARACTER') return false;
     if (filter.maxCost != null && (c.cost || 0) > filter.maxCost) return false;
@@ -3993,6 +4115,7 @@ function openPlaceAtBottomWindow(game, playerId, opts) {
     max, optional,
     sourceCardName, sourceCardUid,
     filter,
+    pipelineResume,
   };
   log(game, `${sourceCardName}: choose a Character to place at the bottom of its owner's deck (${candidates.length} option(s)).`);
   return true;
@@ -4011,6 +4134,8 @@ if (require.main === module) {
 module.exports = {
   // Parser + cache
   parseAbility, PARSED_EFFECTS,
+  // Phase-3/4 pipeline surface
+  runPipeline, resumePipeline, triggerOnKO,
   // Catalog
   CARD_DB, PRESET_DECKS,
   // Deck + game construction
