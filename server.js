@@ -209,7 +209,7 @@ const CARD_DB = [
     ability:"[On Play] Give your leader or one of your characters up to one rested DON!!. [Activate: Main] You may rest this character: K.O. up to one of your opponent's characters with 5000 or less power." },
 
   { id:'OP08-118', name:'Silvers Rayleigh', type:'CHARACTER', color:'Yellow', attribute:'Slash',
-    power:8000, cost:8, counter:0, image:IMG('OP08','OP08-118','png'),
+    power:8000, cost:8, counter:0, image:IMG('OP08','OP08-118','png'), useNewPipeline:true,
     ability:"[On Play] Choose up to two of your opponents characters: Until the end of your opponents next turn, give one -3000 power and the other -2000 power. After this, K.O. up to one of your opponents characters with a power of 3000 or lower." },
 
   { id:'ST23-002', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash',
@@ -272,7 +272,7 @@ const CARD_DB = [
     ability:"[Blocker] [On Play] Trash 2 cards from your hand." },
 
   { id:'OP09-089', name:'Stronger', type:'CHARACTER', color:'Blue', attribute:'Wisdom',
-    power:0, cost:1, counter:2000, image:IMG('OP09','OP09-089','jpg'),
+    power:0, cost:1, counter:2000, image:IMG('OP09','OP09-089','jpg'), useNewPipeline:true,
     ability:"[Activate: Main] You may trash one card from your hand and this character: If your leader has the {Blackbeard Pirates} type, draw one card. Then give up to one of your opponents characters -2 cost for the turn." },
 
   { id:'OP09-088', name:'Shiryuu', type:'CHARACTER', color:'Black', attribute:'Slash',
@@ -570,6 +570,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     // Each entry: {targetUid, amount, expiresAtTurn, kind: 'turn'|'battle', source}
     // Cleanup: doEnd prunes by turn; RESOLVE_ATTACK prunes kind:'battle'.
     tempPowerEffects: [],
+    tempCostEffects: [],   // Track-P: {targetUid, amount, expiresAtTurn} — lowers effective cost for filter checks.
     effectQueue: [],     // Pending interactive steps for chained effects (one window at a time today; full queue is reserved for future multi-window cards).
   };
 }
@@ -661,6 +662,11 @@ function doEnd(game) {
       if (e.kind === 'battle') return true; // cleared in RESOLVE_ATTACK, not here
       return (e.expiresAtTurn == null) || (e.expiresAtTurn >= game.turn);
     });
+  }
+  // Track-P — prune expired tempCostEffects identically to power buffs.
+  if (game.tempCostEffects && game.tempCostEffects.length) {
+    game.tempCostEffects = game.tempCostEffects.filter(e =>
+      (e.expiresAtTurn == null) || e.expiresAtTurn >= game.turn);
   }
   // Phase 5 Priority 8 — prune expired suppressions. Same expiry
   // semantics as tempPowerEffects: thisTurn-kind gets expiresAtTurn
@@ -2015,7 +2021,19 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'Invalid target.'});
         return;
       }
-      applyTempPower(game, action.targetUid, w.amount, w.duration, w.sourceCardName);
+      // Track-P — when the window is opened in cost-debuff mode the
+      // resolver writes into tempCostEffects instead of tempPowerEffects.
+      if (w.mode === 'cost') {
+        const expiresAtTurn = (w.duration === 'opponentNextTurn') ? (game.turn + 1) : game.turn;
+        if (!Array.isArray(game.tempCostEffects)) game.tempCostEffects = [];
+        game.tempCostEffects.push({
+          targetUid: action.targetUid, amount: w.amount, expiresAtTurn,
+          source: w.sourceCardName,
+        });
+        log(game, `${w.sourceCardName}: target cost modified by ${w.amount}.`);
+      } else {
+        applyTempPower(game, action.targetUid, w.amount, w.duration, w.sourceCardName);
+      }
       game.powerBuffTargetWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
@@ -2532,6 +2550,17 @@ function extractNameFilter(text) {
 // Jesse the Jester). Used everywhere battle math happens on the server
 // (DECLARE_ATTACK, USE_BLOCKER, RESOLVE_ATTACK) so passives affect actual
 // battle outcomes — not just the displayed power on the client.
+// Track-P — effective cost of a card on field. Base c.cost plus any
+// active tempCostEffects (e.g. Stronger's -2 cost for the turn). Used
+// by target-filter checks that gate on "cost N or less".
+function effectiveCostOf(card, game) {
+  if (!card) return 0;
+  let c = card.cost || 0;
+  const effs = (game && game.tempCostEffects) || [];
+  for (const e of effs) if (e.targetUid === card.uid) c += (e.amount || 0);
+  return Math.max(0, c);
+}
+
 function effectivePowerOf(card, game) {
   if (!card) return 0;
   let p = (card.power || 0) + (card.attachedDon || 0) * 1000;
@@ -4225,6 +4254,20 @@ function parseAbility(text) {
     }
   );
 
+  // Track-P partial — Rayleigh multi-pick split. Rewrites
+  //   "Choose up to two of your opponents characters: Until the end
+  //    of your opponents next turn, give one -N power and the other
+  //    -M power"
+  // into two sequential single-target powerDebuff segments so the
+  // existing picker chains naturally (player picks one for -N, then
+  // another for -M). Accuracy: the user can target the same character
+  // twice, totalling the debuffs — slightly more flexible than the
+  // spec but not harmful.
+  processed = processed.replace(
+    /[Cc]hoose up to two of your opponents characters: [Uu]ntil the end of your opponents next turn, give one\s*-(\d+)\s*power and the other\s*-(\d+)\s*power/g,
+    (_m, a1, a2) => `Give up to one of your opponents characters -${a1} power until end of opponent's next turn. Give up to one of your opponents characters -${a2} power until end of opponent's next turn`
+  );
+
   // Track-P partial — "You may trash N <Type> card from your hand. Play
   // this character from the trash as (rested|active)." (Marco OP03-013).
   // The optional hand-trash cost is written with a period rather than a
@@ -4424,12 +4467,20 @@ function _parseBlock(block, unparsed) {
     body = body.substring(donRet[0].length).trim();
   }
 
-  // "You may (trash|discard) N [Character|Event] card(s) [with a power of M or more] from your hand:"
-  const trash = body.match(/^You may (?:trash|discard) (\d+) (Character |Event )?cards? (?:with a power of (\d+) or more )?from your hand:\s*/i);
+  // "You may (trash|discard) N [Character|Event] card(s) [with a power
+  // of M or more] from your hand[ and this character]:"
+  // Stronger OP09-089 adds an "and this character" suffix that pushes
+  // a second trashSelf cost onto the stack.
+  const trash = body.match(/^You may (?:trash|discard) (one|\d+) (Character |Event )?cards? (?:with a power of (\d+) or more )?from your hand(?:\s+and this character)?\s*:\s*/i);
   if (trash) {
-    const c = { type: 'trashFromHand', count: parseInt(trash[1]) };
+    const n = trash[1].toLowerCase() === 'one' ? 1 : parseInt(trash[1]);
+    const c = { type: 'trashFromHand', count: n };
     if (trash[2]) c.filterType = trash[2].trim().toUpperCase();
     if (trash[3]) c.filterPowerMin = parseInt(trash[3]);
+    // Synchronous costs must be ordered BEFORE window-opening costs
+    // so they run on the same agentPayCosts pass — after the async
+    // cost opens its window, resume skips the cost agent entirely.
+    if (/and this character/i.test(trash[0])) costs.push({ type: 'trashSelf' });
     costs.push(c);
     body = body.substring(trash[0].length).trim();
   }
@@ -4610,13 +4661,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
     return { type: 'koTarget', max: n, filter: { maxCost: parseInt(m[2]), opponent: true } };
   }
-  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?(\d+)\s*power or less/i))) {
+  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?(\d+)\s*power or (?:less|lower)/i))) {
     const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
     return { type: 'koTarget', max: n, filter: { maxPower: parseInt(m[2]), opponent: true } };
   }
   // Phase 5 Priority 3 — alternate word order: "power of N or less"
   // (Lucky Roux: "Characters with an original power of 6000 or less").
-  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?power of (\d+) or less/i))) {
+  if ((m = seg.match(/K\.O\. (?:up to )?(one|\d+).*?power of (\d+) or (?:less|lower)/i))) {
     const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
     return { type: 'koTarget', max: n, filter: { maxPower: parseInt(m[2]), opponent: true } };
   }
@@ -4724,6 +4775,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
   if ((m = seg.match(/[Gg]ive your leader or one of your characters up to (one|\d+)\s+rested DON!!/i))) {
     const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
     return { type: 'giveDon', count: n, state: 'rested' };
+  }
+
+  // Track-P partial — costDebuff (Stronger OP09-089):
+  //   "give up to one of your opponents characters -N cost for the turn"
+  if ((m = seg.match(/[Gg]ive (?:up to )?(one|\d+) of your opponent'?s?\s+characters?\s+-(\d+)\s+cost for (?:the|this) turn/i))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'costDebuff', max: n, amount: parseInt(m[2]), duration: 'thisTurn' };
   }
 
   // Phase-5 Priority 1 — "Give [up to N of] your Leader/Character cards
@@ -5316,6 +5374,23 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Track-P partial — costDebuff (Stronger OP09-089): open an
+    // opponent-character picker reusing powerBuffTargetWindow, then
+    // have the resolver write into tempCostEffects when the window
+    // is flagged mode='cost'.
+    case 'costDebuff': {
+      const opened = openPowerBuffTarget(ctx.game, ctx.playerId, {
+        side: 'opponent', targetKind: 'character',
+        optional: true,
+        sourceCardName: ctx.card.name,
+        amount: -Math.abs(effect.amount || 0),
+        duration: effect.duration || 'thisTurn',
+        pipelineResume: resume || null,
+      });
+      if (opened) ctx.game.powerBuffTargetWindow.mode = 'cost';
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
     // Track-P partial — Marco-style self-revive: pay an optional
     // trashFromHand cost, then move the source (currently in trash
     // from its [On K.O.]) back to the field. Uses the existing
@@ -5761,7 +5836,7 @@ module.exports = {
   handleAction, doRefresh, doDraw, doEnd, nextPhase,
   // Keyword detectors
   hasBlocker, hasRush, hasDoubleAttack, hasBanish,
-  effectivePowerOf,
+  effectivePowerOf, effectiveCostOf,
   counterValueOf,
   // Broadcast plumbing (tests replace clients.get(id).send with a spy)
   rooms, clients, send, broadcast, sendState,
