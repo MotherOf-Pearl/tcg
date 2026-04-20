@@ -177,7 +177,7 @@ const CARD_DB = [
     ability:"[Blocker] [Opponent's Turn] This character has +2000 power." },
 
   { id:'PRB02-003', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged',
-    power:2000, cost:4, counter:1000, image:IMG('PRB02','PRB02-003','jpg'),
+    power:2000, cost:4, counter:1000, image:IMG('PRB02','PRB02-003','jpg'), useNewPipeline:true,
     ability:"[Blocker] [On Play] You may trash 1 Character card with a power of 6000 or more from your hand: Draw 2 cards." },
 
   { id:'OP03-013', name:'Marco', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -241,7 +241,7 @@ const CARD_DB = [
     ability:"[Main] You may rest 5 DON!!: K.O. up to 1 of your opponent's characters with 8000 Power or less. [Counter] Up to 1 of your Leaders gains +3000 Power during this battle." },
 
   { id:'OP01-026', name:'Gum-Gum Red Hawk', type:'EVENT', color:'Red',
-    power:0, cost:2, counter:0, image:IMG('OP01','OP01-026','png'),
+    power:0, cost:2, counter:0, image:IMG('OP01','OP01-026','png'), useNewPipeline:true,
     ability:"[Counter] Your Leader or up to 1 of your Characters gains +4000 power during this battle. Then, K.O. up to 1 of your opponent's Characters with 4000 power or less. [Trigger] Give up to 1 of your opponent's Leader or Characters -10000 power during this turn." },
 
   { id:'OP09-020', name:"Come on!! We'll fight you!!", type:'EVENT', color:'Red',
@@ -339,7 +339,7 @@ const CARD_DB = [
     ability:"[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash." },
 
   { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
-    power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-084','png'),
+    power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-084','png'), useNewPipeline:true,
     ability:"[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
@@ -379,7 +379,7 @@ const CARD_DB = [
     ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
 
   { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'', affiliation:'Duchess of Brittany',
-    power:0, cost:1, counter:0, image:IMG('OP01','OP01-090','png'),
+    power:0, cost:1, counter:0, image:IMG('OP01','OP01-090','png'), useNewPipeline:true,
     ability:"[Activate: Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
 
   // ══════════════════════════════
@@ -402,7 +402,7 @@ const CARD_DB = [
     ability:"[DON!! x1] [When Attacking] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and rest it." },
 
   { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:4000, cost:3, counter:1000, image:IMG('ST04','ST04-008','png'),
+    power:4000, cost:3, counter:1000, image:IMG('ST04','ST04-008','png'), useNewPipeline:true,
     ability:"[On Play] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
   { id:'ST04-002', name:'Dabby the Domeless', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -434,7 +434,7 @@ const CARD_DB = [
     ability:"[On Play] DON!! -6: If your Leader has the {Holy Roman Empire} type, K.O. all Characters other than this Character." },
 
   { id:'ST04-016', name:'Off to the Market', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
-    power:0, cost:1, counter:0, image:IMG('ST04','ST04-016','png'),
+    power:0, cost:1, counter:0, image:IMG('ST04','ST04-016','png'), useNewPipeline:true,
     ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
 
   { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
