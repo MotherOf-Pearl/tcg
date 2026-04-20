@@ -19,7 +19,7 @@ test('Shanks OP12-008 flag + fully parsed', () => {
   assert.equal(p.effects[0].timing, 'onYourOpponentsAttack');
 });
 
-test('DECLARE_ATTACK fires defender [On Your Opponent\'s Attack] pipeline', () => {
+test('SELECT_TARGET fires defender [On Your Opponent\'s Attack] pipeline', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
   // Defender (p2) has Shanks on field with 1 hand card for the cost.
   const shanks = { ...srv.CARD_DB.find(c => c.id === 'OP12-008'),
@@ -35,11 +35,11 @@ test('DECLARE_ATTACK fires defender [On Your Opponent\'s Attack] pipeline', () =
   game.turn = 2;
   game.activePlayer = p1;
 
+  srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-1' });
   srv.handleAction(roomId, p1, {
-    type: 'DECLARE_ATTACK', attackerUid: 'atk-1', targetUid: game.players[p2].leader.uid,
+    type: 'SELECT_TARGET', targetUid: game.players[p2].leader.uid,
   });
-  // Shanks' effect opens trashFromHand cost window — but window's
-  // playerId is the DEFENDER (p2), not the attacker.
+  // Shanks' effect opens trashFromHand cost window with defender playerId.
   assert.ok(game.trashFromHandWindow, 'defender cost window opened');
   assert.equal(game.trashFromHandWindow.playerId, p2);
 });
@@ -58,8 +58,9 @@ test('Defender resolves onYourOpponentsAttack chain independent of attacker flow
   game.turn = 2;
   game.activePlayer = p1;
 
+  srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-2' });
   srv.handleAction(roomId, p1, {
-    type: 'DECLARE_ATTACK', attackerUid: 'atk-2', targetUid: game.players[p1].leader.uid,
+    type: 'SELECT_TARGET', targetUid: game.players[p2].leader.uid,
   });
   assert.ok(game.trashFromHandWindow);
   // Defender pays cost by trashing the hand card.
@@ -88,8 +89,9 @@ test('Defender with no eligible hand cards: no cost window opened', () => {
   game.turn = 2;
   game.activePlayer = p1;
 
+  srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-3' });
   srv.handleAction(roomId, p1, {
-    type: 'DECLARE_ATTACK', attackerUid: 'atk-3', targetUid: game.players[p1].leader.uid,
+    type: 'SELECT_TARGET', targetUid: game.players[p2].leader.uid,
   });
   assert.ok(!game.trashFromHandWindow,
     'no hand cards → openTrashFromHand returns false → no window');

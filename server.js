@@ -62,7 +62,7 @@ const CARD_DB = [
   // DOFLAMINGO DECK (Purple)
   // ══════════════════════════════
   { id:'OP14-060', name:'Donquixote Doflamingo', type:'LEADER', color:'Purple', attribute:'Special',
-    power:5000, life:5, cost:0, counter:0, image:IMG('OP14','OP14-060','png'),
+    power:5000, life:5, cost:0, counter:0, image:IMG('OP14','OP14-060','png'), useNewPipeline:true,
     ability:"[On Your Opponent's Attack] [Once Per Turn] DON!! -1: Select your Leader or 1 of your {Donquixote Pirates} type Characters. Change the attack target to the selected card." },
 
   { id:'OP10-065', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special',
@@ -558,6 +558,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
     playFromTrashWindow: null, // Phase 7: {playerId, candidateUids, filter, rested, sourceCardName, pipelineResume}
+    attackRedirectWindow: null, // Track-P: {playerId, candidateUids, sourceCardName, pipelineResume}
     donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
     koTargetWindow: null,     // KO target picker: {playerId, candidateUids, remaining, optional, sourceCardName, resumeTiming, resumeCardUid, filterKind, filterValue}
     // Bug 5 — TRASH_FROM_HAND_COST: parsed from "You may trash N card(s) from your hand: <effect>".
@@ -1083,19 +1084,6 @@ function handleAction(roomId, playerId, action) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
       } else if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
       else parseAndApply('whenAttacking', game, playerId, attacker, opp);
-      // Phase 8 — fire [On Your Opponent's Attack] on defender's side.
-      // Each defender-side pipelined card with that timing gets a run;
-      // windows opened here carry defender playerId so only they resolve.
-      const defenderCards = [
-        ...(opp.leader && opp.leader.useNewPipeline ? [opp.leader] : []),
-        ...(opp.field || []).filter(c => c && c.useNewPipeline),
-      ];
-      for (const c of defenderCards) {
-        const parsed = PARSED_EFFECTS.get(c.id);
-        if (parsed && (parsed.effects || []).some(b => b.timing === 'onYourOpponentsAttack')) {
-          runPipeline('onYourOpponentsAttack', game, oppId, c);
-        }
-      }
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
       break;
     }
@@ -1124,6 +1112,23 @@ function handleAction(roomId, playerId, action) {
       game.battleState.targetIsLeader = targetIsLeader;
       game.phase = 'BLOCK_STEP';
       log(game, `\uD83C\uDFAF ${game.battleState.attackerName} (${game.battleState.attackerPower}) \u2192 ${target.name} (${targetPower})`);
+      // Track-P — fire [On Your Opponent's Attack] on defender's side
+      // AFTER target is set. This unifies timing so redirect-style
+      // effects (Doflamingo) and simple reactions (Shanks OP12-008)
+      // share a fire point and both have access to battleState.targetUid.
+      const defenderCards = [
+        ...(opp.leader && opp.leader.useNewPipeline ? [opp.leader] : []),
+        ...(opp.field || []).filter(c => c && c.useNewPipeline),
+      ];
+      for (const c of defenderCards) {
+        const parsed = PARSED_EFFECTS.get(c.id);
+        if (parsed && (parsed.effects || []).some(b => b.timing === 'onYourOpponentsAttack')) {
+          runPipeline('onYourOpponentsAttack', game, playerId === Object.keys(game.players)[0]
+            ? Object.keys(game.players)[1] : Object.keys(game.players)[0], c);
+        }
+      }
+      // Refresh target power in case an effect lowered it.
+      if (game.battleState) game.battleState.targetPower = effectivePowerOf(target, game);
       break;
     }
 
@@ -1709,6 +1714,42 @@ function handleAction(roomId, playerId, action) {
       // After the played card's own onPlay resolves, continue the chain
       // for the effect that DISPATCHED the play (e.g. Snow Merchant's
       // counter → playFromHand → caller's next effect, if any).
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // Track-P partial — Doflamingo redirect resolver. Mutates
+    // battleState.targetUid to the picked own card and refreshes
+    // target name/power for the overlay.
+    case 'ATTACK_REDIRECT_SELECTED': {
+      if (!game.attackRedirectWindow || game.attackRedirectWindow.playerId !== playerId) return;
+      const w = game.attackRedirectWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        game.attackRedirectWindow = null;
+        log(game, `${w.sourceCardName}: redirect skipped.`);
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid redirect target.'});
+        return;
+      }
+      // Locate the chosen card on defender's own side.
+      const me = game.players[playerId];
+      const newTarget = (me.leader && me.leader.uid === action.targetUid) ? me.leader
+                     : (me.field || []).find(c => c.uid === action.targetUid);
+      if (!newTarget || !game.battleState) {
+        game.attackRedirectWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      game.battleState.targetUid = newTarget.uid;
+      game.battleState.targetName = newTarget.name;
+      game.battleState.targetPower = effectivePowerOf(newTarget, game);
+      game.battleState.targetIsLeader = (me.leader && me.leader.uid === newTarget.uid);
+      log(game, `${w.sourceCardName}: attack redirected to ${newTarget.name}.`);
+      game.attackRedirectWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -4254,6 +4295,16 @@ function parseAbility(text) {
     }
   );
 
+  // Track-P partial — Doflamingo leader (OP14-060) attack redirect.
+  //   "Select your Leader or 1 of your {X} type Characters. Change the
+  //    attack target to the selected card."
+  // Collapses to a single §REDIRECT_<aff>§ placeholder so the picker
+  // + mutation happen as one logical effect.
+  processed = processed.replace(
+    /[Ss]elect your Leader or (?:\d+|one) of your \{([^}]+)\}\s*type Characters?\.\s*Change the attack target to the selected card/g,
+    (_m, aff) => `\u00a7REDIRECT_${aff.replace(/\s+/g, '-')}\u00a7`
+  );
+
   // Track-P partial — Rayleigh multi-pick split. Rewrites
   //   "Choose up to two of your opponents characters: Until the end
   //    of your opponents next turn, give one -N power and the other
@@ -4867,6 +4918,12 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'grantKeyword', keyword: m[1].replace(/-/g, ' '), duration: m[2] };
   }
 
+  // Track-P partial — redirectAttack placeholder. Doflamingo OP14-060.
+  if ((m = seg.match(/\u00a7REDIRECT_([^\u00a7]+)\u00a7/))) {
+    return { type: 'redirectAttack',
+      filter: { affiliation: m[1].replace(/-/g, ' ') } };
+  }
+
   // Track-P partial — selfRevive placeholder. Marco OP03-013 only.
   if ((m = seg.match(/\u00a7REVIVE_(\d+)_(Character|Event)_(rested|active)\u00a7/))) {
     return { type: 'selfRevive',
@@ -5374,6 +5431,36 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Track-P partial — redirectAttack (Doflamingo OP14-060 leader):
+    // opens a picker over the defender's own leader + filtered own
+    // characters. On resolution, mutates battleState.targetUid to the
+    // picked uid. Requires a live battleState.
+    case 'redirectAttack': {
+      if (!ctx.game.battleState || !ctx.game.battleState.targetUid) {
+        return { status: 'applied' };  // nothing to redirect
+      }
+      const candidates = [];
+      if (ctx.player.leader) candidates.push(ctx.player.leader);
+      const filter = effect.filter || {};
+      for (const c of (ctx.player.field || [])) {
+        if (c.type !== 'CHARACTER') continue;
+        if (filter.affiliation) {
+          const aff = c.affiliation || '';
+          if (!aff.toLowerCase().includes(filter.affiliation.toLowerCase())) continue;
+        }
+        candidates.push(c);
+      }
+      if (candidates.length === 0) return { status: 'no-targets' };
+      ctx.game.attackRedirectWindow = {
+        playerId: ctx.playerId,
+        candidateUids: candidates.map(c => c.uid),
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose a redirect target (${candidates.length} option(s)).`);
+      return { status: 'window-open' };
+    }
+
     // Track-P partial — costDebuff (Stronger OP09-089): open an
     // opponent-character picker reusing powerBuffTargetWindow, then
     // have the resolver write into tempCostEffects when the window
