@@ -538,18 +538,22 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     [p1id]: createPlayerState(p1deck?.leaderId || 'ST03-001', p1deck?.cards || PRESET_DECKS['Anna of Brittany'].cards),
     [p2id]: createPlayerState(p2deck?.leaderId || 'ST04-001', p2deck?.cards || PRESET_DECKS['Constable Jack'].cards),
   };
+  // Coin flip who goes first. activePlayer mirrors firstPlayer for turn 1
+  // so both fields agree during mulligan / DON phase.
+  const firstPlayerId = Math.random() < 0.5 ? p1id : p2id;
+  console.log('createGame: firstPlayer', firstPlayerId.slice(0, 6), 'of', [p1id, p2id].map(i => i.slice(0, 6)).join(','));
   return {
     id: uuidv4(),
     phase: 'MULLIGAN',
     turn: 1,
-    activePlayer: p1id,
+    activePlayer: firstPlayerId,
     players,
     log: ['Game started! Both players: keep your hand or mulligan.'],
     winner: null,
     mulliganDone: { [p1id]: false, [p2id]: false },
     counterWindow: null,
     counterDone: { [p1id]: false, [p2id]: false },
-    firstPlayer: p1id,
+    firstPlayer: firstPlayerId,
     battleState: null, // Phase 1 attack flow: {attackerUid, attackerId, attackerName, attackerPower, targetUid, targetName, targetPower, targetIsLeader, counterBonus}
     triggerWindow: null, // Task#1 [Trigger]: {playerId, card}
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
@@ -741,7 +745,15 @@ function handleAction(roomId, playerId, action) {
   switch (action.type) {
 
     case 'MULLIGAN': {
-      if (game.phase !== 'MULLIGAN' || game.mulliganDone[playerId]) return;
+      // Guard: must be in MULLIGAN phase AND this playerId must be a known
+      // mulligan slot (rejects stray UUIDs that aren't in the game) AND not
+      // already resolved.
+      if (game.phase !== 'MULLIGAN' ||
+          !Object.prototype.hasOwnProperty.call(game.mulliganDone, playerId) ||
+          game.mulliganDone[playerId]) {
+        console.log('MULLIGAN rejected:', { playerId, doMulligan: action.doMulligan, phase: game.phase, mulliganDone: game.mulliganDone });
+        return;
+      }
       if (action.doMulligan) {
         game.mulliganDone[playerId] = true;
         // Put hand cards at the bottom of the deck, draw 5 new from the top
@@ -752,6 +764,7 @@ function handleAction(roomId, playerId, action) {
         game.mulliganDone[playerId] = true;
         log(game, `${playerId.slice(0,6)} keeps their hand.`);
       }
+      console.log('MULLIGAN:', { playerId, doMulligan: action.doMulligan, mulliganDone: game.mulliganDone });
       if (Object.values(game.mulliganDone).every(v => v)) {
         doRefresh(game);
         // Turn 1 first player skips card draw, goes straight to DON

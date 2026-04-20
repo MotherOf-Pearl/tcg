@@ -207,6 +207,35 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
   display:flex;gap:5px;flex-wrap:wrap;
 }
 .deck-row .mbtn{ height:32px; font-size:0.72rem; letter-spacing:1px; padding:0 10px; width:auto; flex:1; min-width:80px; }
+/* Parchment-styled dropdown for the deck picker (BUG 1). Matches the .btn
+   family look used on the main menu: warm gradient, dark brown border, gold
+   thickening. appearance:none strips native chrome so the gradient shows. */
+.mp-deck-select{
+  width:100%;
+  appearance:none; -webkit-appearance:none; -moz-appearance:none;
+  background:linear-gradient(180deg,#f0dfa0 0%,#d8b860 50%,#c9a84c 100%);
+  border:2px solid #8b6914;
+  border-radius:6px;
+  padding:10px 28px 10px 12px;
+  color:#3d1c02;
+  font-family:Georgia,'Palatino Linotype','Book Antiqua',Palatino,serif;
+  font-size:0.95rem;
+  font-weight:bold;
+  letter-spacing:0.03em;
+  text-shadow:0 1px 0 rgba(255,255,255,0.35);
+  cursor:pointer;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.45), inset 0 -2px 0 rgba(0,0,0,0.18);
+  /* inline caret so we don't depend on native dropdown chrome */
+  background-image:
+    linear-gradient(45deg, transparent 50%, #3d1c02 50%),
+    linear-gradient(135deg, #3d1c02 50%, transparent 50%),
+    linear-gradient(180deg,#f0dfa0 0%,#d8b860 50%,#c9a84c 100%);
+  background-position: right 12px center, right 7px center, 0 0;
+  background-size: 5px 5px, 5px 5px, 100% 100%;
+  background-repeat: no-repeat;
+}
+.mp-deck-select:hover{ filter:brightness(0.94); border-color:#f0c860; }
+.mp-deck-select:focus{ outline:none; border-color:#f0c860; }
 .mp-form-label{
   font-family:'Barlow Condensed',sans-serif;
   font-size:0.65rem;
@@ -864,10 +893,8 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div class="mp-form-label">Nickname</div>
         <input class="mp-input" id="createName" placeholder="Your nickname">
         <div class="mp-form-label">Choose Deck</div>
-        <div class="deck-row">
-          <button class="mbtn" id="cDeckBtn_Anna of Brittany" onclick="pickDeck('Anna of Brittany')">Anna of Brittany</button>
-          <button class="mbtn" id="cDeckBtn_Constable Jack"   onclick="pickDeck('Constable Jack')">Constable Jack</button>
-        </div>
+        <select class="mp-deck-select" id="cDeckSelect"></select>
+        <button class="mbtn" onclick="confirmDeckSelection('c')">Confirm Deck</button>
         <button class="mbtn mp-submit" onclick="createRoom()">Create Game</button>
         <button class="mp-back-btn" onclick="closeMPForm()">← Back</button>
       </div>
@@ -879,10 +906,8 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div class="mp-form-label">Room Code</div>
         <input class="mp-input code-input" id="joinCode" placeholder="XXXXXX" maxlength="6">
         <div class="mp-form-label">Choose Deck</div>
-        <div class="deck-row">
-          <button class="mbtn" id="jDeckBtn_Anna of Brittany" onclick="pickDeck('Anna of Brittany')">Anna of Brittany</button>
-          <button class="mbtn" id="jDeckBtn_Constable Jack"   onclick="pickDeck('Constable Jack')">Constable Jack</button>
-        </div>
+        <select class="mp-deck-select" id="jDeckSelect"></select>
+        <button class="mbtn" onclick="confirmDeckSelection('j')">Confirm Deck</button>
         <button class="mbtn mp-submit" onclick="joinRoom()">Join Game</button>
         <button class="mp-back-btn" onclick="closeMPForm()">← Back</button>
       </div>
@@ -1215,6 +1240,12 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 
 </div><!-- #game -->
 
+<!-- BUG 2 — first-player announcement. Shown for ~2s when the first
+     MULLIGAN-phase GAME_STATE arrives in multiplayer. Auto-hides. -->
+<div id="firstPlayerBanner" style="display:none;position:fixed;inset:0;z-index:10000;pointer-events:none;align-items:center;justify-content:center;">
+  <div id="firstPlayerBannerText" style="font-family:'Cinzel',serif;font-size:2.2rem;color:#f0d896;text-shadow:0 2px 12px rgba(0,0,0,.85),0 0 22px rgba(240,200,96,.45);padding:18px 36px;background:rgba(12,8,4,.82);border:2px solid #8b6914;border-radius:10px;letter-spacing:.08em;">You go first!</div>
+</div>
+
 <!-- ADD_FROM_TRASH browser — horizontal strip pinned to bottom of viewport,
      populated only while game.addFromTrashWindow is open for the local player.
      Click a card to send ADD_FROM_TRASH_SELECTED. -->
@@ -1421,6 +1452,42 @@ function openMPForm(type) {
   document.getElementById('mpChoice').style.display = 'none';
   document.getElementById('mpCreateForm').classList.toggle('open', type === 'create');
   document.getElementById('mpJoinForm').classList.toggle('open',   type === 'join');
+  // Fresh each open so new decks added to PRESET_DECKS show up without reload.
+  populateDeckSelects();
+}
+
+// Populates both the Create + Join deck <select>s from PRESET_DECKS and
+// pre-selects whatever deck is currently active. Safe to call repeatedly.
+function populateDeckSelects() {
+  const names = Object.keys(PRESET_DECKS);
+  const current = selectedDeckName();
+  const opts = names.map(n =>
+    `<option value="${n}"${n === current ? ' selected' : ''}>${n}</option>`
+  ).join('');
+  ['cDeckSelect', 'jDeckSelect'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = opts;
+  });
+}
+
+// Reverse-lookup: find the PRESET_DECKS key matching the currently selected
+// deck (compares by leaderId + card list — good enough since we never alias
+// two presets to the same composition).
+function selectedDeckName() {
+  if (!selectedDeck) return null;
+  for (const [name, preset] of Object.entries(PRESET_DECKS)) {
+    if (preset.leaderId === selectedDeck.leaderId &&
+        JSON.stringify(preset.cards) === JSON.stringify(selectedDeck.cards)) return name;
+  }
+  return null;
+}
+
+// Commit the deck chosen in the dropdown (form prefix: 'c' for create, 'j'
+// for join). pickDeck writes to selectedDeck + localStorage.
+function confirmDeckSelection(prefix) {
+  const el = document.getElementById(prefix + 'DeckSelect');
+  if (!el || !el.value) return;
+  pickDeck(el.value);
 }
 function closeMPForm() {
   document.getElementById('mpChoice').style.display = 'flex';
@@ -1475,6 +1542,13 @@ function handleMsg(msg) {
       snapshotPositions();
       game = msg.game;
       showScreen('game');
+      // BUG 2 — announce who's first the moment the first MULLIGAN state
+      // lands. firstPlayerAnnounced latches so the banner shows exactly once
+      // per session. Suppressed in solo (one browser controls both sides).
+      if (!isSolo && !firstPlayerAnnounced && game.phase === 'MULLIGAN' && game.firstPlayer) {
+        showFirstPlayerBanner(game.firstPlayer === myId);
+        firstPlayerAnnounced = true;
+      }
       if (game.phase === 'MULLIGAN') renderMulligan();
       else renderGame();
       requestAnimationFrame(() => animateMovements());
@@ -1501,6 +1575,20 @@ function joinRoom() {
   if (!code) { alert('Enter a room code'); return; }
   const deck = selectedDeck || myDeck;
   connect(() => send2({ type: 'JOIN_ROOM', roomId: code, deck, nickname: document.getElementById('joinName').value || 'Pirate' }));
+}
+
+// ─── BUG 2 — first-player announcement ──────────────────────────────────
+// Latched so the banner fires once per page load (a mid-game GAME_STATE
+// won't replay it). Reset implicitly on full page reload — we don't tear
+// down the banner on disconnect because the session ends with it.
+let firstPlayerAnnounced = false;
+function showFirstPlayerBanner(iAmFirst) {
+  const el = document.getElementById('firstPlayerBanner');
+  const txt = document.getElementById('firstPlayerBannerText');
+  if (!el || !txt) return;
+  txt.textContent = iAmFirst ? 'You go first!' : 'Opponent goes first!';
+  el.style.display = 'flex';
+  setTimeout(() => { el.style.display = 'none'; }, 2000);
 }
 
 // ─── MULLIGAN ───
