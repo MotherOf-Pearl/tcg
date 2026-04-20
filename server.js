@@ -391,7 +391,7 @@ const CARD_DB = [
 
   { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
     power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-100','png'),
-    ability:"[Blocker]" },
+    ability:"[Blocker] [On K.O.] Add 1 DON!! card from your DON!! deck and rest it." },
 
   { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:3000, cost:3, counter:0, image:IMG('ST04','ST04-010','png'),
@@ -1341,7 +1341,14 @@ function handleAction(roomId, playerId, action) {
                     : (owner.field || []).find(c => c.uid === resumeCardUid);
           if (src) {
             const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
-            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { koResolved: true });
+            // BUG 7 — Chris the Visually Impaired and every other DON-cost-
+            // then-K.O. card re-opened the DON return prompt on resume
+            // because the new opts didn't carry donCostPaid forward. The
+            // DON block in parseAndApply only short-circuits when
+            // donCostPaid is truthy. Propagating it here closes the loop.
+            // Safe for cards without a DON cost — donCostMatch is null in
+            // that case and both branches of the DON block are skipped.
+            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { koResolved: true, donCostPaid: true });
           }
         }
       };
@@ -1912,6 +1919,7 @@ function openKoTargetWindow(game, playerId, opts) {
   game.koTargetWindow = {
     playerId,
     candidateUids: candidates.map(c => c.uid),
+    initialCount: opts.count || 1,
     remaining: opts.count || 1,
     optional: opts.optional !== false,
     sourceCardName: opts.sourceCardName,
@@ -2502,14 +2510,16 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       drawCards(p, parseInt(drawMatch[1]), game, card.name);
     }
 
-    // Add DON rested
-    if (/[Aa]dd up to (\d+) DON!!.*rest/i.test(effect)) {
-      const donMatch = effect.match(/[Aa]dd up to (\d+) DON!!/i);
+    // Add DON rested — matches "Add N DON!!" and "Add up to N DON!!" so
+    // Merchant Dam ("Add 1 DON!! ... rest it") and any future card using
+    // the up-to shape both resolve here.
+    if (/[Aa]dd (?:up to )?(\d+) DON!!.*rest/i.test(effect)) {
+      const donMatch = effect.match(/[Aa]dd (?:up to )?(\d+) DON!!/i);
       addDonFromDeck(p, donMatch ? parseInt(donMatch[1]) : 1, true, game, card.name);
     }
     // Add DON active
-    else if (/[Aa]dd up to (\d+) DON!!.*active/i.test(effect)) {
-      const donMatch = effect.match(/[Aa]dd up to (\d+) DON!!/i);
+    else if (/[Aa]dd (?:up to )?(\d+) DON!!.*active/i.test(effect)) {
+      const donMatch = effect.match(/[Aa]dd (?:up to )?(\d+) DON!!/i);
       addDonFromDeck(p, donMatch ? parseInt(donMatch[1]) : 1, false, game, card.name);
     }
 
