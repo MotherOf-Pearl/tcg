@@ -34,29 +34,26 @@
   ];
   if (TRACKS.length === 0) return;
 
-  // Resume the same track + position the previous page was at, otherwise pick fresh.
-  let trackUrl;
-  try { trackUrl = sessionStorage.getItem('currentTrack'); } catch (_) {}
-  if (!trackUrl || TRACKS.indexOf(trackUrl) === -1) {
-    trackUrl = TRACKS[Math.floor(Math.random() * TRACKS.length)];
-    try { sessionStorage.setItem('currentTrack', trackUrl); } catch (_) {}
-  }
-  let startPos = 0;
-  try {
-    const v = parseFloat(sessionStorage.getItem('trackPosition'));
-    if (!isNaN(v) && v >= 0) startPos = v;
-  } catch (_) {}
-
   const isMuted  = () => { try { return localStorage.getItem('musicMuted') === '1'; } catch (_) { return false; } };
   const setMuted = (m) => { try { localStorage.setItem('musicMuted', m ? '1' : '0'); } catch (_) {} };
 
   const TARGET_VOL  = 0.3;
   const FADE_OUT_MS = 300;
-  const FADE_IN_MS  = 500;
 
-  const audio = new Audio(trackUrl);
-  audio.loop    = true;
-  audio.volume  = 0;          // start silent — fade up after playback begins
+  // Avoid picking the same track twice in a row. `currentTrackUrl` is updated
+  // every time we pick; the do/while short-circuits when there is only one
+  // track in the pool (can't avoid repetition then).
+  let currentTrackUrl = null;
+  const pickRandomTrack = () => {
+    let next;
+    do {
+      next = TRACKS[Math.floor(Math.random() * TRACKS.length)];
+    } while (next === currentTrackUrl && TRACKS.length > 1);
+    currentTrackUrl = next;
+    return next;
+  };
+
+  const audio   = new Audio();
   audio.preload = 'auto';
   audio.muted   = isMuted();
 
@@ -83,33 +80,21 @@
     requestAnimationFrame(tick);
   };
 
-  // Fade in on the FIRST successful playback. `playing` fires every time the
-  // audio (re)starts; { once: true } restricts us to the initial start, so a
-  // pause/resume from mute toggling later won't trigger another fade.
-  audio.addEventListener('playing', () => {
-    fadeAudio(TARGET_VOL, FADE_IN_MS);
-  }, { once: true });
-
   const tryPlay = () => {
     const p = audio.play();
     if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay blocked until first interaction */ });
   };
 
-  // Seek to the saved position once metadata is in, then play.
-  audio.addEventListener('loadedmetadata', () => {
-    if (startPos > 0 && startPos < (audio.duration || Infinity)) {
-      try { audio.currentTime = startPos; } catch (_) {}
-    }
-    tryPlay();
-  }, { once: true });
+  // Each page load picks a fresh random track — no cross-page resume.
+  audio.src    = pickRandomTrack();
+  audio.volume = TARGET_VOL;
+  tryPlay();
 
-  // Persist playback position so the next page resumes there. 1s cadence is
-  // imperceptible and cheap; only writes while actually playing.
-  setInterval(() => {
-    if (!audio.paused && !audio.ended) {
-      try { sessionStorage.setItem('trackPosition', String(audio.currentTime)); } catch (_) {}
-    }
-  }, 1000);
+  // When the track finishes, pick a DIFFERENT random track and play it.
+  audio.addEventListener('ended', () => {
+    audio.src = pickRandomTrack();
+    tryPlay();
+  });
 
   // Mute button + first-interaction autoplay unlock.
   const isGamePage = /\/game\.html/i.test(location.pathname);
@@ -176,22 +161,14 @@
   if (document.body) setup();
   else document.addEventListener('DOMContentLoaded', setup, { once: true });
 
-  // ─── Smooth cross-page navigation ────────────────────────────────────────
-  // The browser destroys this page's <audio> element on unload, so the new
-  // page has to recreate it from scratch — there's an unavoidable gap. What
-  // we CAN do is make sure the saved position reflects the click moment (not
-  // the last 1s tick of the position-save interval) and give the click-sound
-  // 100ms to start before the page tears down.
+  // ─── Smooth nav fade-out ────────────────────────────────────────────────
+  // The audio element is destroyed on unload, so all we can do is fade the
+  // volume to 0 before navigating away — the next page picks a fresh random
+  // track on load.
   //
   // For this path to fire, nav controls must be either <a href="..."> or
   // <button data-href="...">. onclick="location.href=..." bypasses this and
-  // navigates synchronously, before sessionStorage can flush.
-  const saveMusicPosition = () => {
-    try {
-      sessionStorage.setItem('trackPosition', String(audio.currentTime || 0));
-      sessionStorage.setItem('currentTrack', trackUrl);
-    } catch (_) {}
-  };
+  // navigates synchronously, before the fade can run.
   const interceptNav = () => {
     document.addEventListener('click', (e) => {
       // Respect new-tab / new-window modifier clicks — don't hijack those.
@@ -202,20 +179,9 @@
       if (!href || href.startsWith('#') || /^javascript:/i.test(href)) return;
       if (link.target === '_blank') return;
       e.preventDefault();
-      saveMusicPosition();
-      // Fade music out, THEN navigate. The fade doesn't touch the Audio
-      // element's transport — volume only — so the position saved above
-      // stays accurate (the audio keeps playing through the fade, just
-      // silently tapering). The matching fade-in on the next page's Audio
-      // element turns the transition into an intentional handoff rather
-      // than a jump cut.
       fadeAudio(0, FADE_OUT_MS, () => { window.location.href = href; });
     }, true);
   };
-  // Belt-and-suspenders: also save on pagehide / beforeunload so manual nav
-  // (typed URL, back button, refresh) doesn't lose more than 1s of position.
-  window.addEventListener('pagehide',     saveMusicPosition);
-  window.addEventListener('beforeunload', saveMusicPosition);
   if (document.body) interceptNav();
   else document.addEventListener('DOMContentLoaded', interceptNav, { once: true });
 
