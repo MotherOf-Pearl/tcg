@@ -324,7 +324,7 @@ const CARD_DB = [
   // ══════════════════════════════
   { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'),
-    ability:"[Activate: Main] Once per turn, you may rest 1 of your Characters: Draw 1 card." },
+    ability:"[Activate: Main] Once per turn: Rest 1 of your opponent's Characters. Draw 1 card." },
 
   { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'),
@@ -352,7 +352,7 @@ const CARD_DB = [
 
   { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:4000, cost:4, counter:1000, image:IMG('ST03','ST03-014','png'),
-    ability:"[On Play] Return up to 1 Character with a cost of 3 or less to the owner's hand." },
+    ability:"[On Play] Return up to 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
 
   { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:7000, cost:7, counter:1000, image:IMG('OP01','OP01-067','png'),
@@ -1106,6 +1106,10 @@ function handleAction(roomId, playerId, action) {
       }
       defender.hand.splice(idx, 1);
       defender.trash.push(card);
+      // BUG 3 — flag set whenever the defender plays any counter (power or
+      // ability). RESOLVE_ATTACK consults this to choose between the
+      // "Attack countered!" and "No damage — defender wins!" wordings.
+      game.battleState.counterUsed = true;
       if (cv > 0) {
         game.battleState.counterBonus = (game.battleState.counterBonus || 0) + cv;
         log(game, `\uD83D\uDEE1\uFE0F ${card.name} +${cv} (counter bonus: ${game.battleState.counterBonus})`);
@@ -1156,7 +1160,8 @@ function handleAction(roomId, playerId, action) {
         outcome: 'blocked',   // will be overwritten below
         lifeRemaining: defender.life.length,
         doubleAttack: !!(attackerCard && hasDoubleAttack(attackerCard)),
-        blockerUsed: !!bs.blockerUsed,  // BUG 5
+        blockerUsed: !!bs.blockerUsed,
+        counterUsed: !!bs.counterUsed,
       };
 
       if (attackerWins) {
@@ -1188,13 +1193,18 @@ function handleAction(roomId, playerId, action) {
         }
       } else {
         log(game, `\uD83D\uDEE1\uFE0F ${bs.targetName} survives the attack (${bs.attackerPower} vs ${totalDefense}).`);
-        // BUG 5 — wording split. "attack_failed" = attack didn't land on the
-        // leader (no damage). "blocked" = a real Blocker intercepted. Third
-        // case — defender won through raw power on a character target — is a
-        // defender-power-win and gets its own category.
-        if (bs.targetIsLeader)        outcome.outcome = 'attack_failed';
-        else if (bs.blockerUsed)      outcome.outcome = 'blocked';
-        else                          outcome.outcome = 'defender_power_win';
+        // BUG 3 (this batch) — outcome categorisation now has four cases:
+        //   blocked           — a Blocker card intercepted the attack
+        //   countered         — a counter card pushed defense past attack
+        //   defender_power_win — raw power survived (no blocker, no counter)
+        //   attack_failed     — leader attack where defender held the line
+        // blocker takes precedence over counter in the wording, since the
+        // blocker IS the reason the attack didn't hit the leader; the
+        // counter bonus just made that blocker's power higher.
+        if (bs.blockerUsed)          outcome.outcome = 'blocked';
+        else if (bs.counterUsed)     outcome.outcome = 'countered';
+        else if (bs.targetIsLeader)  outcome.outcome = 'attack_failed';
+        else                         outcome.outcome = 'defender_power_win';
         // Blocker that wins stays on board, but remains rested (already rested by USE_BLOCKER).
       }
 
@@ -1619,6 +1629,45 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // BUG 5 (this batch) — rest-target resolution. Flips c.rested on the
+    // picked opponent character, then resumes parseAndApply so follow-up
+    // clauses (e.g. Anna's "Draw 1 card") can fire.
+    case 'REST_TARGET_SELECTED': {
+      if (!game.restTargetWindow || game.restTargetWindow.playerId !== playerId) return;
+      const w = game.restTargetWindow;
+      const oppOfActor = game.players[Object.keys(game.players).find(id => id !== playerId)];
+      const finishWindow = () => {
+        const resumeTiming  = w.resumeTiming;
+        const resumeCardUid = w.resumeCardUid;
+        game.restTargetWindow = null;
+        if (resumeTiming && resumeCardUid) {
+          const owner = game.players[playerId];
+          const src = (owner.leader && owner.leader.uid === resumeCardUid) ? owner.leader
+                    : (owner.field || []).find(c => c.uid === resumeCardUid);
+          if (src) {
+            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
+            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { restResolved: true, donCostPaid: true });
+          }
+        }
+      };
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a character to rest.'}); return; }
+        log(game, `${w.sourceCardName}: rest skipped.`);
+        finishWindow();
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid rest target.'});
+        return;
+      }
+      const target = oppOfActor.field.find(c => c.uid === action.targetUid);
+      if (!target) { send(playerId, {type:'ERROR', msg:'Target no longer on field.'}); return; }
+      target.rested = true;
+      log(game, `${w.sourceCardName}: rested ${target.name}.`);
+      finishWindow();
+      break;
+    }
+
     // Resolve add-from-trash selection (George the Brave & friends). This is
     // the tail of the effect, so there is no resumeTiming to re-enter.
     case 'ADD_FROM_TRASH_SELECTED': {
@@ -1931,6 +1980,33 @@ function openDonReturn(game, playerId, card, required, timing) {
 // exists and the window opened, false otherwise (the caller should fall through).
 // `count` defaults to 1 — for multi-target ("K.O. up to N"), the window stays open
 // until the count is exhausted or the player skips.
+// BUG 5 (this batch) — opens the interactive rest-target picker. Candidates
+// are active (non-rested) opponent CHARACTER cards; optional defaults to
+// false (user must pick). Returns false when no active opponent characters
+// exist — caller uses that to block the activation entirely.
+function openRestTargetWindow(game, playerId, opts) {
+  const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
+  const { sourceCardName = '', optional = false, resumeTiming = null, resumeCardUid = null,
+          costThreshold = null } = opts || {};
+  const candidates = (opp.field || []).filter(c =>
+    c.type === 'CHARACTER' && !c.rested &&
+    (costThreshold == null || (c.cost || 0) <= costThreshold)
+  );
+  if (candidates.length === 0) {
+    log(game, `${sourceCardName}: no active opponent characters to rest.`);
+    return false;
+  }
+  game.restTargetWindow = {
+    playerId,
+    candidateUids: candidates.map(c => c.uid),
+    optional,
+    sourceCardName,
+    resumeTiming, resumeCardUid,
+  };
+  log(game, `${sourceCardName}: choose an opponent Character to rest (${candidates.length} option(s)).`);
+  return true;
+}
+
 function openKoTargetWindow(game, playerId, opts) {
   const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
   const candidates = opp.field.filter(c => c.type === 'CHARACTER' && opts.filter(c));
@@ -2136,13 +2212,17 @@ function parseBounceTarget(effect) {
   if (!effect) return null;
   // BUG 13 — "(?:up to )?" makes mandatory phrasings ("Return 1 Character…")
   // match too. The `optional` flag is derived from whether "you may" or
-  // "up to" appears anywhere in the effect text — scalable to every bounce
-  // regardless of specific card.
+  // "up to" appears anywhere in the effect text — scalable to every bounce.
   const opt = /\b(?:you may|up to)\b/i.test(effect);
-  let m = effect.match(/[Rr]eturn (?:up to )?(\d+) Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i);
-  if (m) return { count: parseInt(m[1]), filterKind: 'cost',  filterValue: parseInt(m[2]), optional: opt };
-  m = effect.match(/[Rr]eturn (?:up to )?(\d+) Character.*?(\d+)\s*power or less.*?(?:owner'?s? )?hand/i);
-  if (m) return { count: parseInt(m[1]), filterKind: 'power', filterValue: parseInt(m[2]), optional: opt };
+  // BUG 2 (this batch) — scope is 'opponent' when the effect explicitly
+  // targets "your opponent's Character(s)"; otherwise 'any' (either side
+  // of the field, matching TCG "Character" phrasing). Scales to every
+  // bounce effect.
+  const scope = /\byour opponent'?s? Character/i.test(effect) ? 'opponent' : 'any';
+  let m = effect.match(/[Rr]eturn (?:up to )?(\d+) (?:of your opponent'?s? )?Character.*?cost of (\d+) or less.*?(?:owner'?s? )?hand/i);
+  if (m) return { count: parseInt(m[1]), filterKind: 'cost',  filterValue: parseInt(m[2]), optional: opt, scope };
+  m = effect.match(/[Rr]eturn (?:up to )?(\d+) (?:of your opponent'?s? )?Character.*?(\d+)\s*power or less.*?(?:owner'?s? )?hand/i);
+  if (m) return { count: parseInt(m[1]), filterKind: 'power', filterValue: parseInt(m[2]), optional: opt, scope };
   return null;
 }
 
@@ -2251,14 +2331,19 @@ function openBounceTarget(game, playerId, opts) {
   const opp = game.players[Object.keys(game.players).find(id => id !== playerId)];
   const me  = game.players[playerId];
   const { filterKind, filterValue, optional = true, sourceCardName = '',
-          resumeTiming = null, resumeCardUid = null } = opts || {};
+          resumeTiming = null, resumeCardUid = null, scope = 'any' } = opts || {};
   const matches = (c) => {
     if (c.type !== 'CHARACTER') return false;
     if (filterKind === 'cost') return (c.cost || 0) <= filterValue;
     if (filterKind === 'power') return ((c.power || 0) + (c.attachedDon || 0) * 1000) <= filterValue;
     return true;
   };
-  const candidates = [...me.field.filter(matches), ...opp.field.filter(matches)];
+  // BUG 2 (this batch) — scope decides which fields contribute candidates.
+  // 'opponent' = opp only; 'any' = both sides. Unchanged from prior when
+  // scope defaults to 'any'.
+  const candidates = scope === 'opponent'
+    ? opp.field.filter(matches)
+    : [...me.field.filter(matches), ...opp.field.filter(matches)];
   if (candidates.length === 0) {
     log(game, `${sourceCardName}: no valid bounce targets.`);
     return false;
@@ -2357,7 +2442,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, sourceCardName: card.name,
+        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
         resumeTiming: 'onPlay', resumeCardUid: card.uid,
       })) return;
     }
@@ -2540,7 +2625,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, sourceCardName: card.name,
+        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
         resumeTiming: 'onKO', resumeCardUid: card.uid,
       })) return;
     }
@@ -2822,7 +2907,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, sourceCardName: card.name,
+        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
         resumeTiming: 'counter', resumeCardUid: card.uid,
       })) return;
     }
@@ -2907,7 +2992,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, sourceCardName: card.name,
+        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
         resumeTiming: 'trigger', resumeCardUid: card.uid,
       })) return;
     }
@@ -2980,7 +3065,7 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
     if (bounce && !opts.bounceResolved) {
       if (openBounceTarget(game, playerId, {
         filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, sourceCardName: card.name,
+        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
         resumeTiming: 'activateMain', resumeCardUid: card.uid,
       })) return;
     }
@@ -2993,9 +3078,51 @@ function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
       opts.tempBuffApplied = true;
     }
 
+    // BUG 5 (this batch) — interactive rest-opponent-character picker for
+    // Activate Main effects. Parses "Rest [up to] N of your opponent's
+    // Character(s)" (optional threshold). Must be placed BEFORE the Draw
+    // block so Anna's "Rest … Draw 1 card" resolves in order (rest first,
+    // then draw on resume). Scales to every "rest opponent character"
+    // effect on this timing.
+    const restMatch = effect.match(/[Rr]est (?:up to )?(\d+) of your opponent'?s? Character/i);
+    if (restMatch && !opts.restResolved) {
+      const costMatch = effect.match(/cost of (\d+) or less/);
+      const isOpt = /\b(?:you may|up to)\b/i.test(effect);
+      if (openRestTargetWindow(game, playerId, {
+        sourceCardName: card.name,
+        optional: isOpt,
+        costThreshold: costMatch ? parseInt(costMatch[1]) : null,
+        resumeTiming: 'activateMain', resumeCardUid: card.uid,
+      })) return;
+      // No valid targets → block the whole activation by returning early.
+      // openRestTargetWindow already logged "no active opponent characters".
+      if (!isOpt) {
+        send(playerId, {type:'ERROR', msg:'No active opponent characters to rest.'});
+        return;
+      }
+    }
+
     // Draw N cards
     const drawMatch = effect.match(/[Dd]raw (\d+) card/);
     if (drawMatch) drawCards(p, parseInt(drawMatch[1]), game, card.name);
+
+    // BUG 6 (this batch) — Constable Jack and any card with the pattern
+    // "Trash up to N of your opponent's Life cards". Moves top N life
+    // cards straight to the opponent's trash — no hand, no [Trigger]
+    // activation. Scales to every "trash life" effect that bypasses
+    // Trigger; if a future effect explicitly says "add to hand" or
+    // "activate Trigger" we'd need a separate branch.
+    const lifeTrashMatch = effect.match(/[Tt]rash up to (\d+) of your opponent'?s? Life cards?/i);
+    if (lifeTrashMatch && !opts.lifeTrashResolved) {
+      const want = Math.min(parseInt(lifeTrashMatch[1]), opp.life.length);
+      for (let i = 0; i < want; i++) {
+        const lifeCard = opp.life.pop();
+        if (!lifeCard) break;
+        opp.trash.push(lifeCard);
+        log(game, `${card.name}: trashed opponent's life card ${lifeCard.name}. ${opp.life.length} life remaining.`);
+      }
+      opts.lifeTrashResolved = true;
+    }
 
     // Look at top N → reveal {Type} → add to hand → place rest
     if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
@@ -3110,7 +3237,7 @@ function parseEventMain(game, playerId, card, opp, opts = {}) {
   if (bounce && !opts.bounceResolved) {
     if (openBounceTarget(game, playerId, {
       filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-      optional: bounce.optional, sourceCardName: card.name,
+      optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
       resumeTiming: 'eventMain', resumeCardUid: card.uid,
     })) return;
   }

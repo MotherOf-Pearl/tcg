@@ -1177,6 +1177,11 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <button class="gb-pbtn gb-pbtn-sm" id="koSkipBtn"  onclick="skipKoTarget()" style="display:none;">Skip</button>
         <button class="gb-pbtn gb-pbtn-sm" id="koDoneBtn" onclick="skipKoTarget()" style="display:none;">Done</button>
       </div>
+      <!-- Rest-target picker (Anna and any "rest opponent character" effect) -->
+      <div id="restTargetBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="restTargetTitle">Rest an opponent character</div>
+        <div id="restTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Click a highlighted opponent character.</div>
+      </div>
       <!-- DON!! -N return-to-deck picker (interactive cost) -->
       <div id="donReturnBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="donReturnTitle">Return DON!! to deck</div>
@@ -1657,8 +1662,8 @@ function showAttackOutcome(msg) {
     case 'leader_hit':
       if (iAmAttacker) {
         text = msg.doubleAttack
-          ? `Hit! Opponent's leader took damage [Double Attack]. Life remaining: ${msg.lifeRemaining}`
-          : `Hit! Opponent's leader took 1 damage. Life remaining: ${msg.lifeRemaining}`;
+          ? `Hit! Leader took damage [Double Attack]. Life remaining: ${msg.lifeRemaining}`
+          : `Hit! Leader took 1 damage. Life remaining: ${msg.lifeRemaining}`;
       } else if (iAmDefender) {
         text = `Your leader took damage! Life remaining: ${msg.lifeRemaining}`;
       } else {
@@ -1666,21 +1671,18 @@ function showAttackOutcome(msg) {
       }
       break;
     case 'character_koed':
-      text = iAmAttacker
-        ? `${msg.targetName} was KO'd!`
-        : (iAmDefender ? `${msg.targetName} was KO'd!` : `${msg.targetName} was KO'd.`);
+      text = `${msg.targetName} was KO'd!`;
       break;
     case 'attack_failed':
-      text = iAmAttacker ? `Attack failed — defender wins!` : `Attack blocked!`;
+      text = iAmAttacker ? `No damage — defender wins!` : `Attack survived!`;
       break;
     case 'blocked':
-      // BUG 5 — "blocked" means a Blocker intercepted. Wording stays.
-      text = iAmAttacker
-        ? `Blocked! ${msg.targetName} survives.`
-        : `Attack blocked!`;
+      text = `Attack blocked!`;
+      break;
+    case 'countered':
+      text = `Attack countered!`;
       break;
     case 'defender_power_win':
-      // BUG 5 — defender won through raw power (no blocker used).
       text = iAmAttacker
         ? `No damage — defender wins!`
         : `${msg.targetName} survived the attack.`;
@@ -1763,6 +1765,8 @@ function renderGame() {
       myId = game.bounceTargetWindow.playerId;
     } else if (game.addFromTrashWindow) {
       myId = game.addFromTrashWindow.playerId;
+    } else if (game.restTargetWindow) {
+      myId = game.restTargetWindow.playerId;
     } else if (game.koTargetWindow) {
       myId = game.koTargetWindow.playerId;
     } else if (game.donReturnWindow) {
@@ -1979,6 +1983,24 @@ function renderGame() {
   } else {
     ktwPanel.style.display = 'none';
     if (ktw) hint('Opponent is choosing a K.O. target…');
+  }
+
+  // BUG 5 (this batch) — rest-target picker. Highlights active opponent
+  // characters; click dispatches REST_TARGET_SELECTED via the shared
+  // window-click consumer.
+  const rtw = game.restTargetWindow;
+  const rtwPanel = document.getElementById('restTargetBtns');
+  if (rtw && rtw.playerId === myId) {
+    hideAllBtnGroups();
+    rtwPanel.style.display = 'flex';
+    document.getElementById('restTargetTitle').textContent =
+      `${rtw.sourceCardName} — rest opponent character`;
+    requestAnimationFrame(() => {
+      rtw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    rtwPanel.style.display = 'none';
+    if (rtw) hint('Opponent is choosing a rest target…');
   }
 
   // Bug 5 — TRASH_FROM_HAND_COST resolver. Highlights only the eligible hand
@@ -2200,6 +2222,13 @@ function _tryConsumeWindowClick(uid) {
   if (game?.koTargetWindow?.playerId === myId
       && game.koTargetWindow.candidateUids.includes(uid)) {
     act({ type: 'KO_TARGET_SELECTED', targetUid: uid });
+    return true;
+  }
+  // BUG 5 (this batch) — rest-target picker reuses the same card-click
+  // dispatch as KO / bounce.
+  if (game?.restTargetWindow?.playerId === myId
+      && game.restTargetWindow.candidateUids.includes(uid)) {
+    act({ type: 'REST_TARGET_SELECTED', targetUid: uid });
     return true;
   }
   return false;
@@ -2512,20 +2541,33 @@ let scryCards = [];
 // independently to the top pile or the bottom pile in click order.
 let scryTopOrder = [];
 let scryBottomOrder = [];
+// BUG 1 (this batch) — renderScry re-runs on every GAME_STATE; previously
+// the selection arrays were wiped on every render, so any server broadcast
+// (e.g. the opponent drawing DON) between clicks froze the UI by erasing
+// the user's progress. We now latch a signature of the current scry cards
+// and only reset state when that signature changes (new window opens).
+let scryWindowSig = null;
 
 function renderScry() {
   const left = document.querySelector('.gb-left');
   if (!game || !game.scryWindow || game.scryWindow.playerId !== myId) {
     document.getElementById('scryOverlay').style.display = 'none';
     if (left) left.classList.remove('scry-active');
+    scryWindowSig = null;
     return;
   }
   const sw = game.scryWindow;
-  scryCards = sw.cards;
-  scryOrder = [];
-  scryKeep = [];
-  scryTopOrder = [];
-  scryBottomOrder = [];
+  // Identify window by (card uids + source name). Stable across re-renders
+  // of the same window; flips when a brand-new scry opens.
+  const sig = (sw.cards || []).map(c => c.uid).join(',') + '|' + (sw.cardName || '');
+  if (sig !== scryWindowSig) {
+    scryWindowSig   = sig;
+    scryCards       = sw.cards;
+    scryOrder       = [];
+    scryKeep        = [];
+    scryTopOrder    = [];
+    scryBottomOrder = [];
+  }
   const overlay = document.getElementById('scryOverlay');
   overlay.style.display = 'flex';
   if (left) left.classList.add('scry-active');
@@ -2757,6 +2799,7 @@ function closeScry() {
   scryTopOrder = [];
   scryBottomOrder = [];
   scryCards = [];
+  scryWindowSig = null;
 }
 
 function renderLife(id, countId, max, remaining) {
@@ -2889,7 +2932,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -3668,6 +3711,10 @@ function showPowerOverlay(uid, power) {
   const el = findCardEl(uid);
   const host = document.getElementById('battleOverlays');
   if (!el || !host) return;
+  // BUG 4 — only one power number per card. Counter bonus re-renders call
+  // showPowerOverlay on the same uid; without this the old number stays
+  // under the new one and both are visible.
+  host.querySelectorAll(`.power-overlay[data-uid="${uid}"]`).forEach(p => p.remove());
   const r = el.getBoundingClientRect();
   const div = document.createElement('div');
   div.className = 'power-overlay';
