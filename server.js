@@ -205,7 +205,7 @@ const CARD_DB = [
     ability:"[On Play] K.O. up to 1 of your opponents Characters with a power of 6000 or less." },
 
   { id:'ST15-002', name:'Edward Newgate', type:'CHARACTER', color:'Red', attribute:'Special',
-    power:8000, cost:7, counter:0, image:IMG('ST15','ST15-002','png'),
+    power:8000, cost:7, counter:0, image:IMG('ST15','ST15-002','png'), useNewPipeline:true,
     ability:"[On Play] Give your leader or one of your characters up to one rested DON!!. [Activate: Main] You may rest this character: K.O. up to one of your opponent's characters with 5000 or less power." },
 
   { id:'OP08-118', name:'Silvers Rayleigh', type:'CHARACTER', color:'Yellow', attribute:'Slash',
@@ -233,7 +233,7 @@ const CARD_DB = [
     ability:"[Counter] You may trash 1 card from your hand: Give up to 1 of your leaders or characters +3000 Power this battle. [Trigger] Give up to one of your opponent's leaders or characters -3000 power for this turn." },
 
   { id:'OP10-018', name:'Kamakura Jussoushi', type:'EVENT', color:'Red',
-    power:0, cost:2, counter:0, image:IMG('OP10','OP10-018','jpg'),
+    power:0, cost:2, counter:0, image:IMG('OP10','OP10-018','jpg'), useNewPipeline:true,
     ability:"[Counter] Choose up to 1 of your leader or character, it gains +3000 during this battle. Afterwards, one of your opponent's leader or character gets -2000 during this turn. [Trigger] Choose up to 1 of your leader or character, it gets +1000 during this turn." },
 
   { id:'OP10-019', name:'Divine Departure', type:'EVENT', color:'Red',
@@ -4395,7 +4395,7 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'scaledPowerBuff', per: parseInt(m[2]), amount: parseInt(m[1]), source: 'eventsInTrash' };
   }
 
-  if ((m = seg.match(/(?:[Gg]ains?|[Hh]as|[Gg]ets?)\s*\+(\d+)\s*power\s+(until (?:the )?end of (?:your )?opponent'?s? next (?:turn|end phase)|during this turn|during this battle|for this turn|for this battle)/i))) {
+  if ((m = seg.match(/(?:[Gg]ains?|[Hh]as|[Gg]ets?)\s*\+(\d+)(?:\s*power)?\s+(until (?:the )?end of (?:your )?opponent'?s? next (?:turn|end phase)|during this turn|during this battle|for this turn|for this battle)/i))) {
     const amount = parseInt(m[1]);
     const when = m[2].toLowerCase();
     const duration = when.includes('opponent') ? 'opponentNextTurn'
@@ -4406,6 +4406,25 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
                  : (/your leader/.test(lead) && !/character/.test(lead)) ? 'leader'
                  : 'leaderOrCharacter';
     return { type: 'powerBuff', target, value: amount, duration };
+  }
+
+  // Phase 8 — "(Afterwards,) one of your opponent's leader or character
+  // gets -N during this turn" (Kamakura Jussoushi). The existing
+  // powerDebuff matchers key off "give -N" or "-N000 power" phrasings;
+  // this one handles "gets -N" with optional "power" word.
+  if ((m = seg.match(/(?:[Aa]fterwards?,?\s*)?(?:one of )?your opponent'?s?\s+(leaders? or characters?|leader|character)\s+(?:gets?|gains?|has)\s*-(\d+)(?:\s*power)?\s+(until .*?next turn|during this turn|during this battle|for this turn|for this battle)/i))) {
+    const kind = (m[1].toLowerCase().includes(' or ')) ? 'opponentLeaderOrCharacter'
+               : m[1].toLowerCase().includes('character') ? 'opponentCharacter'
+               : 'opponentLeader';
+    return { type: 'powerDebuff', target: kind, value: parseInt(m[2]) };
+  }
+
+  // Phase 8 — "Give your leader or one of your characters up to N rested
+  // DON!!" (Edward Newgate ST15-002). Opens a target picker for the
+  // player's own leader/characters, then attaches N rested DON!! to it.
+  if ((m = seg.match(/[Gg]ive your leader or one of your characters up to (one|\d+)\s+rested DON!!/i))) {
+    const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
+    return { type: 'giveDon', count: n, state: 'rested' };
   }
 
   // Phase-5 Priority 1 — "Give [up to N of] your Leader/Character cards
@@ -4983,6 +5002,24 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 8 — giveDon: attach N DON!! cards to an own target. Takes
+    // from donDeck. TODO: proper picker UI for the target; for now
+    // auto-attaches to the source card (good enough for Newgate, the
+    // only card using this today — a Newgate self-play typically
+    // wants the boost on itself).
+    case 'giveDon': {
+      const want = effect.count || 1;
+      const avail = Math.min(want, ctx.player.donDeck || 0);
+      if (avail <= 0) {
+        log(ctx.game, `${ctx.card.name}: no DON!! in deck — giveDon skipped.`);
+        return { status: 'applied' };
+      }
+      ctx.player.donDeck -= avail;
+      ctx.card.attachedDon = (ctx.card.attachedDon || 0) + avail;
+      log(ctx.game, `${ctx.card.name}: attached ${avail} rested DON!! to self.`);
+      return { status: 'applied' };
+    }
+
     // Phase 8 — mandatory "Trash N cards from your hand" as an effect
     // (Caribou OP11-083). Opens trashFromHandWindow with optional=false
     // so the player must pick exactly N cards.
