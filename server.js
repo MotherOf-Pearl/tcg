@@ -394,7 +394,7 @@ const CARD_DB = [
     ability:"[Blocker] [On K.O.] Add 1 DON!! card from your DON!! deck and rest it." },
 
   { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
-    power:3000, cost:3, counter:0, image:IMG('ST04','ST04-010','png'),
+    power:3000, cost:3, counter:0, image:IMG('ST04','ST04-010','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 3 or less. [Trigger] Play this card." },
 
   { id:'OP01-101', name:'Shawn the Whimsical', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
@@ -4267,6 +4267,13 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'trashFromHandEffect', count: parseInt(m[1]) };
   }
 
+  // Phase 8 — "Play this card" as a [Trigger] effect (Monk Matt
+  // ST04-010). When a life card with this trigger is revealed, the
+  // card moves from hand to field as a free play.
+  if (/^[Pp]lay this card$/i.test(seg)) {
+    return { type: 'playSelf' };
+  }
+
   if ((m = seg.match(/^(?:[Dd]raw) (one|\d+) cards?/))) {
     const n = m[1].toLowerCase() === 'one' ? 1 : parseInt(m[1]);
     return { type: 'drawCards', count: n };
@@ -5002,6 +5009,26 @@ function agentApplyEffect(effect, ctx, resume) {
     // client's existing SCRY_RESOLVE UI flow is reused as-is. Chain
     // resume threads through for any card that adds extra steps after
     // the placement.
+    // Phase 8 — playSelf: move source card from hand to field as a
+    // free play (Monk Matt's [Trigger] "Play this card"). When the
+    // trigger is activated from a life reveal the card is in hand,
+    // having been moved there by the life-reveal path.
+    case 'playSelf': {
+      const hidx = ctx.player.hand.findIndex(c => c.uid === ctx.card.uid);
+      if (hidx === -1) {
+        log(ctx.game, `${ctx.card.name}: not in hand — playSelf skipped.`);
+        return { status: 'applied' };
+      }
+      const picked = ctx.player.hand.splice(hidx, 1)[0];
+      picked.rested = false;
+      picked.attachedDon = 0;
+      picked.usedThisTurn = false;
+      picked.playedThisTurn = true;
+      ctx.player.field.push(picked);
+      log(ctx.game, `${ctx.card.name}: played from life trigger for free.`);
+      return { status: 'applied' };
+    }
+
     // Phase 8 — giveDon: attach N DON!! cards to an own target. Takes
     // from donDeck. TODO: proper picker UI for the target; for now
     // auto-attaches to the source card (good enough for Newgate, the
