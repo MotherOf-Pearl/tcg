@@ -610,34 +610,11 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 .scry-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
 .scry-card.kept{border-color:#4ade80;box-shadow:0 0 8px rgba(74,222,128,.5);}
 .scry-card.keep-eligible{border-color:rgba(212,180,80,.85);box-shadow:0 0 6px rgba(255,210,80,.55);}
-/* Track K — assign-mode (placement='either', keepCount=0): each card
-   gets a column with the image on top and two BIG Top/Bottom buttons
-   beneath. Currently-selected side glows gold. Larger than the tiny
-   inline buttons so a confused user can actually find them. */
-.scry-assign-col{
-  display:flex;flex-direction:column;align-items:center;gap:4px;
-  padding:4px;border-radius:4px;background:rgba(0,0,0,.25);flex-shrink:0;
-}
-.scry-assign-col .scry-card{cursor:pointer;}
-.scry-assign-col.top-selected .scry-card{
-  border-color:#70b8ff;box-shadow:0 0 10px rgba(90,160,255,.6);
-}
-.scry-assign-col.bottom-selected .scry-card{
-  border-color:#ffa070;box-shadow:0 0 10px rgba(255,130,80,.55);
-}
-.scry-assign-btn{
-  min-width:60px;padding:6px 10px;border-radius:4px;font-size:.72rem;
-  font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;
-  border:1.5px solid var(--gold-dim);background:rgba(20,14,4,.9);
-  color:var(--gold);cursor:pointer;transition:all .12s;
-  text-transform:uppercase;font-weight:600;
-}
-.scry-assign-btn:hover{border-color:var(--gold);background:rgba(40,28,8,.9);}
-.scry-assign-btn.selected{
-  background:var(--gold);color:#0f0a04;border-color:var(--gold);
-  box-shadow:0 0 8px rgba(255,210,80,.7);
-}
-.scry-assign-row{display:flex;gap:4px;}
+/* placement='either' badge tints — applied to the base .scry-card via
+   .scry-card.scry-top (blue glow) or .scry-card.scry-bottom (orange)
+   so the chosen pile is obvious without changing the card widget itself. */
+.scry-card.scry-top   {border-color:#70b8ff;box-shadow:0 0 10px rgba(90,160,255,.6);}
+.scry-card.scry-bottom{border-color:#ffa070;box-shadow:0 0 10px rgba(255,130,80,.55);}
 /* Pin scry overlay directly above the player hand while scry is active */
 .gb-left.scry-active .gb-self-hand{flex:0 0 auto;}
 .gb-left.scry-active .gb-card-preview.has-card{flex:0 1 auto;}
@@ -1394,8 +1371,8 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 ════════════════════════════════════════════════════ -->
 <script>
 // ─── BUNDLE VERSION TAG (loud so you can tell which build the browser is running) ───
-console.log('%c[BUNDLE v2025-04-20-SCRY-DIAG-B]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
-window.__BUNDLE_VERSION = '2025-04-20-SCRY-DIAG-B';
+console.log('%c[BUNDLE v2025-04-20-QV-MATCH]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
+window.__BUNDLE_VERSION = '2025-04-20-QV-MATCH';
 
 // ─── CONFIG ───
 const WS_URL = 'wss://game.boohawtcg.com';
@@ -2919,7 +2896,7 @@ function renderScry() {
     else                                 label += `; then order the rest (1 = top)`;
     title.textContent = label;
   } else if (sw.placement === 'either') {
-    title.textContent = `Assign each card Top or Bottom of deck (click a button under each card — clicking order sets the stacking order, 1 = first)`;
+    title.textContent = `Click each card to cycle: unassigned → TOP → BOTTOM → unassigned. Stacking order = click order (1 = first).`;
   } else {
     title.textContent = `Click cards in the order to place on ${sw.placement || 'top'} of deck (1 = top of stack)`;
   }
@@ -2937,16 +2914,19 @@ function renderScry() {
   };
 
   const isEither = sw.placement === 'either';
-  // Assign-mode is the FiFi Cat shape: no keep step, every card must be
-  // explicitly placed on top or bottom. The whole column (card image +
-  // two prominent buttons) is a dedicated widget instead of the older
-  // tiny-inline-button approach.
-  const assignMode = isEither && (sw.keepCount || 0) === 0;
 
   const container = document.getElementById('scryCards');
   container.innerHTML = '';
 
-  const makeCardEl = (card, idx) => {
+  // Every card renders as a standard .scry-card tile — exactly the same
+  // widget Queen Victoria / Schola / Sugar use. Differences between shapes
+  // live purely in scryCardClick's dispatch:
+  //   keepCount > 0, placement='bottom' — click toggles keep, then
+  //     click remaining cards in bottom order.
+  //   keepCount === 0, placement='either' (FiFi Cat) — click CYCLES
+  //     the card through Top → Bottom → Unassigned. T1/B1/T2 badges
+  //     on the card face show the pile + order.
+  sw.cards.forEach((card, idx) => {
     const el = document.createElement('div');
     el.className = 'scry-card';
     if (sw.keepCount > 0 && isKeepEligible(card)) el.classList.add('keep-eligible');
@@ -2955,64 +2935,20 @@ function renderScry() {
     el.innerHTML = imgSrc
       ? `<img src="${imgSrc}" onerror="this.parentElement.style.background='var(--card-back)';">`
       : '';
+    el.addEventListener('click', (ev) => {
+      console.log('[SCRY CARD CLICKED]', {
+        idx, cardName: card.name, cardUid: card.uid,
+        keepCount: sw.keepCount, keepEligible: isKeepEligible(card),
+        isEither,
+        currentKeep: [...scryKeep], currentOrder: [...scryOrder],
+        currentTop: [...scryTopOrder], currentBottom: [...scryBottomOrder],
+      });
+      scryCardClick(idx, sw.keepCount, isKeepEligible(card), isEither);
+    });
     el.addEventListener('mouseenter', e => showTooltip(card, e));
     el.addEventListener('mouseleave', hideTooltip);
-    return el;
-  };
-
-  if (assignMode) {
-    // Assign-mode layout: column per card (image on top, big Top/Bottom
-    // buttons below). Body click cycles Top → Bottom → unassigned as a
-    // convenience but the visible buttons are the primary target.
-    sw.cards.forEach((card, idx) => {
-      const col = document.createElement('div');
-      col.className = 'scry-assign-col';
-      col.dataset.idx = idx;
-
-      const cardEl = makeCardEl(card, idx);
-      cardEl.addEventListener('click', () => {
-        console.log('[SCRY CARD CLICKED]', { idx, cardName: card.name, mode: 'assign' });
-        const inTop = scryTopOrder.includes(idx);
-        const inBottom = scryBottomOrder.includes(idx);
-        if (!inTop && !inBottom)        scryAssignTop(idx);
-        else if (inTop)                  scryAssignBottom(idx);  // cycle: top → bottom
-        else                             scryAssignBottom(idx);  // bottom → unassigned (toggle inside fn)
-      });
-      col.appendChild(cardEl);
-
-      const row = document.createElement('div');
-      row.className = 'scry-assign-row';
-      const topBtn = document.createElement('button');
-      topBtn.className = 'scry-assign-btn';
-      topBtn.textContent = 'Top';
-      topBtn.onclick = (ev) => { ev.stopPropagation(); scryAssignTop(idx); };
-      const botBtn = document.createElement('button');
-      botBtn.className = 'scry-assign-btn';
-      botBtn.textContent = 'Bottom';
-      botBtn.onclick = (ev) => { ev.stopPropagation(); scryAssignBottom(idx); };
-      row.appendChild(topBtn);
-      row.appendChild(botBtn);
-      col.appendChild(row);
-
-      container.appendChild(col);
-    });
-  } else {
-    sw.cards.forEach((card, idx) => {
-      const el = makeCardEl(card, idx);
-      el.addEventListener('click', (ev) => {
-        console.log('[SCRY CARD CLICKED]', {
-          idx, cardName: card.name, cardUid: card.uid,
-          keepCount: sw.keepCount, keepEligible: isKeepEligible(card),
-          isEither,
-          currentKeep: [...scryKeep], currentOrder: [...scryOrder],
-          currentTop: [...scryTopOrder], currentBottom: [...scryBottomOrder],
-          eventTarget: ev.target.tagName,
-        });
-        scryCardClick(idx, sw.keepCount, isKeepEligible(card), isEither);
-      });
-      container.appendChild(el);
-    });
-  }
+    container.appendChild(el);
+  });
   document.getElementById('scryConfirm').style.display = 'none';
   // Skip is only meaningful when the player can opt out without committing to a placement —
   // hide it whenever the source effect forces a specific placement OR has a keep filter
@@ -3130,27 +3066,13 @@ function scryAssignBottom(idx) {
 function updateScryDisplay() {
   const sw = game && game.scryWindow;
   const isEither = sw && sw.placement === 'either';
-  const assignMode = isEither && (sw?.keepCount || 0) === 0;
-  // In assign-mode, paint the column wrapper so the glow is clearly
-  // visible AROUND both the card AND its button row. Badges still go
-  // on the inner .scry-card for the T/B number indicator.
-  if (assignMode) {
-    const cols = document.querySelectorAll('#scryCards .scry-assign-col');
-    cols.forEach((col, idx) => {
-      col.classList.remove('top-selected', 'bottom-selected');
-      if (scryTopOrder.includes(idx)) col.classList.add('top-selected');
-      else if (scryBottomOrder.includes(idx)) col.classList.add('bottom-selected');
-      // Highlight whichever button is active.
-      const [btnTop, btnBot] = col.querySelectorAll('.scry-assign-btn');
-      if (btnTop) btnTop.classList.toggle('selected', scryTopOrder.includes(idx));
-      if (btnBot) btnBot.classList.toggle('selected', scryBottomOrder.includes(idx));
-    });
-  }
   const cards = document.querySelectorAll('#scryCards .scry-card');
-  cards.forEach((el, i) => {
+  cards.forEach((el) => {
     const idx = Number(el.dataset.idx);
     el.querySelectorAll('.scry-order').forEach(b => b.remove());
-    el.classList.remove('kept');
+    el.classList.remove('kept', 'scry-top', 'scry-bottom');
+    if (scryTopOrder.includes(idx))    el.classList.add('scry-top');
+    if (scryBottomOrder.includes(idx)) el.classList.add('scry-bottom');
 
     if (scryKeep.includes(idx)) {
       el.classList.add('kept');
