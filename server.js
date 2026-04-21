@@ -344,7 +344,7 @@ const CARD_DB = [
 
   { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-085','png'), useNewPipeline:true,
-    ability:"[On Play] If your Leader has the {Duchess of Brittany} type, select up to 1 of your opponent's Characters with a cost of 4 or less. The selected Character cannot attack until the end of your opponent's next turn." },
+    ability:"[On Play] If your Leader has the {Duchess of Brittany} type, rest up to 1 of your opponent's Characters with a cost of 4 or less." },
 
   { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:6000, cost:5, counter:0, image:IMG('ST03','ST03-003','png'), useNewPipeline:true,

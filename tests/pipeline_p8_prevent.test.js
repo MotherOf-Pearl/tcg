@@ -59,9 +59,9 @@ test('Limejuice (OP09-014) flag + fully parsed', () => {
   assert.deepEqual(p.unparsedSegments, []);
 });
 
-// ─── Sarra onPlay — attack suppression end-to-end ────────────────────────
+// ─── Sarra onPlay — rest-target semantics (updated from attack suppression) ───
 
-test('Sarra onPlay opens suppressionTargetWindow (attack) with cost-filtered candidates', () => {
+test('Sarra onPlay opens restTargetWindow with cost-filtered candidates', () => {
   const { p1, p2, game } = twoPlayerGame();
   // Leader on p1 side is Anna of Brittany (Duchess of Brittany) by default.
   const smallOpp = { ...srv.CARD_DB.find(c => c.id === 'OP01-101'),
@@ -74,10 +74,8 @@ test('Sarra onPlay opens suppressionTargetWindow (attack) with cost-filtered can
   game.players[p1].field.push(sarra);
   srv.runPipeline('onPlay', game, p1, sarra);
 
-  assert.ok(game.suppressionTargetWindow, 'window opened');
-  assert.equal(game.suppressionTargetWindow.kind, 'attack');
-  assert.equal(game.suppressionTargetWindow.duration, 'opponentNextTurn');
-  assert.deepEqual(game.suppressionTargetWindow.candidateUids, ['opp-cost3'],
+  assert.ok(game.restTargetWindow, 'rest target window opened');
+  assert.deepEqual(game.restTargetWindow.candidateUids, ['opp-cost3'],
     'cost-4 filter excludes the cost-10 character');
 });
 
@@ -94,36 +92,24 @@ test('Sarra with non-Duchess leader: leaderType condition fails → no window', 
   game.players[p1].field.push(sarra);
   srv.runPipeline('onPlay', game, p1, sarra);
 
-  assert.ok(!game.suppressionTargetWindow, 'no window when leaderType condition unmet');
+  assert.ok(!game.restTargetWindow, 'no window when leaderType condition unmet');
 });
 
-test('SUPPRESSION_TARGET_SELECTED (attack) → DECLARE_ATTACK blocked for the picked target', () => {
+test('REST_TARGET_SELECTED rests the picked opponent character', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
   const opp = { ...srv.CARD_DB.find(c => c.id === 'OP01-101'),
-    uid: 'opp-att', rested: false, attachedDon: 0, playedThisTurn: false };
+    uid: 'opp-att', rested: false, attachedDon: 0 };
   game.players[p2].field.push(opp);
   const sarra = { ...srv.CARD_DB.find(c => c.id === 'OP01-085'), uid: 'sarra-3' };
   game.players[p1].field.push(sarra);
 
   srv.runPipeline('onPlay', game, p1, sarra);
-  assert.ok(game.suppressionTargetWindow);
-  srv.handleAction(roomId, p1, { type: 'SUPPRESSION_TARGET_SELECTED', targetUid: 'opp-att' });
-  assert.equal(game.suppressionTargetWindow, null);
+  assert.ok(game.restTargetWindow);
+  srv.handleAction(roomId, p1, { type: 'REST_TARGET_SELECTED', targetUid: 'opp-att' });
+  assert.equal(game.restTargetWindow, null);
 
   const t = game.players[p2].field.find(c => c.uid === 'opp-att');
-  assert.ok(Array.isArray(t.suppressions));
-  assert.equal(t.suppressions.length, 1);
-  assert.equal(t.suppressions[0].kind, 'attack');
-
-  // Flip active player to p2 and try to DECLARE_ATTACK with the suppressed
-  // character — must be refused.
-  game.activePlayer = p2;
-  game.phase = 'MAIN';
-  game.turn = 2;
-  srv.handleAction(roomId, p2, {
-    type: 'DECLARE_ATTACK', attackerUid: 'opp-att', targetUid: game.players[p1].leader.uid,
-  });
-  assert.ok(!game.battleState, 'attack suppressed — no battleState');
+  assert.equal(t.rested, true, 'target is rested');
 });
 
 // ─── Limejuice onPlay — blocker suppression end-to-end ───────────────────
