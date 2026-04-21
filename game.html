@@ -2167,22 +2167,28 @@ function renderGame() {
     if (ssw) hint('Opponent is deciding on a self-save…');
   }
 
-  // Track K — Opponent's Turn activation buttons. Any of your cards
-  // whose ability's timing is currently fireable (opponentsTurn) and
-  // not yet used this turn surface a clickable button here.
+  // Track K — Opponent's Turn activation buttons. Client scans own
+  // leader + field for cards whose ability text carries an
+  // [Opponent's Turn] block and that haven't been activated this
+  // round. The server validates the action on receipt.
   const otwPanel = document.getElementById('oppTurnActivateBtns');
-  const showOppTurnActivation =
-    game && game.activePlayer && myId && game.activePlayer !== myId && Array.isArray(game.oppTurnActivations);
-  if (showOppTurnActivation && game.oppTurnActivations.length > 0) {
-    hideAllBtnGroups();
+  const onOpponentsTurn = game && game.activePlayer && myId && game.activePlayer !== myId && game.phase !== 'END';
+  let oppActivations = [];
+  if (onOpponentsTurn && game.players && game.players[myId]) {
+    const me = game.players[myId];
+    const pool = [me.leader, ...(me.field || [])].filter(Boolean);
+    oppActivations = pool.filter(c =>
+      c.ability && c.ability.includes("[Opponent's Turn]") && !c.oppTurnUsedThisRound);
+  }
+  if (oppActivations.length > 0) {
     otwPanel.style.display = 'flex';
     const host = document.getElementById('oppTurnActivateList');
     host.innerHTML = '';
-    game.oppTurnActivations.forEach(entry => {
+    oppActivations.forEach(c => {
       const btn = document.createElement('button');
       btn.className = 'gb-pbtn gb-pbtn-sm';
-      btn.textContent = 'Activate ' + entry.name;
-      btn.onclick = () => send({ type: 'ACTIVATE_OPP_TURN', cardUid: entry.uid });
+      btn.textContent = 'Activate ' + c.name;
+      btn.onclick = () => send({ type: 'ACTIVATE_OPP_TURN', cardUid: c.uid });
       host.appendChild(btn);
     });
   } else {

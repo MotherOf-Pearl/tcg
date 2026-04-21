@@ -678,6 +678,12 @@ function doEnd(game) {
   }
   // Track-P Phase 6 — clear per-turn self-save slots.
   if (game._selfSaveUsedThisTurn) game._selfSaveUsedThisTurn.clear();
+  // Track K — clear per-round [Opponent's Turn] activation flags.
+  for (const pid of Object.keys(game.players)) {
+    const pl = game.players[pid];
+    const cards = [pl.leader, ...(pl.field || [])].filter(Boolean);
+    for (const c of cards) if (c.oppTurnUsedThisRound) c.oppTurnUsedThisRound = false;
+  }
   // Phase 5 Priority 8 — prune expired suppressions. Same expiry
   // semantics as tempPowerEffects: thisTurn-kind gets expiresAtTurn
   // equal to the turn they were applied on (now < game.turn → dropped).
@@ -975,6 +981,32 @@ function handleAction(roomId, playerId, action) {
       card.rested = true;
       log(game, `${card.name}: [Activate: Main] activated.`);
       runPipeline('activateMain', game, playerId, card);
+      break;
+    }
+
+    // Track K — player-initiated activation of an [Opponent's Turn]
+    // ability (Trebol, OP10-071 Doflamingo character). Only valid when
+    // it's the caller's opponent's turn and the card hasn't been used
+    // this round.
+    case 'ACTIVATE_OPP_TURN': {
+      if (isActive) { send(playerId, {type:'ERROR', msg:"Not your opponent's turn."}); return; }
+      let card = null;
+      if (p.leader && p.leader.uid === action.cardUid) card = p.leader;
+      else card = (p.field || []).find(c => c.uid === action.cardUid);
+      if (!card) { send(playerId, {type:'ERROR', msg:'Card not on field.'}); return; }
+      if (!card.ability || !card.ability.includes("[Opponent's Turn]")) {
+        send(playerId, {type:'ERROR', msg:"No [Opponent's Turn] effect."}); return;
+      }
+      if (card.oppTurnUsedThisRound) {
+        send(playerId, {type:'ERROR', msg:'Already activated this round.'}); return;
+      }
+      const parsed = PARSED_EFFECTS.get(card.id);
+      if (!parsed || !(parsed.effects || []).some(b => b.timing === 'opponentsTurn' && (b.effects || []).length > 0)) {
+        send(playerId, {type:'ERROR', msg:'Nothing to activate.'}); return;
+      }
+      card.oppTurnUsedThisRound = true;
+      log(game, `${card.name}: [Opponent's Turn] activated.`);
+      runPipeline('opponentsTurn', game, playerId, card);
       break;
     }
 
