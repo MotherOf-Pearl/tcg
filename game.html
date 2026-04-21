@@ -3,6 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Force browsers to revalidate every load — the scry diagnostics
+     needed the newest bundle and cached copies were blocking visibility. -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <title>One Piece TCG Simulator</title>
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Barlow+Condensed:wght@400;600;700&family=Barlow:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -1388,6 +1393,10 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
      JAVASCRIPT
 ════════════════════════════════════════════════════ -->
 <script>
+// ─── BUNDLE VERSION TAG (loud so you can tell which build the browser is running) ───
+console.log('%c[BUNDLE v2025-04-20-SCRY-DIAG]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
+window.__BUNDLE_VERSION = '2025-04-20-SCRY-DIAG';
+
 // ─── CONFIG ───
 const WS_URL = 'wss://game.boohawtcg.com';
 
