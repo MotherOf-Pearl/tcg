@@ -75,47 +75,62 @@ test('tryAutoSelfSave: Ace-style powerDebuff self-save in place of KO', () => {
   // Skipping the direct-call; the integration test below covers it.
 });
 
-test('Ace self-save fires when KO_TARGET_SELECTED targets him (first time per turn)', () => {
+test('Ace self-save opens dialog for the owner; accepting keeps him on field', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
   const ace = { ...srv.CARD_DB.find(c => c.id === 'ST15-005'),
     uid: 'ace-2', attachedDon: 0, rested: false };
   game.players[p2].field.push(ace);
-  // p1 uses Benn Beckman's onPlay KO (Benn is migrated, power ≤6000 filter
-  // — Ace's power is 5000 so it qualifies).
   const benn = { ...srv.CARD_DB.find(c => c.id === 'OP09-009'), uid: 'benn-2' };
   game.players[p1].field.push(benn);
   srv.runPipeline('onPlay', game, p1, benn);
   assert.ok(game.koTargetWindow);
-  assert.ok(game.koTargetWindow.candidateUids.includes('ace-2'));
   srv.handleAction(roomId, p1, { type: 'KO_TARGET_SELECTED', targetUid: 'ace-2' });
-  // Ace should still be on field (saved).
+  // KO_TARGET_SELECTED now pauses on selfSaveWindow for the owner (p2).
+  assert.ok(game.selfSaveWindow);
+  assert.equal(game.selfSaveWindow.playerId, p2);
+  assert.equal(game.selfSaveWindow.replaceWith, 'powerDebuffSelf');
+
+  // Owner accepts — Ace stays, save slot consumed.
+  srv.handleAction(roomId, p2, { type: 'SELF_SAVE_RESOLVE', accept: true });
+  assert.equal(game.selfSaveWindow, null);
   assert.ok(game.players[p2].field.find(c => c.uid === 'ace-2'),
-    'Ace saved himself, stays on field');
-  // Self-save slot consumed.
-  assert.ok(game._selfSaveUsedThisTurn && game._selfSaveUsedThisTurn.has('ace-2'));
+    'Ace still on field');
+  assert.ok(game._selfSaveUsedThisTurn.has('ace-2'));
 });
 
-test('Vergo self-save (returnDon) consumes 1 DON from his owner\'s active pool', () => {
+test('Self-save dialog declined: target is K.O.\'d as normal', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
-  // Vergo belongs to p2, opponent (p1) KOs him via Benn. Vergo's save
-  // requires his affiliation matches (Donquixote Pirates) — OP14-061's
-  // CARD_DB entry has that. Need DON available on p2's field.
+  const ace = { ...srv.CARD_DB.find(c => c.id === 'ST15-005'),
+    uid: 'ace-3', attachedDon: 0, rested: false };
+  game.players[p2].field.push(ace);
+  const benn = { ...srv.CARD_DB.find(c => c.id === 'OP09-009'), uid: 'benn-4' };
+  game.players[p1].field.push(benn);
+  srv.runPipeline('onPlay', game, p1, benn);
+  srv.handleAction(roomId, p1, { type: 'KO_TARGET_SELECTED', targetUid: 'ace-3' });
+  srv.handleAction(roomId, p2, { type: 'SELF_SAVE_RESOLVE', accept: false });
+  assert.equal(game.selfSaveWindow, null);
+  assert.equal(game.players[p2].field.find(c => c.uid === 'ace-3'), undefined,
+    'Ace K.O.\'d');
+  assert.ok(game.players[p2].trash.find(c => c.uid === 'ace-3'));
+  // Save slot NOT consumed — owner declined.
+  assert.ok(!game._selfSaveUsedThisTurn || !game._selfSaveUsedThisTurn.has('ace-3'));
+});
+
+test('Vergo self-save (returnDon) via dialog: accepting consumes 1 DON', () => {
+  const { roomId, p1, p2, game } = twoPlayerGame();
   game.players[p2].donActive = 3;
   game.players[p2].donDeck = 0;
   const vergo = { ...srv.CARD_DB.find(c => c.id === 'OP14-061'),
     uid: 'vg-1', attachedDon: 0, rested: false, power: 5000 };
   game.players[p2].field.push(vergo);
-
   const benn = { ...srv.CARD_DB.find(c => c.id === 'OP09-009'), uid: 'benn-3' };
   game.players[p1].field.push(benn);
   srv.runPipeline('onPlay', game, p1, benn);
-  assert.ok(game.koTargetWindow);
-  assert.ok(game.koTargetWindow.candidateUids.includes('vg-1'));
   srv.handleAction(roomId, p1, { type: 'KO_TARGET_SELECTED', targetUid: 'vg-1' });
-
-  assert.ok(game.players[p2].field.find(c => c.uid === 'vg-1'),
-    'Vergo stays on field');
-  assert.equal(game.players[p2].donActive, 2, '1 DON moved from active to deck');
+  assert.ok(game.selfSaveWindow);
+  srv.handleAction(roomId, p2, { type: 'SELF_SAVE_RESOLVE', accept: true });
+  assert.ok(game.players[p2].field.find(c => c.uid === 'vg-1'));
+  assert.equal(game.players[p2].donActive, 2);
   assert.equal(game.players[p2].donDeck, 1);
 });
 

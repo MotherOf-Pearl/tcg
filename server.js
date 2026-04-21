@@ -560,6 +560,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     playFromTrashWindow: null, // Phase 7: {playerId, candidateUids, filter, rested, sourceCardName, pipelineResume}
     attackRedirectWindow: null, // Track-P: {playerId, candidateUids, sourceCardName, pipelineResume}
     giveDonTargetWindow: null,  // Track-K: {playerId, candidateUids, count, sourceCardName, pipelineResume}
+    selfSaveWindow: null,       // Track-K: {playerId, cardUid, cardName, replaceWith, amount, _koContinuation}
     donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
     koTargetWindow: null,     // KO target picker: {playerId, candidateUids, remaining, optional, sourceCardName, resumeTiming, resumeCardUid, filterKind, filterValue}
     // Bug 5 — TRASH_FROM_HAND_COST: parsed from "You may trash N card(s) from your hand: <effect>".
@@ -1513,11 +1514,28 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'Invalid K.O. target.'});
         return;
       }
-      // Track-P Phase 6 — self-save passives (Ace, Law, Vergo). If the
-      // target card carries a selfSaveReplacement and its once-per-turn
-      // slot is open, auto-apply the alternative and skip the K.O.
-      if (tryAutoSelfSave(target, playerId, game, w.sourceCardName)) {
-        finishWindow();
+      // Track K — self-save opt-in dialog (Ace, Law, Vergo). Ask the
+      // target's owner whether to use their passive save instead of
+      // accepting the K.O. Auto-apply paths on aoeKO / koLastTarget
+      // still exist for bulk removals where a dialog per victim would
+      // chain too many windows.
+      const saveCand = getSelfSaveCandidate(target, playerId, game);
+      if (saveCand) {
+        const oppOfActorId = Object.keys(game.players).find(id => id !== playerId);
+        game.selfSaveWindow = {
+          playerId: saveCand.owner.playerId,
+          cardUid: target.uid,
+          cardName: target.name,
+          replaceWith: saveCand.save.replaceWith,
+          amount: saveCand.save.amount,
+          _koContinuation: {
+            koWindow: w,
+            attackerId: playerId,
+            targetUid: target.uid,
+            oppOfActorId,
+          },
+        };
+        log(game, `${target.name}: self-save available — owner may decide.`);
         break;
       }
       oppOfActor.field = oppOfActor.field.filter(c => c.uid !== action.targetUid);
@@ -1702,6 +1720,44 @@ function handleAction(roomId, playerId, action) {
       log(game, `${w.sourceCardName}: attack redirected to ${newTarget.name}.`);
       game.attackRedirectWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // Track K — self-save opt-in resolver. The target's owner decides
+    // whether to use their selfSave passive or let the removal happen.
+    case 'SELF_SAVE_RESOLVE': {
+      if (!game.selfSaveWindow || game.selfSaveWindow.playerId !== playerId) return;
+      const w = game.selfSaveWindow;
+      const cont = w._koContinuation || {};
+      const attackerId = cont.attackerId;
+      const oppOfActor = game.players[cont.oppOfActorId];
+      const target = (oppOfActor.field || []).find(c => c.uid === cont.targetUid);
+      const koWindow = cont.koWindow;
+      game.selfSaveWindow = null;
+      if (action.accept) {
+        // Apply the save alternative — skip removal.
+        if (target) {
+          const cand = getSelfSaveCandidate(target, attackerId, game);
+          if (cand) applySelfSaveAlternative(cand, target, game, (koWindow && koWindow.sourceCardName) || 'Effect');
+        }
+      } else {
+        // Proceed with the original K.O.
+        if (target) {
+          oppOfActor.field = oppOfActor.field.filter(c => c.uid !== cont.targetUid);
+          oppOfActor.trash.push(target);
+          dropTempEffectsFor(game, target.uid);
+          log(game, `\uD83D\uDC80 ${target.name} K.O.'d!`);
+          triggerOnKO(game, cont.oppOfActorId, target, attackerId);
+        }
+      }
+      // Finalise the KO window regardless of accept/reject.
+      if (koWindow) {
+        koWindow.remaining -= 1;
+        // Short-circuit: close the KO window and resume the pipeline.
+        const pipelineResume = koWindow.pipelineResume;
+        game.koTargetWindow = null;
+        if (pipelineResume) resumePipeline(game, attackerId, pipelineResume);
+      }
       break;
     }
 
@@ -2524,43 +2580,57 @@ function tryOpenScryFromEffect(game, playerId, card, effect) {
 // Supports:
 //   powerDebuffSelf  (Ace, Law) — give self -N power for the turn
 //   returnDon        (Vergo) — return 1 own DON from field to deck
-function tryAutoSelfSave(card, removerPlayerId, game, sourceCardName) {
-  if (!card || !game) return false;
+// Track K — query helper. Returns a descriptor if the card has an
+// applicable self-save passive, else null. Caller decides whether to
+// open a dialog or auto-apply.
+function getSelfSaveCandidate(card, removerPlayerId, game) {
+  if (!card || !game) return null;
   const passives = PASSIVE_EFFECTS.get(card.id) || [];
   const save = passives.find(p => p.type === 'selfSaveReplacement');
-  if (!save) return false;
+  if (!save) return null;
   const owner = findCardOwner(game, card.uid);
-  if (!owner || owner.playerId === removerPlayerId) return false;
-  // Vergo's save is affiliation-gated — only fires when THE card being
-  // removed matches the affiliation clause.
+  if (!owner || owner.playerId === removerPlayerId) return null;
   if (save.scope === 'affiliation' && save.affiliation) {
     const aff = (card.affiliation || '').toLowerCase();
-    if (!aff.includes(save.affiliation.toLowerCase())) return false;
+    if (!aff.includes(save.affiliation.toLowerCase())) return null;
   }
   if (!game._selfSaveUsedThisTurn) game._selfSaveUsedThisTurn = new Set();
   const hasOnceGate = (save.conditions || []).some(c => c.type === 'oncePerTurn');
-  if (hasOnceGate && game._selfSaveUsedThisTurn.has(card.uid)) return false;
-  // Apply the alternative.
+  if (hasOnceGate && game._selfSaveUsedThisTurn.has(card.uid)) return null;
+  // Affordability check for returnDon.
+  if (save.replaceWith === 'returnDon'
+      && (owner.player.donActive || 0) === 0
+      && (owner.player.donRested || 0) === 0) {
+    return null;
+  }
+  return { save, owner, hasOnceGate };
+}
+
+// Apply the save alternative in place of removal; returns true on success.
+function applySelfSaveAlternative(cand, card, game, sourceCardName) {
+  const { save, owner, hasOnceGate } = cand;
   if (save.replaceWith === 'powerDebuffSelf') {
     applyTempPower(game, card.uid, -Math.abs(save.amount || 0),
       save.duration || 'thisTurn', sourceCardName);
   } else if (save.replaceWith === 'returnDon') {
-    // Return 1 DON from field (prefer active) back to deck.
     if ((owner.player.donActive || 0) > 0) {
-      owner.player.donActive--;
-      owner.player.donDeck++;
+      owner.player.donActive--; owner.player.donDeck++;
     } else if ((owner.player.donRested || 0) > 0) {
-      owner.player.donRested--;
-      owner.player.donDeck++;
-    } else {
-      return false;  // no DON available — save can't pay its cost
-    }
-  } else {
-    return false;
-  }
+      owner.player.donRested--; owner.player.donDeck++;
+    } else return false;
+  } else return false;
   if (hasOnceGate) game._selfSaveUsedThisTurn.add(card.uid);
   log(game, `${card.name}: self-save applied (${save.replaceWith}) instead of removal.`);
   return true;
+}
+
+// Track-P auto-apply path — kept for aoeKO and koLastTarget where a
+// player-opt-in dialog would chain too many windows. Single-target KO
+// paths (KO_TARGET_SELECTED) use the interactive dialog instead.
+function tryAutoSelfSave(card, removerPlayerId, game, sourceCardName) {
+  const cand = getSelfSaveCandidate(card, removerPlayerId, game);
+  if (!cand) return false;
+  return applySelfSaveAlternative(cand, card, game, sourceCardName);
 }
 
 // Track-P Phase 5 — removal protection check. Returns true if `card`
