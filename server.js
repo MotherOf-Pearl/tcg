@@ -592,6 +592,16 @@ function broadcast(roomId, msg) {
 function sendState(roomId) {
   const room = rooms.get(roomId);
   if (!room?.game) return;
+  console.log('[BROADCAST]', {
+    roomId,
+    phase: room.game.phase,
+    turn: room.game.turn,
+    activePlayer: room.game.activePlayer,
+    scryWindow: !!room.game.scryWindow,
+    scryWindowPlayerId: room.game.scryWindow?.playerId,
+    scryCards: room.game.scryWindow?.cards?.length,
+    recipients: room.players,
+  });
   room.players.forEach(pid => send(pid, { type: 'GAME_STATE', game: room.game, yourId: pid }));
 }
 
@@ -5151,6 +5161,15 @@ function agentApplyEffect(effect, ctx, resume) {
         placement:      effect.placement || 'top',
         pipelineResume: resume || null,
       };
+      console.log('[SCRY_OPEN]', {
+        cardId: ctx.card.id,
+        cardName: ctx.card.name,
+        playerId: ctx.playerId,
+        scryWindow: !!ctx.game.scryWindow,
+        cards: ctx.game.scryWindow.cards.length,
+        keepCount: ctx.game.scryWindow.keepCount,
+        placement: ctx.game.scryWindow.placement,
+      });
       log(ctx.game, `${ctx.card.name}: looking at top ${lookCount} cards…`);
       return { status: 'window-open' };
     }

@@ -1394,8 +1394,8 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 ════════════════════════════════════════════════════ -->
 <script>
 // ─── BUNDLE VERSION TAG (loud so you can tell which build the browser is running) ───
-console.log('%c[BUNDLE v2025-04-20-SCRY-DIAG]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
-window.__BUNDLE_VERSION = '2025-04-20-SCRY-DIAG';
+console.log('%c[BUNDLE v2025-04-20-SCRY-DIAG-B]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
+window.__BUNDLE_VERSION = '2025-04-20-SCRY-DIAG-B';
 
 // ─── CONFIG ───
 const WS_URL = 'wss://game.boohawtcg.com';
@@ -1633,6 +1633,11 @@ function act(action) {
 }
 
 function handleMsg(msg) {
+  console.log('[MSG]', msg.type, {
+    hasScryWindow: !!msg.game?.scryWindow,
+    scryWindowPlayer: msg.game?.scryWindow?.playerId,
+    phase: msg.game?.phase,
+  });
   switch(msg.type) {
     case 'CONNECTED':
       myId = msg.clientId;
