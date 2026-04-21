@@ -24,6 +24,95 @@ test('FiFi Cat onPlay opens scry{count:5, placement:either}', () => {
   assert.equal(game.scryWindow.playerId, p1);
 });
 
+// ─── placement='either' + keepCount=0 full assignment flow ──────────────
+
+test("FiFi-shape: assigning all 5 cards to top/bottom piles places them correctly", () => {
+  // Mirrors the UI flow: open scry window, player assigns each of the 5
+  // cards to Top or Bottom, Confirm dispatches SCRY_RESOLVE with the
+  // topOrder and bottomOrder arrays, server unshifts the top pile and
+  // pushes the bottom pile onto the deck.
+  const { roomId, p1, game } = twoPlayerGame();
+  const make = (uid, name) => ({
+    id: 'FFT', name, uid, type: 'CHARACTER', power: 1000, cost: 1,
+  });
+  const c0 = make('s0', 'Card0');
+  const c1 = make('s1', 'Card1');
+  const c2 = make('s2', 'Card2');
+  const c3 = make('s3', 'Card3');
+  const c4 = make('s4', 'Card4');
+  game.scryWindow = {
+    playerId: p1,
+    cards: [c0, c1, c2, c3, c4],
+    keepCount: 0,
+    keepFilter: null, keepCardType: null, keepExcludeName: null,
+    cardName: 'FiFi Cat',
+    placement: 'either',
+    pipelineResume: null,
+  };
+  const deckBefore = game.players[p1].deck.slice();
+  // Simulate: player clicks Top on 0, 2, 4 (in that order) and Bottom on
+  // 1, 3. The client builds topOrder=[0,2,4] and bottomOrder=[1,3].
+  srv.handleAction(roomId, p1, {
+    type: 'SCRY_RESOLVE',
+    keptIndices: [],
+    topOrder: [0, 2, 4],
+    bottomOrder: [1, 3],
+  });
+  assert.equal(game.scryWindow, null, 'window cleared');
+  const deck = game.players[p1].deck;
+  assert.equal(deck.length, deckBefore.length + 5, 'all 5 cards returned to deck');
+  // Top pile lands at deck[0..2] in the order clicked.
+  assert.equal(deck[0].uid, 's0');
+  assert.equal(deck[1].uid, 's2');
+  assert.equal(deck[2].uid, 's4');
+  // Bottom pile lands at deck.tail in the order clicked.
+  assert.equal(deck[deck.length - 2].uid, 's1');
+  assert.equal(deck[deck.length - 1].uid, 's3');
+});
+
+test('FiFi-shape: all cards to TOP only (no bottom assignments)', () => {
+  const { roomId, p1, game } = twoPlayerGame();
+  const make = (uid) => ({ id: 'T', name: uid, uid, type: 'CHARACTER', power: 1, cost: 1 });
+  const cards = ['a', 'b', 'c'].map(make);
+  game.scryWindow = {
+    playerId: p1, cards, keepCount: 0,
+    keepFilter: null, keepCardType: null, keepExcludeName: null,
+    cardName: 'X', placement: 'either', pipelineResume: null,
+  };
+  const before = game.players[p1].deck.slice();
+  srv.handleAction(roomId, p1, {
+    type: 'SCRY_RESOLVE', keptIndices: [],
+    topOrder: [0, 1, 2], bottomOrder: [],
+  });
+  assert.equal(game.scryWindow, null);
+  const deck = game.players[p1].deck;
+  assert.equal(deck.length, before.length + 3);
+  assert.equal(deck[0].uid, 'a');
+  assert.equal(deck[1].uid, 'b');
+  assert.equal(deck[2].uid, 'c');
+});
+
+test('FiFi-shape: all cards to BOTTOM only (no top assignments)', () => {
+  const { roomId, p1, game } = twoPlayerGame();
+  const make = (uid) => ({ id: 'T', name: uid, uid, type: 'CHARACTER', power: 1, cost: 1 });
+  const cards = ['a', 'b', 'c'].map(make);
+  game.scryWindow = {
+    playerId: p1, cards, keepCount: 0,
+    keepFilter: null, keepCardType: null, keepExcludeName: null,
+    cardName: 'X', placement: 'either', pipelineResume: null,
+  };
+  const before = game.players[p1].deck.slice();
+  srv.handleAction(roomId, p1, {
+    type: 'SCRY_RESOLVE', keptIndices: [],
+    topOrder: [], bottomOrder: [0, 1, 2],
+  });
+  const deck = game.players[p1].deck;
+  assert.equal(deck.length, before.length + 3);
+  assert.equal(deck[deck.length - 3].uid, 'a');
+  assert.equal(deck[deck.length - 2].uid, 'b');
+  assert.equal(deck[deck.length - 1].uid, 'c');
+});
+
 test('SCRY_RESOLVE split: topOrder unshifts, bottomOrder pushes', () => {
   const { roomId, p1, game } = twoPlayerGame();
   // Pre-stage a known scry window so we know exactly what to expect.
