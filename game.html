@@ -1612,6 +1612,12 @@ function handleMsg(msg) {
       showScreen('game');
       break;
     case 'GAME_STATE':
+      console.log('[GAME_STATE RECEIVED]', {
+        phase: msg.game?.phase, turn: msg.game?.turn,
+        activePlayer: msg.game?.activePlayer,
+        hasScryWindow: !!msg.game?.scryWindow,
+        scryWindowPlayer: msg.game?.scryWindow?.playerId,
+      });
       // FLIP step 1 — capture every visible card's screen position from the OLD DOM
       // before we replace state. After the new render lays cards out at their
       // destinations, animateMovements() inverts the deltas and animates back to 0.
@@ -2804,8 +2810,25 @@ let scryBottomOrder = [];
 let scryWindowSig = null;
 
 function renderScry() {
+  // ─── DIAGNOSTIC ──────────────────────────────────────────────────────
+  // Print the scry state on EVERY render so we can see in the browser
+  // console whether a GAME_STATE broadcast is wiping local selection
+  // between user clicks, and whether scryWindowSig is changing.
+  console.log('[RENDER_SCRY]', {
+    sig: scryWindowSig,
+    cards: scryCards.length,
+    keep: [...scryKeep],
+    order: [...scryOrder],
+    topOrder: [...scryTopOrder],
+    bottomOrder: [...scryBottomOrder],
+    windowPlayer: game?.scryWindow?.playerId,
+    myId,
+    scryWindowPresent: !!game?.scryWindow,
+  });
+
   const left = document.querySelector('.gb-left');
   if (!game || !game.scryWindow || game.scryWindow.playerId !== myId) {
+    console.log('[RENDER_SCRY] hiding — no window or not our turn');
     document.getElementById('scryOverlay').style.display = 'none';
     if (left) left.classList.remove('scry-active');
     scryWindowSig = null;
@@ -2816,12 +2839,15 @@ function renderScry() {
   // of the same window; flips when a brand-new scry opens.
   const sig = (sw.cards || []).map(c => c.uid).join(',') + '|' + (sw.cardName || '');
   if (sig !== scryWindowSig) {
+    console.log('[RENDER_SCRY] NEW WINDOW — resetting selection state. old sig:', scryWindowSig, 'new sig:', sig);
     scryWindowSig   = sig;
     scryCards       = sw.cards;
     scryOrder       = [];
     scryKeep        = [];
     scryTopOrder    = [];
     scryBottomOrder = [];
+  } else {
+    console.log('[RENDER_SCRY] same window — preserving selection');
   }
   const overlay = document.getElementById('scryOverlay');
   overlay.style.display = 'flex';
@@ -2868,7 +2894,17 @@ function renderScry() {
     el.innerHTML = imgSrc
       ? `<img src="${imgSrc}" onerror="this.parentElement.style.background='var(--card-back)';">`
       : '';
-    el.addEventListener('click', () => scryCardClick(idx, sw.keepCount, isKeepEligible(card), isEither));
+    el.addEventListener('click', (ev) => {
+      console.log('[SCRY CARD CLICKED]', {
+        idx, cardName: card.name, cardUid: card.uid,
+        keepCount: sw.keepCount, keepEligible: isKeepEligible(card),
+        isEither,
+        currentKeep: [...scryKeep], currentOrder: [...scryOrder],
+        currentTop: [...scryTopOrder], currentBottom: [...scryBottomOrder],
+        eventTarget: ev.target.tagName,
+      });
+      scryCardClick(idx, sw.keepCount, isKeepEligible(card), isEither);
+    });
     el.addEventListener('mouseenter', e => showTooltip(card, e));
     el.addEventListener('mouseleave', hideTooltip);
     if (isEither) {
@@ -2907,16 +2943,42 @@ function renderScry() {
 }
 
 function scryCardClick(idx, keepCount, keepEligible, isEither) {
-  // In 'either' mode, clicking the card body only toggles keep. Ordering
-  // for deck placement is driven by the per-card Top/Bottom buttons.
+  console.log('[scryCardClick]', { idx, keepCount, keepEligible, isEither });
+  // In 'either' mode:
+  //   keepCount > 0 — body-click toggles keep (Top/Bottom buttons handle
+  //   placement). keepCount === 0 (FiFi Cat) — body-click CYCLES the
+  //   card through Top → Bottom → Unassigned so the whole card surface
+  //   is productive; the inline Top/Bottom buttons remain as explicit
+  //   alternatives for readability.
   if (isEither) {
+    if (keepCount === 0) {
+      // Cycle: unassigned → top → bottom → unassigned.
+      const inTop    = scryTopOrder.includes(idx);
+      const inBottom = scryBottomOrder.includes(idx);
+      if (!inTop && !inBottom) {
+        scryTopOrder.push(idx);
+        console.log('[scryCardClick] either cycle: → TOP', { idx });
+      } else if (inTop) {
+        scryTopOrder = scryTopOrder.filter(i => i !== idx);
+        scryBottomOrder.push(idx);
+        console.log('[scryCardClick] either cycle: TOP → BOTTOM', { idx });
+      } else {
+        scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
+        console.log('[scryCardClick] either cycle: BOTTOM → unassigned', { idx });
+      }
+      updateScryDisplay();
+      return;
+    }
     if (keepCount > 0 && keepEligible && scryKeep.length < keepCount && !scryKeep.includes(idx)) {
-      // Moving into keep — clear any top/bottom assignment.
       scryTopOrder = scryTopOrder.filter(i => i !== idx);
       scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
       scryKeep.push(idx);
+      console.log('[scryCardClick] either-mode: added to keep', { scryKeep });
     } else if (scryKeep.includes(idx)) {
       scryKeep = scryKeep.filter(i => i !== idx);
+      console.log('[scryCardClick] either-mode: removed from keep', { scryKeep });
+    } else {
+      console.log('[scryCardClick] either-mode: NO-OP (card body click ineligible; use Top/Bottom)');
     }
     updateScryDisplay();
     return;
@@ -2945,6 +3007,7 @@ function scryCardClick(idx, keepCount, keepEligible, isEither) {
 // mutually exclusive; Kept trumps both. Clicking the same assignment
 // twice un-assigns (removes from the pile).
 function scryAssignTop(idx) {
+  console.log('[scryAssignTop]', { idx, before: { top: [...scryTopOrder], bottom: [...scryBottomOrder] } });
   scryKeep = scryKeep.filter(i => i !== idx);
   scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
   if (scryTopOrder.includes(idx)) scryTopOrder = scryTopOrder.filter(i => i !== idx);
@@ -2952,6 +3015,7 @@ function scryAssignTop(idx) {
   updateScryDisplay();
 }
 function scryAssignBottom(idx) {
+  console.log('[scryAssignBottom]', { idx, before: { top: [...scryTopOrder], bottom: [...scryBottomOrder] } });
   scryKeep = scryKeep.filter(i => i !== idx);
   scryTopOrder = scryTopOrder.filter(i => i !== idx);
   if (scryBottomOrder.includes(idx)) scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
@@ -3014,6 +3078,9 @@ function updateScryDisplay() {
 
 function confirmScry(placement) {
   const sw = game && game.scryWindow;
+  console.log('[confirmScry]', { placement, swPlacement: sw?.placement,
+    scryKeep: [...scryKeep], scryOrder: [...scryOrder],
+    scryTopOrder: [...scryTopOrder], scryBottomOrder: [...scryBottomOrder] });
   const remainingIndices = scryCards.map((_, i) => i).filter(i => !scryKeep.includes(i));
   if (placement === 'either' || (sw && sw.placement === 'either')) {
     // Split placement — map each assignment list into remaining-index space.
