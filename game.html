@@ -2839,6 +2839,18 @@ let scryBottomOrder = [];
 let scryWindowSig = null;
 
 function renderScry() {
+  // ─── SCRY_DIAGNOSTIC (pre-render, before any DOM mutation) ─────────
+  console.log('[SCRY_DIAGNOSTIC]', {
+    overlay_exists: !!document.querySelector('#scryOverlay'),
+    overlay_display: document.querySelector('#scryOverlay')?.style.display,
+    overlay_rect: document.querySelector('#scryOverlay')?.getBoundingClientRect(),
+    scryCards_count: document.querySelectorAll('.scry-card').length,
+    assignCols_count: document.querySelectorAll('.scry-assign-col').length,
+    assignBtns_count: document.querySelectorAll('.scry-assign-btn').length,
+    elementAtCenter: document.elementFromPoint(window.innerWidth/2, window.innerHeight/2)?.className,
+    elementAtButton: document.elementFromPoint(window.innerWidth/2, window.innerHeight/2 + 80)?.className
+  });
+
   // ─── DIAGNOSTIC ──────────────────────────────────────────────────────
   // Print the scry state on EVERY render so we can see in the browser
   // console whether a GAME_STATE broadcast is wiping local selection
@@ -3008,6 +3020,16 @@ function renderScry() {
   // badges vanish until the next click — which looks like the UI is
   // frozen because clicks re-add badges that were never there.
   updateScryDisplay();
+
+  // ─── SCRY_AFTER_RENDER (post-layout snapshot, 100ms after DOM build) ─
+  setTimeout(() => {
+    const topBtnEl = document.querySelector('.scry-assign-btn');
+    console.log('[SCRY_AFTER_RENDER]', {
+      assignBtns_count: document.querySelectorAll('.scry-assign-btn').length,
+      elementAtButton: document.elementFromPoint(window.innerWidth/2, window.innerHeight/2 + 80)?.className,
+      topBtn: topBtnEl?.getBoundingClientRect(),
+    });
+  }, 100);
 }
 
 function scryCardClick(idx, keepCount, keepEligible, isEither) {
