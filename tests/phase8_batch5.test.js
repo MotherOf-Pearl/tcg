@@ -73,13 +73,35 @@ test('Newgate ST15-002 flag + fully parsed (onPlay giveDon + activateMain koTarg
   assert.deepEqual(p.unparsedSegments, []);
 });
 
-test('Newgate onPlay: giveDon attaches 1 DON from deck to Newgate itself', () => {
-  const { p1, game } = twoPlayerGame();
+test('Newgate onPlay: giveDon opens target picker; selecting Newgate attaches DON', () => {
+  const { roomId, p1, game } = twoPlayerGame();
   const newgate = { ...srv.CARD_DB.find(c => c.id === 'ST15-002'),
     uid: 'ng-1', attachedDon: 0 };
   game.players[p1].field.push(newgate);
   const donDeckBefore = game.players[p1].donDeck;
+
   srv.runPipeline('onPlay', game, p1, newgate);
-  assert.equal(newgate.attachedDon, 1, 'DON attached to Newgate');
+  assert.ok(game.giveDonTargetWindow, 'picker opens');
+  assert.equal(game.giveDonTargetWindow.count, 1);
+  assert.ok(game.giveDonTargetWindow.candidateUids.includes('ng-1'));
+  assert.ok(game.giveDonTargetWindow.candidateUids.includes(game.players[p1].leader.uid));
+
+  srv.handleAction(roomId, p1, { type: 'GIVE_DON_TARGET_SELECTED', targetUid: 'ng-1' });
+  assert.equal(game.giveDonTargetWindow, null);
+  assert.equal(newgate.attachedDon, 1);
   assert.equal(game.players[p1].donDeck, donDeckBefore - 1);
+});
+
+test('Newgate onPlay: giveDon can target the leader instead', () => {
+  const { roomId, p1, game } = twoPlayerGame();
+  const newgate = { ...srv.CARD_DB.find(c => c.id === 'ST15-002'),
+    uid: 'ng-2', attachedDon: 0 };
+  game.players[p1].field.push(newgate);
+  const leader = game.players[p1].leader;
+  const leaderDonBefore = leader.attachedDon || 0;
+
+  srv.runPipeline('onPlay', game, p1, newgate);
+  srv.handleAction(roomId, p1, { type: 'GIVE_DON_TARGET_SELECTED', targetUid: leader.uid });
+  assert.equal(leader.attachedDon, leaderDonBefore + 1, 'DON attached to leader');
+  assert.equal(newgate.attachedDon, 0, 'Newgate did not receive the DON');
 });

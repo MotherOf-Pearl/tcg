@@ -1209,6 +1209,26 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="chooseOneTitle">Choose one</div>
         <div id="chooseOneBranches" style="display:flex;flex-direction:column;gap:4px;"></div>
       </div>
+      <!-- Track K — giveDon target picker (Newgate ST15-002). Click one of
+           your own highlighted Leader/Character cards to attach DON. -->
+      <div id="giveDonTargetBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="giveDonTargetTitle">Attach DON!!</div>
+        <div id="giveDonTargetHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Click a highlighted target to attach the DON!!.</div>
+      </div>
+      <!-- Track K — Opponent's Turn activation button, surfaced when an
+           own card carries an [Opponent's Turn][Once Per Turn] ability. -->
+      <div id="oppTurnActivateBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;">Activate during opponent's turn</div>
+        <div id="oppTurnActivateList" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+      <!-- Track K — Self-save opt-in dialog (Ace, Law, Vergo). Offered
+           when the target of an opponent's removal has a selfSave passive. -->
+      <div id="selfSaveBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="selfSaveTitle">Use self-save?</div>
+        <div id="selfSaveHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="send({ type: 'SELF_SAVE_RESOLVE', accept: true })">Yes, use it</button>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="send({ type: 'SELF_SAVE_RESOLVE', accept: false })">No — proceed with removal</button>
+      </div>
       <!-- DON!! -N return-to-deck picker (interactive cost) -->
       <div id="donReturnBtns" style="display:none;flex-direction:column;gap:6px;">
         <div style="font-family:'Cinzel',serif;font-size:.78rem;color:var(--gold);text-align:center;line-height:1.3;" id="donReturnTitle">Return DON!! to deck</div>
@@ -2111,6 +2131,64 @@ function renderGame() {
     if (cow) hint('Opponent is choosing a branch…');
   }
 
+  // Track K — giveDon target picker (Newgate). Highlights own leader +
+  // own characters; click one to attach the pending DON.
+  const gdw = game.giveDonTargetWindow;
+  const gdwPanel = document.getElementById('giveDonTargetBtns');
+  if (gdw && gdw.playerId === myId) {
+    hideAllBtnGroups();
+    gdwPanel.style.display = 'flex';
+    document.getElementById('giveDonTargetTitle').textContent =
+      `${gdw.sourceCardName} — attach ${gdw.count} DON!!`;
+    requestAnimationFrame(() => {
+      gdw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    gdwPanel.style.display = 'none';
+    if (gdw) hint("Opponent is choosing a target for DON!!…");
+  }
+
+  // Track K — self-save opt-in dialog (Ace, Law, Vergo). Server opens
+  // this when an opponent's effect is about to remove a protected card;
+  // the owner decides whether to apply the save or let the removal happen.
+  const ssw = game.selfSaveWindow;
+  const sswPanel = document.getElementById('selfSaveBtns');
+  if (ssw && ssw.playerId === myId) {
+    hideAllBtnGroups();
+    sswPanel.style.display = 'flex';
+    document.getElementById('selfSaveTitle').textContent =
+      `Self-save: ${ssw.cardName}`;
+    const desc = ssw.replaceWith === 'returnDon'
+      ? `Return 1 DON!! from field to your deck instead of losing ${ssw.cardName}.`
+      : `Give ${ssw.cardName} -${ssw.amount || 2000} power this turn instead of losing it.`;
+    document.getElementById('selfSaveHint').textContent = desc;
+  } else {
+    sswPanel.style.display = 'none';
+    if (ssw) hint('Opponent is deciding on a self-save…');
+  }
+
+  // Track K — Opponent's Turn activation buttons. Any of your cards
+  // whose ability's timing is currently fireable (opponentsTurn) and
+  // not yet used this turn surface a clickable button here.
+  const otwPanel = document.getElementById('oppTurnActivateBtns');
+  const showOppTurnActivation =
+    game && game.activePlayer && myId && game.activePlayer !== myId && Array.isArray(game.oppTurnActivations);
+  if (showOppTurnActivation && game.oppTurnActivations.length > 0) {
+    hideAllBtnGroups();
+    otwPanel.style.display = 'flex';
+    const host = document.getElementById('oppTurnActivateList');
+    host.innerHTML = '';
+    game.oppTurnActivations.forEach(entry => {
+      const btn = document.createElement('button');
+      btn.className = 'gb-pbtn gb-pbtn-sm';
+      btn.textContent = 'Activate ' + entry.name;
+      btn.onclick = () => send({ type: 'ACTIVATE_OPP_TURN', cardUid: entry.uid });
+      host.appendChild(btn);
+    });
+  } else {
+    otwPanel.style.display = 'none';
+  }
+
   // Phase 3 — SELECT_BOTTOM_DECK_TARGET picker (Noble Shlawger [On Block]
   // and any card migrated to the new agent pipeline that emits a
   // placeAtBottom effect).
@@ -2378,6 +2456,18 @@ function _tryConsumeWindowClick(uid) {
   if (game?.suppressionTargetWindow?.playerId === myId
       && game.suppressionTargetWindow.candidateUids.includes(uid)) {
     act({ type: 'SUPPRESSION_TARGET_SELECTED', targetUid: uid });
+    return true;
+  }
+  // Track K — giveDon target picker.
+  if (game?.giveDonTargetWindow?.playerId === myId
+      && game.giveDonTargetWindow.candidateUids.includes(uid)) {
+    act({ type: 'GIVE_DON_TARGET_SELECTED', targetUid: uid });
+    return true;
+  }
+  // Track P — Doflamingo-leader attack redirect picker.
+  if (game?.attackRedirectWindow?.playerId === myId
+      && game.attackRedirectWindow.candidateUids.includes(uid)) {
+    act({ type: 'ATTACK_REDIRECT_SELECTED', targetUid: uid });
     return true;
   }
   return false;
@@ -3081,7 +3171,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','suppressionTargetBtns','chooseOneBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','suppressionTargetBtns','chooseOneBtns','giveDonTargetBtns','selfSaveBtns','oppTurnActivateBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';

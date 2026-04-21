@@ -559,6 +559,7 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     playFromHandWindow: null, // PLAY_FROM_HAND resolver: {playerId, candidateUids, costThreshold, typeName, nameMatch, sourceCardName}
     playFromTrashWindow: null, // Phase 7: {playerId, candidateUids, filter, rested, sourceCardName, pipelineResume}
     attackRedirectWindow: null, // Track-P: {playerId, candidateUids, sourceCardName, pipelineResume}
+    giveDonTargetWindow: null,  // Track-K: {playerId, candidateUids, count, sourceCardName, pipelineResume}
     donReturnWindow: null,    // DON!! -N cost: {playerId, sourceCardUid, sourceCardName, timing, required, available}
     koTargetWindow: null,     // KO target picker: {playerId, candidateUids, remaining, optional, sourceCardName, resumeTiming, resumeCardUid, filterKind, filterValue}
     // Bug 5 — TRASH_FROM_HAND_COST: parsed from "You may trash N card(s) from your hand: <effect>".
@@ -1700,6 +1701,29 @@ function handleAction(roomId, playerId, action) {
       game.battleState.targetIsLeader = (me.leader && me.leader.uid === newTarget.uid);
       log(game, `${w.sourceCardName}: attack redirected to ${newTarget.name}.`);
       game.attackRedirectWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // Track K — giveDon target picker resolver. Attaches N DON!! cards
+    // pulled from the player's DON deck onto the chosen own target.
+    case 'GIVE_DON_TARGET_SELECTED': {
+      if (!game.giveDonTargetWindow || game.giveDonTargetWindow.playerId !== playerId) return;
+      const w = game.giveDonTargetWindow;
+      const pipelineResume = w.pipelineResume;
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid target.'});
+        return;
+      }
+      const me = game.players[playerId];
+      const target = (me.leader && me.leader.uid === action.targetUid) ? me.leader
+                   : (me.field || []).find(c => c.uid === action.targetUid);
+      if (target) {
+        me.donDeck -= w.count;
+        target.attachedDon = (target.attachedDon || 0) + w.count;
+        log(game, `${w.sourceCardName}: attached ${w.count} DON!! to ${target.name}.`);
+      }
+      game.giveDonTargetWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -4841,10 +4865,26 @@ function agentApplyEffect(effect, ctx, resume) {
         log(ctx.game, `${ctx.card.name}: no DON!! in deck — giveDon skipped.`);
         return { status: 'applied' };
       }
-      ctx.player.donDeck -= avail;
-      ctx.card.attachedDon = (ctx.card.attachedDon || 0) + avail;
-      log(ctx.game, `${ctx.card.name}: attached ${avail} rested DON!! to self.`);
-      return { status: 'applied' };
+      // Track K — open a target picker over own leader + own Characters
+      // so the player chooses which card receives the attached DON.
+      const candidates = [];
+      if (ctx.player.leader) candidates.push(ctx.player.leader);
+      candidates.push(...(ctx.player.field || []).filter(c => c.type === 'CHARACTER'));
+      if (candidates.length === 0) {
+        // No targets — attach to source as a degraded fallback.
+        ctx.player.donDeck -= avail;
+        ctx.card.attachedDon = (ctx.card.attachedDon || 0) + avail;
+        return { status: 'applied' };
+      }
+      ctx.game.giveDonTargetWindow = {
+        playerId: ctx.playerId,
+        candidateUids: candidates.map(c => c.uid),
+        count: avail,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose a target for ${avail} DON!! (${candidates.length} option(s)).`);
+      return { status: 'window-open' };
     }
 
     // Phase 8 — mandatory "Trash N cards from your hand" as an effect
