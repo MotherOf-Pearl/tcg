@@ -92,6 +92,56 @@ test('FiFi-shape: all cards to TOP only (no bottom assignments)', () => {
   assert.equal(deck[2].uid, 'c');
 });
 
+test('FiFi single-pile flow (TOP): click order preserved at deck head', () => {
+  // User clicks 5 cards in an order, then hits [Place at Top]. All 5
+  // go to the top of the deck with the first-clicked card at deck[0].
+  const { roomId, p1, game } = twoPlayerGame();
+  const make = (uid) => ({ id: 'F', name: uid, uid, type: 'CHARACTER', power: 1, cost: 1 });
+  const cards = ['a', 'b', 'c', 'd', 'e'].map(make);
+  game.scryWindow = {
+    playerId: p1, cards, keepCount: 0,
+    keepFilter: null, keepCardType: null, keepExcludeName: null,
+    cardName: 'FiFi Cat', placement: 'either', pipelineResume: null,
+  };
+  srv.handleAction(roomId, p1, {
+    type: 'SCRY_RESOLVE',
+    keptIndices: [],
+    topOrder: [0, 1, 2, 3, 4],  // click order a, b, c, d, e → top
+    bottomOrder: [],
+  });
+  assert.equal(game.scryWindow, null);
+  const deck = game.players[p1].deck;
+  assert.equal(deck[0].uid, 'a', 'first clicked at deck[0]');
+  assert.equal(deck[1].uid, 'b');
+  assert.equal(deck[2].uid, 'c');
+  assert.equal(deck[3].uid, 'd');
+  assert.equal(deck[4].uid, 'e');
+});
+
+test('FiFi single-pile flow (BOTTOM): click order preserved at deck tail', () => {
+  const { roomId, p1, game } = twoPlayerGame();
+  const make = (uid) => ({ id: 'F', name: uid, uid, type: 'CHARACTER', power: 1, cost: 1 });
+  const cards = ['a', 'b', 'c', 'd', 'e'].map(make);
+  game.scryWindow = {
+    playerId: p1, cards, keepCount: 0,
+    keepFilter: null, keepCardType: null, keepExcludeName: null,
+    cardName: 'FiFi Cat', placement: 'either', pipelineResume: null,
+  };
+  srv.handleAction(roomId, p1, {
+    type: 'SCRY_RESOLVE',
+    keptIndices: [],
+    topOrder: [],
+    bottomOrder: [0, 1, 2, 3, 4],  // click order a, b, c, d, e → bottom
+  });
+  const deck = game.players[p1].deck;
+  // Stack pushed in click order onto the tail; first-clicked is 5th from tail.
+  assert.equal(deck[deck.length - 5].uid, 'a');
+  assert.equal(deck[deck.length - 4].uid, 'b');
+  assert.equal(deck[deck.length - 3].uid, 'c');
+  assert.equal(deck[deck.length - 2].uid, 'd');
+  assert.equal(deck[deck.length - 1].uid, 'e', 'last clicked at deck tail');
+});
+
 test('FiFi-shape: all cards to BOTTOM only (no top assignments)', () => {
   const { roomId, p1, game } = twoPlayerGame();
   const make = (uid) => ({ id: 'T', name: uid, uid, type: 'CHARACTER', power: 1, cost: 1 });

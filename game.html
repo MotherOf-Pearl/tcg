@@ -610,27 +610,6 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 .scry-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
 .scry-card.kept{border-color:#4ade80;box-shadow:0 0 8px rgba(74,222,128,.5);}
 .scry-card.keep-eligible{border-color:rgba(212,180,80,.85);box-shadow:0 0 6px rgba(255,210,80,.55);}
-/* placement='either' badge tints — applied to the base .scry-card via
-   .scry-card.scry-top (blue glow) or .scry-card.scry-bottom (orange)
-   so the chosen pile is obvious without changing the card widget itself. */
-.scry-card.scry-top   {border-color:#70b8ff;box-shadow:0 0 10px rgba(90,160,255,.6);}
-.scry-card.scry-bottom{border-color:#ffa070;box-shadow:0 0 10px rgba(255,130,80,.55);}
-/* Per-card stacking wrapper used in 'either' mode: card on top, two
-   small pile-indicator buttons beneath. */
-.scry-stack{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;}
-.scry-pile-row{display:flex;gap:2px;}
-.scry-pile-btn{
-  padding:2px 6px;border-radius:3px;font-size:.58rem;
-  font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;
-  border:1px solid var(--gold-dim);background:rgba(20,14,4,.85);
-  color:var(--muted);cursor:pointer;transition:all .1s;
-  text-transform:uppercase;font-weight:600;line-height:1;
-}
-.scry-pile-btn:hover{border-color:var(--gold);color:var(--gold);}
-.scry-pile-btn.selected{
-  background:var(--gold);color:#0f0a04;border-color:var(--gold);
-  box-shadow:0 0 5px rgba(255,210,80,.6);
-}
 /* Pin scry overlay directly above the player hand while scry is active */
 .gb-left.scry-active .gb-self-hand{flex:0 0 auto;}
 .gb-left.scry-active .gb-card-preview.has-card{flex:0 1 auto;}
@@ -1387,8 +1366,8 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 ════════════════════════════════════════════════════ -->
 <script>
 // ─── BUNDLE VERSION TAG (loud so you can tell which build the browser is running) ───
-console.log('%c[BUNDLE v2025-04-20-PILE-BTNS]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
-window.__BUNDLE_VERSION = '2025-04-20-PILE-BTNS';
+console.log('%c[BUNDLE v2025-04-20-SINGLE-PILE]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
+window.__BUNDLE_VERSION = '2025-04-20-SINGLE-PILE';
 
 // ─── CONFIG ───
 const WS_URL = 'wss://game.boohawtcg.com';
@@ -2912,7 +2891,7 @@ function renderScry() {
     else                                 label += `; then order the rest (1 = top)`;
     title.textContent = label;
   } else if (sw.placement === 'either') {
-    title.textContent = `Click each card to cycle: unassigned → TOP → BOTTOM → unassigned. Stacking order = click order (1 = first).`;
+    title.textContent = `Click cards in the order you want (1 = top of the stack). Then click Top or Bottom to commit the whole pile to that end of the deck.`;
   } else {
     title.textContent = `Click cards in the order to place on ${sw.placement || 'top'} of deck (1 = top of stack)`;
   }
@@ -2930,17 +2909,17 @@ function renderScry() {
   };
 
   const isEither = sw.placement === 'either';
-  // FiFi Cat shape: no keep step, each card must end up Top or Bottom.
-  // We still render the same .scry-card widget Queen Victoria uses, but
-  // underneath we add two small indicator buttons (Top/Bottom). The
-  // selected one highlights gold and the number badge on the card shows
-  // the stacking order within its chosen pile.
-  const pileMode = isEither && (sw.keepCount || 0) === 0;
 
   const container = document.getElementById('scryCards');
   container.innerHTML = '';
 
-  const buildCard = (card, idx) => {
+  // Every scry mode renders standard .scry-card tiles.
+  //   keepCount > 0              — click toggles keep, click others in order.
+  //   keepCount === 0 + 'either' — click each in desired stacking order;
+  //                                bottom bar shows BOTH [Top] and [Bottom]
+  //                                and the chosen one commits all 5 cards
+  //                                to that end of the deck in click order.
+  sw.cards.forEach((card, idx) => {
     const el = document.createElement('div');
     el.className = 'scry-card';
     if (sw.keepCount > 0 && isKeepEligible(card)) el.classList.add('keep-eligible');
@@ -2953,44 +2932,14 @@ function renderScry() {
       console.log('[SCRY CARD CLICKED]', {
         idx, cardName: card.name, cardUid: card.uid,
         keepCount: sw.keepCount, keepEligible: isKeepEligible(card),
-        isEither, pileMode,
+        isEither,
         currentKeep: [...scryKeep], currentOrder: [...scryOrder],
-        currentTop: [...scryTopOrder], currentBottom: [...scryBottomOrder],
       });
       scryCardClick(idx, sw.keepCount, isKeepEligible(card), isEither);
     });
     el.addEventListener('mouseenter', e => showTooltip(card, e));
     el.addEventListener('mouseleave', hideTooltip);
-    return el;
-  };
-
-  sw.cards.forEach((card, idx) => {
-    if (pileMode) {
-      // Wrap card + small indicator buttons in a vertical stack.
-      const stack = document.createElement('div');
-      stack.className = 'scry-stack';
-      stack.appendChild(buildCard(card, idx));
-      const row = document.createElement('div');
-      row.className = 'scry-pile-row';
-      const topB = document.createElement('button');
-      topB.className = 'scry-pile-btn';
-      topB.dataset.pile = 'top';
-      topB.dataset.idx = idx;
-      topB.textContent = 'Top';
-      topB.onclick = (ev) => { ev.stopPropagation(); scryAssignTop(idx); };
-      const botB = document.createElement('button');
-      botB.className = 'scry-pile-btn';
-      botB.dataset.pile = 'bottom';
-      botB.dataset.idx = idx;
-      botB.textContent = 'Bottom';
-      botB.onclick = (ev) => { ev.stopPropagation(); scryAssignBottom(idx); };
-      row.appendChild(topB);
-      row.appendChild(botB);
-      stack.appendChild(row);
-      container.appendChild(stack);
-    } else {
-      container.appendChild(buildCard(card, idx));
-    }
+    container.appendChild(el);
   });
   document.getElementById('scryConfirm').style.display = 'none';
   // Skip is only meaningful when the player can opt out without committing to a placement —
@@ -3027,41 +2976,18 @@ function renderScry() {
 
 function scryCardClick(idx, keepCount, keepEligible, isEither) {
   console.log('[scryCardClick]', { idx, keepCount, keepEligible, isEither });
-  // In 'either' mode:
-  //   keepCount > 0 — body-click toggles keep (Top/Bottom buttons handle
-  //   placement). keepCount === 0 (FiFi Cat) — body-click CYCLES the
-  //   card through Top → Bottom → Unassigned so the whole card surface
-  //   is productive; the inline Top/Bottom buttons remain as explicit
-  //   alternatives for readability.
-  if (isEither) {
-    if (keepCount === 0) {
-      // Cycle: unassigned → top → bottom → unassigned.
-      const inTop    = scryTopOrder.includes(idx);
-      const inBottom = scryBottomOrder.includes(idx);
-      if (!inTop && !inBottom) {
-        scryTopOrder.push(idx);
-        console.log('[scryCardClick] either cycle: → TOP', { idx });
-      } else if (inTop) {
-        scryTopOrder = scryTopOrder.filter(i => i !== idx);
-        scryBottomOrder.push(idx);
-        console.log('[scryCardClick] either cycle: TOP → BOTTOM', { idx });
-      } else {
-        scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
-        console.log('[scryCardClick] either cycle: BOTTOM → unassigned', { idx });
-      }
-      updateScryDisplay();
-      return;
-    }
-    if (keepCount > 0 && keepEligible && scryKeep.length < keepCount && !scryKeep.includes(idx)) {
-      scryTopOrder = scryTopOrder.filter(i => i !== idx);
-      scryBottomOrder = scryBottomOrder.filter(i => i !== idx);
-      scryKeep.push(idx);
-      console.log('[scryCardClick] either-mode: added to keep', { scryKeep });
-    } else if (scryKeep.includes(idx)) {
-      scryKeep = scryKeep.filter(i => i !== idx);
-      console.log('[scryCardClick] either-mode: removed from keep', { scryKeep });
+  // placement='either' + keepCount===0 (FiFi Cat): one numbered-order
+  // flow identical to Queen Victoria's click-to-order pattern. Click
+  // a card → it gets a number. Click again to un-number. Once all 5
+  // are numbered, the bottom-bar [Top] / [Bottom] buttons commit the
+  // whole pile in click order to that end of the deck.
+  if (isEither && keepCount === 0) {
+    if (scryOrder.includes(idx)) {
+      scryOrder = scryOrder.filter(i => i !== idx);
+      console.log('[scryCardClick] either-pile: removed from order', { scryOrder });
     } else {
-      console.log('[scryCardClick] either-mode: NO-OP (card body click ineligible; use Top/Bottom)');
+      scryOrder.push(idx);
+      console.log('[scryCardClick] either-pile: added to order', { scryOrder });
     }
     updateScryDisplay();
     return;
@@ -3109,13 +3035,13 @@ function scryAssignBottom(idx) {
 function updateScryDisplay() {
   const sw = game && game.scryWindow;
   const isEither = sw && sw.placement === 'either';
+  const eitherPile = isEither && (sw?.keepCount || 0) === 0;
+
   const cards = document.querySelectorAll('#scryCards .scry-card');
   cards.forEach((el) => {
     const idx = Number(el.dataset.idx);
     el.querySelectorAll('.scry-order').forEach(b => b.remove());
-    el.classList.remove('kept', 'scry-top', 'scry-bottom');
-    if (scryTopOrder.includes(idx))    el.classList.add('scry-top');
-    if (scryBottomOrder.includes(idx)) el.classList.add('scry-bottom');
+    el.classList.remove('kept');
 
     if (scryKeep.includes(idx)) {
       el.classList.add('kept');
@@ -3123,18 +3049,6 @@ function updateScryDisplay() {
       badge.className = 'scry-order';
       badge.textContent = '✓';
       badge.style.background = 'rgba(20,80,20,.85)';
-      el.appendChild(badge);
-    } else if (isEither && scryTopOrder.includes(idx)) {
-      const badge = document.createElement('div');
-      badge.className = 'scry-order';
-      badge.textContent = `${scryTopOrder.indexOf(idx) + 1}`;
-      badge.style.background = 'rgba(30,90,150,.9)';
-      el.appendChild(badge);
-    } else if (isEither && scryBottomOrder.includes(idx)) {
-      const badge = document.createElement('div');
-      badge.className = 'scry-order';
-      badge.textContent = `${scryBottomOrder.indexOf(idx) + 1}`;
-      badge.style.background = 'rgba(150,60,30,.9)';
       el.appendChild(badge);
     } else if (scryOrder.includes(idx)) {
       const pos = scryOrder.indexOf(idx) + 1;
@@ -3146,30 +3060,34 @@ function updateScryDisplay() {
   });
 
   const remainingCount = scryCards.length - scryKeep.length;
+  const allOrdered = scryOrder.length === remainingCount;
+
   const confirm = document.getElementById('scryConfirm');
   const eitherBtn = document.getElementById('scryEitherConfirm');
   const topBtn = document.getElementById('scryPlaceTop');
   const botBtn = document.getElementById('scryPlaceBottom');
-  if (isEither) {
-    const allAssigned = (scryTopOrder.length + scryBottomOrder.length) === remainingCount;
-    confirm.style.display = allAssigned ? 'flex' : 'none';
-    if (eitherBtn) eitherBtn.style.display = allAssigned ? '' : 'none';
-    if (topBtn) topBtn.style.display = 'none';
-    if (botBtn) botBtn.style.display = 'none';
-  } else {
-    if (eitherBtn) eitherBtn.style.display = 'none';
-    confirm.style.display = scryOrder.length === remainingCount ? 'flex' : 'none';
-  }
 
-  // Paint the per-card Top/Bottom indicator buttons (pile-mode only).
-  document.querySelectorAll('#scryCards .scry-pile-btn').forEach(btn => {
-    const idx = Number(btn.dataset.idx);
-    const pile = btn.dataset.pile;
-    const inPile = pile === 'top'
-      ? scryTopOrder.includes(idx)
-      : scryBottomOrder.includes(idx);
-    btn.classList.toggle('selected', inPile);
-  });
+  if (eitherBtn) eitherBtn.style.display = 'none';
+
+  if (eitherPile) {
+    // FiFi Cat: ONE set of Top/Bottom buttons at the bottom; both are
+    // active once every card has a click-order number.
+    confirm.style.display = allOrdered ? 'flex' : 'none';
+    if (topBtn) { topBtn.style.display = allOrdered ? '' : 'none'; topBtn.textContent = 'Place at the top'; }
+    if (botBtn) { botBtn.style.display = allOrdered ? '' : 'none'; botBtn.textContent = 'Place at the bottom'; }
+  } else if (sw && sw.placement === 'top') {
+    confirm.style.display = allOrdered ? 'flex' : 'none';
+    if (topBtn) topBtn.style.display = allOrdered ? '' : 'none';
+    if (botBtn) botBtn.style.display = 'none';
+  } else if (sw && sw.placement === 'bottom') {
+    confirm.style.display = allOrdered ? 'flex' : 'none';
+    if (topBtn) topBtn.style.display = 'none';
+    if (botBtn) botBtn.style.display = allOrdered ? '' : 'none';
+  } else {
+    confirm.style.display = allOrdered ? 'flex' : 'none';
+    if (topBtn) topBtn.style.display = allOrdered ? '' : 'none';
+    if (botBtn) botBtn.style.display = allOrdered ? '' : 'none';
+  }
 }
 
 function confirmScry(placement) {
@@ -3178,20 +3096,21 @@ function confirmScry(placement) {
     scryKeep: [...scryKeep], scryOrder: [...scryOrder],
     scryTopOrder: [...scryTopOrder], scryBottomOrder: [...scryBottomOrder] });
   const remainingIndices = scryCards.map((_, i) => i).filter(i => !scryKeep.includes(i));
-  if (placement === 'either' || (sw && sw.placement === 'either')) {
-    // Split placement — map each assignment list into remaining-index space.
-    const topOrder    = scryTopOrder.map(idx => remainingIndices.indexOf(idx));
-    const bottomOrder = scryBottomOrder.map(idx => remainingIndices.indexOf(idx));
+  const orderedRemaining = scryOrder.map(idx => remainingIndices.indexOf(idx));
+  // FiFi Cat (either + keepCount=0): all ordered cards go to the
+  // chosen end of the deck. Server accepts this via topOrder or
+  // bottomOrder with the complementary array empty.
+  if (sw && sw.placement === 'either' && (sw.keepCount || 0) === 0) {
+    const goTop = placement === 'top';
     act({
       type: 'SCRY_RESOLVE',
-      keptIndices: scryKeep,
-      topOrder,
-      bottomOrder,
+      keptIndices: [],
+      topOrder:    goTop ? orderedRemaining : [],
+      bottomOrder: goTop ? [] : orderedRemaining,
     });
     closeScry();
     return;
   }
-  const orderedRemaining = scryOrder.map(idx => remainingIndices.indexOf(idx));
   act({
     type: 'SCRY_RESOLVE',
     keptIndices: scryKeep,
