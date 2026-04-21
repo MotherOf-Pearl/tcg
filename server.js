@@ -909,12 +909,8 @@ function handleAction(roomId, playerId, action) {
         // precedence for the active player.
         if (isEffectsSuppressed(card) || isOnPlaySuppressed(game, playerId)) {
           log(game, `${card.name}: [On Play] suppressed.`);
-        } else if (card.useNewPipeline) {
-          // Phase-4 routing: new-pipeline characters run through runPipeline;
-          // legacy characters stay on parseAndApply.
-          runPipeline('onPlay', game, playerId, card);
         } else {
-          parseAndApply('onPlay', game, playerId, card, opp);
+          runPipeline('onPlay', game, playerId, card);
         }
       } else if (card.type === 'STAGE') {
         card.rested = false;
@@ -922,22 +918,10 @@ function handleAction(roomId, playerId, action) {
         log(game, `${playerId.slice(0,6)} plays stage ${card.name}.`);
       } else if (card.type === 'EVENT') {
         log(game, `${playerId.slice(0,6)} plays event ${card.name}.`);
-        if (card.useNewPipeline) {
-          // Push to trash FIRST so resumePipeline's leader/field/trash
-          // lookup finds the event by uid when its windows resolve. The
-          // legacy parseAndApply path stays in the else branch with the
-          // original ordering so existing event cards are unaffected.
-          p.trash.push(card);
-          runPipeline('eventMain', game, playerId, card);
-        } else {
-          // Bug 1 — fire the [Main] effect BEFORE moving to trash so any
-          // interactive window opens against an in-flight event. Push to
-          // trash unconditionally afterward — the event's own card object
-          // is already off the player's hand and held by reference, so
-          // any pending resume window keeps a valid `card`.
-          parseAndApply('eventMain', game, playerId, card, opp);
-          p.trash.push(card);
-        }
+        // Push to trash FIRST so resumePipeline's leader/field/trash
+        // lookup finds the event by uid when its windows resolve.
+        p.trash.push(card);
+        runPipeline('eventMain', game, playerId, card);
       }
       break;
     }
@@ -988,11 +972,7 @@ function handleAction(roomId, playerId, action) {
       card.usedThisTurn = true;
       card.rested = true;
       log(game, `${card.name}: [Activate: Main] activated.`);
-      if (card.useNewPipeline) {
-        runPipeline('activateMain', game, playerId, card);
-      } else {
-        parseAndApply('activateMain', game, playerId, card, opp);
-      }
+      runPipeline('activateMain', game, playerId, card);
       break;
     }
 
@@ -1037,8 +1017,7 @@ function handleAction(roomId, playerId, action) {
       // P8 — effects suppression blocks the triggered ability.
       if (isEffectsSuppressed(attacker)) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
-      } else if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
-      else parseAndApply('whenAttacking', game, playerId, attacker, opp);
+      } else runPipeline('whenAttacking', game, playerId, attacker);
 
       game.counterWindow = {
         attackerUid: attacker.uid, defenderUid: defender.uid,
@@ -1092,8 +1071,7 @@ function handleAction(roomId, playerId, action) {
       // still proceeds (attack suppression is a separate kind, checked above).
       if (isEffectsSuppressed(attacker)) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
-      } else if (attacker.useNewPipeline) runPipeline('whenAttacking', game, playerId, attacker);
-      else parseAndApply('whenAttacking', game, playerId, attacker, opp);
+      } else runPipeline('whenAttacking', game, playerId, attacker);
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
       break;
     }
@@ -1261,13 +1239,8 @@ function handleAction(roomId, playerId, action) {
         // blocked.
         if (isEffectsSuppressed(card)) {
           log(game, `${card.name}: [Counter] ability suppressed by opponent effect.`);
-        } else if (card.useNewPipeline) {
-          // Phase-5 Priority-1 routing: new-pipeline counter events
-          // (NoroNoro Beam Sword, Bad Manners Kick Course) run their
-          // [Counter] block through runPipeline.
-          runPipeline('counter', game, defenderId, card);
         } else {
-          parseAndApply('counter', game, defenderId, card, oppOfDefender);
+          runPipeline('counter', game, defenderId, card);
         }
       }
       break;
@@ -1379,13 +1352,7 @@ function handleAction(roomId, playerId, action) {
       log(game, `\uD83D\uDEE1\uFE0F ${playerId.slice(0,6)} counters with ${card.name} (+${card.counter})! Defend: ${game.counterWindow.defendPower}`);
       // Apply additional [Counter] effects from the card's ability
       if (card.ability && card.ability.includes('[Counter]')) {
-        const counterOppId = Object.keys(game.players).find(id => id !== playerId);
-        const counterOpp = game.players[counterOppId];
-        if (card.useNewPipeline) {
-          runPipeline('counter', game, playerId, card);
-        } else {
-          parseAndApply('counter', game, playerId, card, counterOpp);
-        }
+        runPipeline('counter', game, playerId, card);
       }
       break;
     }
@@ -1532,26 +1499,7 @@ function handleAction(roomId, playerId, action) {
         game.koTargetWindow = null;
         // Phase-4: new-pipeline cards take precedence — the pipeline's
         // own chain state is authoritative.
-        if (pipelineResume) {
-          resumePipeline(game, playerId, pipelineResume);
-          return;
-        }
-        if (resumeTiming && resumeCardUid) {
-          const owner = game.players[playerId];
-          const src = (owner.leader && owner.leader.uid === resumeCardUid) ? owner.leader
-                    : (owner.field || []).find(c => c.uid === resumeCardUid);
-          if (src) {
-            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
-            // BUG 7 — Chris the Visually Impaired and every other DON-cost-
-            // then-K.O. card re-opened the DON return prompt on resume
-            // because the new opts didn't carry donCostPaid forward. The
-            // DON block in parseAndApply only short-circuits when
-            // donCostPaid is truthy. Propagating it here closes the loop.
-            // Safe for cards without a DON cost — donCostMatch is null in
-            // that case and both branches of the DON block are skipped.
-            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { koResolved: true, donCostPaid: true });
-          }
-        }
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       };
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a K.O. target.'}); return; }
@@ -1639,19 +1587,7 @@ function handleAction(roomId, playerId, action) {
       const sourceCardUid = w.sourceCardUid;
       game.donReturnWindow = null;
       // Phase-4: new-pipeline cards get their own resume path.
-      if (pipelineResume) {
-        resumePipeline(game, playerId, pipelineResume);
-        break;
-      }
-      // Legacy parseAndApply resume — checks leader/field only (events in
-      // trash are a known miss in the legacy flow; pipeline cards don't
-      // have that bug).
-      const sourceCard = (owner.leader.uid === sourceCardUid) ? owner.leader
-                       : owner.field.find(c => c.uid === sourceCardUid);
-      if (sourceCard) {
-        const oppOfSource = game.players[Object.keys(game.players).find(id => id !== playerId)];
-        parseAndApply(timing, game, playerId, sourceCard, oppOfSource, { donCostPaid: true });
-      }
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
 
@@ -1678,14 +1614,8 @@ function handleAction(roomId, playerId, action) {
         // since suppressions usually target cards on the field.
         if (isEffectsSuppressed(tw.card)) {
           log(game, `${tw.card.name}: [Trigger] suppressed by opponent effect.`);
-        } else if (tw.card.useNewPipeline) {
-          // Phase 5 Priority 5 — route new-pipeline cards through
-          // runPipeline for their [Trigger] block. Snow Merchant is the
-          // first card that benefits (its [Trigger] block contains a
-          // meta-ref to its own [Counter] block).
-          runPipeline('trigger', game, playerId, tw.card);
         } else {
-          parseAndApply('trigger', game, playerId, tw.card, oppOfTrigger);
+          runPipeline('trigger', game, playerId, tw.card);
         }
       } else {
         log(game, `[Trigger] ${tw.card.name} skipped.`);
@@ -1729,8 +1659,7 @@ function handleAction(roomId, playerId, action) {
         log(game, `${picked.name}: [On Play] suppressed.`);
       } else {
         log(game, `${picked.name}: triggering [On Play].`);
-        if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
-        else parseAndApply('onPlay', game, playerId, picked, opp2);
+        runPipeline('onPlay', game, playerId, picked);
       }
       // After the played card's own onPlay resolves, continue the chain
       // for the effect that DISPATCHED the play (e.g. Snow Merchant's
@@ -1809,8 +1738,7 @@ function handleAction(roomId, playerId, action) {
         log(game, `${picked.name}: [On Play] suppressed.`);
       } else {
         log(game, `${picked.name}: triggering [On Play].`);
-        if (picked.useNewPipeline) runPipeline('onPlay', game, playerId, picked);
-        else parseAndApply('onPlay', game, playerId, picked, opp2);
+        runPipeline('onPlay', game, playerId, picked);
       }
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
@@ -1844,20 +1772,7 @@ function handleAction(roomId, playerId, action) {
             log(game, `${selfRevive.sourceName}: revived from trash${picked.rested ? ' (rested)' : ''}.`);
           }
         }
-        // Phase-4: new-pipeline cards take precedence.
-        if (pipelineResume) {
-          resumePipeline(game, playerId, pipelineResume);
-          return;
-        }
-        if (resumeTiming && resumeCardUid) {
-          const src = findSourceCard(owner, resumeCardUid);
-          if (src) {
-            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
-            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { trashCostPaid: true });
-          } else {
-            log(game, `${sourceName}: source card no longer accessible — effect aborted.`);
-          }
-        }
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       };
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must trash cards to fire this effect.'}); return; }
@@ -1901,19 +1816,7 @@ function handleAction(roomId, playerId, action) {
         const resumeCardUid = w.resumeCardUid;
         const pipelineResume = w.pipelineResume;
         game.bounceTargetWindow = null;
-        // Phase-4: new-pipeline path first.
-        if (pipelineResume) {
-          resumePipeline(game, playerId, pipelineResume);
-          return;
-        }
-        if (resumeTiming && resumeCardUid) {
-          const owner = game.players[playerId];
-          const src = findSourceCard(owner, resumeCardUid);
-          if (src) {
-            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
-            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { bounceResolved: true });
-          }
-        }
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       };
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target to bounce.'}); return; }
@@ -1956,21 +1859,7 @@ function handleAction(roomId, playerId, action) {
         const resumeCardUid = w.resumeCardUid;
         const pipelineResume = w.pipelineResume;
         game.restTargetWindow = null;
-        // Phase-4 Batch 3: new-pipeline cards (Anna of Brittany) chain
-        // resume here; legacy cards still flow through parseAndApply.
-        if (pipelineResume) {
-          resumePipeline(game, playerId, pipelineResume);
-          return;
-        }
-        if (resumeTiming && resumeCardUid) {
-          const owner = game.players[playerId];
-          const src = (owner.leader && owner.leader.uid === resumeCardUid) ? owner.leader
-                    : (owner.field || []).find(c => c.uid === resumeCardUid);
-          if (src) {
-            const oppOfSrc = game.players[Object.keys(game.players).find(id => id !== playerId)];
-            parseAndApply(resumeTiming, game, playerId, src, oppOfSrc, { restResolved: true, donCostPaid: true });
-          }
-        }
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       };
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a character to rest.'}); return; }
@@ -2240,17 +2129,6 @@ function addDonFromDeck(p, count, rested, game, cardName) {
 }
 
 // Helper: bounce character by power threshold back to owner's hand
-function bounceByPower(opp, threshold, game, cardName) {
-  const target = opp.field.find(c => c.type === 'CHARACTER' && (c.power + (c.attachedDon || 0) * 1000) <= threshold);
-  if (target) {
-    opp.field = opp.field.filter(c => c.uid !== target.uid);
-    target.attachedDon = 0;
-    opp.hand.push(target);
-    log(game, `${cardName}: returned ${target.name} to hand (power <= ${threshold}).`);
-    return target;
-  }
-  return null;
-}
 
 // Helper: bounce character by cost threshold back to owner's hand
 function bounceByCost(targetPlayer, threshold, game, cardName) {
@@ -2357,22 +2235,6 @@ function counterValueOf(card) {
 }
 
 // Helper: extract effect text after a timing keyword
-function extractEffect(ability, keyword) {
-  const idx = ability.indexOf(keyword);
-  if (idx === -1) return null;
-  let text = ability.substring(idx + keyword.length).trim();
-  // Trim to the next timing keyword or end
-  const nextKeywords = ['[On Play]', '[On K.O.]', '[When Attacking]', '[Blocker]', '[Counter]',
-    '[Trigger]', '[Activate: Main]', '[Rush]', '[Double Attack]', '[Banish]',
-    "[On Your Opponent's Attack]", "[Opponent's Turn]", '[Once Per Turn]',
-    '[End of Your Turn]', '[Your Turn]', '[Main]'];
-  let endIdx = text.length;
-  for (const nk of nextKeywords) {
-    const ni = text.indexOf(nk);
-    if (ni > 0 && ni < endIdx) endIdx = ni;
-  }
-  return text.substring(0, endIdx).trim();
-}
 
 // Helper: auto-play a character from hand with cost <= threshold
 function autoPlayFromHand(p, costThreshold, game, cardName, typeFilter) {
@@ -2621,16 +2483,6 @@ function tryOpenScryFromEffect(game, playerId, card, effect) {
 }
 
 // Extract "[Card Name] card" name filter (skips bracketed keywords like [On Play]).
-function extractNameFilter(text) {
-  const KW = new Set(['On Play','On K.O.','Activate: Main','Main','Counter','Trigger','Blocker',
-    'Rush','Banish','Double Attack','Once Per Turn','When Attacking','On Block',
-    'End of Your Turn','Your Turn',"Opponent's Turn","On Your Opponent's Attack"]);
-  const ms = text.match(/\[([^\]]+)\]\s*card/i);
-  if (!ms) return null;
-  const candidate = ms[1].trim();
-  if (KW.has(candidate) || candidate.startsWith('DON')) return null;
-  return candidate;
-}
 
 // ─── Bug 5/6/8 helpers ────────────────────────────────────────────────────
 
@@ -3128,957 +2980,7 @@ function openBounceTarget(game, playerId, opts) {
 // Locate the source card by uid across leader/field/trash for the given player.
 // Used by resume-handlers: an event's source card is in trash; an [On Play] /
 // [When Attacking] source is on the field.
-function findSourceCard(player, uid) {
-  if (!player) return null;
-  if (player.leader && player.leader.uid === uid) return player.leader;
-  return (player.field || []).find(c => c.uid === uid)
-      || (player.trash || []).find(c => c.uid === uid)
-      || null;
-}
 
-// ─── CENTRAL EFFECT PARSER ───
-
-function parseAndApply(timing, game, playerId, card, opp, opts = {}) {
-  const ab = card.ability || '';
-  if (!ab) return;
-  const p = game.players[playerId];
-
-  // ── [Rush] ──
-  if (timing === 'onPlay' && hasRush(card)) {
-    log(game, `${card.name} has [Rush] — can attack this turn!`);
-  }
-
-  // ── [Blocker] tracking ──
-  if (timing === 'onPlay' && hasBlocker(card)) {
-    log(game, `${card.name} has [Blocker].`);
-  }
-
-  // ── [Activate: Main] — log only ──
-  if (timing === 'onPlay' && ab.includes('[Activate: Main]')) {
-    log(game, `${card.name} has [Activate: Main] ability (manual activation needed).`);
-  }
-
-  // ── [On Play] effects ──
-  if (timing === 'onPlay' && ab.includes('[On Play]')) {
-    let effect = extractEffect(ab, '[On Play]');
-    if (!effect) return;
-
-    // Check DON!! requirement before [On Play] (e.g. "[On Play] DON!! -1:")
-    // Open the interactive DON-return window the first time we see this card; once
-    // RETURN_DON is resolved, parseAndApply re-runs with opts.donCostPaid=true and we
-    // skip past this block.
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
-    if (donCostMatch && !opts.donCostPaid) {
-      const donCost = parseInt(donCostMatch[1]);
-      if (!openDonReturn(game, playerId, card, donCost, 'onPlay')) return;
-      return; // pause until RETURN_DON resolves
-    }
-    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
-
-    // Bug 5 — "You may trash N card(s) from your hand: <effect>" cost. Open the
-    // interactive picker; on resume re-enters here with opts.trashCostPaid=true and
-    // we strip the cost prefix so the parser sees only the post-colon effect.
-    const trashCost = parseTrashFromHandCost(effect);
-    if (trashCost && !opts.trashCostPaid) {
-      if (openTrashFromHand(game, playerId, {
-        count: trashCost.count, optional: true,
-        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: 'onPlay', resumeCardUid: card.uid,
-      })) return;
-      // Couldn't open (no eligible cards) — effect aborts.
-      return;
-    }
-    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
-
-    // Bug 8 — temp power buff at On Play (e.g. Yasopp: "Up to one of your leaders
-    // gains +1000 power until the end of your opponent's next turn").
-    const buff = parseTempPowerBuff(effect);
-    if (buff && !opts.tempBuffApplied) {
-      // Auto-pick: leader → own leader; self → this card; leaderOrCharacter → own leader.
-      let targetUid = null;
-      if (buff.target === 'self') targetUid = card.uid;
-      else targetUid = p.leader.uid;
-      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
-      // Mark applied; if there are sibling effects after (rare), they still process below.
-      opts.tempBuffApplied = true;
-    }
-
-    // Bug 6 — bounce target picker.
-    const bounce = parseBounceTarget(effect);
-    if (bounce && !opts.bounceResolved) {
-      if (openBounceTarget(game, playerId, {
-        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
-        resumeTiming: 'onPlay', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Draw N cards
-    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
-    if (drawMatch) {
-      drawCards(p, parseInt(drawMatch[1]), game, card.name);
-    }
-
-    // K.O. by power — interactive
-    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch && !effect.includes('cost of') && !opts.koResolved) {
-      const threshold = parseInt(koPowerMatch[2]);
-      const count = parseInt(koPowerMatch[1]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'power', filterValue: threshold,
-        resumeTiming: 'onPlay', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // K.O. by cost — interactive
-    const koCostMatch = effect.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
-    if (koCostMatch && !opts.koResolved) {
-      const count = parseInt(koCostMatch[1]);
-      const threshold = parseInt(koCostMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.cost || 0) <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'cost', filterValue: threshold,
-        resumeTiming: 'onPlay', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // K.O. up to 1 of your opponent's Characters (no threshold — any character) — interactive
-    if (/K\.O\.\s+up to 1 of your opponent's Characters\.?$/i.test(effect) && !opts.koResolved) {
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => true,
-        sourceCardName: card.name, count: 1, optional: true,
-        filterKind: 'any', filterValue: '',
-        resumeTiming: 'onPlay', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // BUG 17 — AOE K.O. ("K.O. all Characters other than this Character").
-    // Non-interactive — every matching opponent character goes to trash in
-    // one pass, each firing its own [On K.O.] via triggerOnKO. Leader
-    // affiliation gate (when present) is enforced via the existing helper.
-    // Scales to any AOE K.O. line with this phrasing.
-    if (/K\.O\.\s+all Characters other than this Character/i.test(effect) && !opts.aoeKoResolved) {
-      if (leaderAffiliationGatePasses(effect, p)) {
-        const victims = (opp.field || []).filter(c => c.type === 'CHARACTER' && c.uid !== card.uid);
-        const oppId = Object.keys(game.players).find(id => id !== playerId);
-        for (const target of victims) {
-          opp.field = opp.field.filter(c => c.uid !== target.uid);
-          opp.trash.push(target);
-          dropTempEffectsFor(game, target.uid);
-          log(game, `\uD83D\uDC80 ${target.name} K.O.'d by ${card.name}!`);
-          triggerOnKO(game, oppId, target, playerId);
-        }
-        opts.aoeKoResolved = true;
-      } else {
-        log(game, `${card.name}: leader affiliation does not match — AOE K.O. skipped.`);
-      }
-    }
-
-    // Rest opponent character (with optional cost threshold)
-    if (/rest up to 1.*opponent/i.test(effect)) {
-      const costMatch = effect.match(/cost of (\d+) or less/);
-      if (costMatch) {
-        restOpponentCharacter(opp, game, card.name, parseInt(costMatch[1]));
-      } else {
-        restOpponentCharacter(opp, game, card.name);
-      }
-    }
-
-    // Rest multiple opponent characters
-    const restMultiMatch = effect.match(/[Rr]est up to (\d+) of your opponent's Characters/);
-    if (restMultiMatch && parseInt(restMultiMatch[1]) > 1) {
-      const count = parseInt(restMultiMatch[1]);
-      const costMatch = effect.match(/cost of (\d+) or less/);
-      for (let i = 0; i < count; i++) {
-        restOpponentCharacter(opp, game, card.name, costMatch ? parseInt(costMatch[1]) : undefined);
-      }
-    }
-
-    // Give power reduction
-    const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
-    if (powerRedMatch) {
-      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
-    }
-
-    // Add DON rested
-    if (/[Aa]dd up to 1 DON!!.*rest/i.test(effect)) {
-      addDonFromDeck(p, 1, true, game, card.name);
-    }
-    // Add DON active
-    else if (/[Aa]dd up to 1 DON!!.*active/i.test(effect) || /[Aa]dd up to 1 DON!!.*set it as active/i.test(effect)) {
-      addDonFromDeck(p, 1, false, game, card.name);
-    }
-    // Generic add DON (defaults to rested)
-    else if (/[Aa]dd up to (\d+) DON!!/i.test(effect) && !effect.includes('active')) {
-      const donMatch = effect.match(/[Aa]dd up to (\d+) DON!!/i);
-      if (donMatch) addDonFromDeck(p, parseInt(donMatch[1]), true, game, card.name);
-    }
-
-    // Return character to hand by cost
-    const bounceCostMatch = effect.match(/[Rr]eturn up to 1 Character.*?cost of (\d+) or less.*?hand/i);
-    if (bounceCostMatch) {
-      bounceByCost(opp, parseInt(bounceCostMatch[1]), game, card.name);
-    }
-
-    // Return character to hand by power
-    const bouncePowerMatch = effect.match(/[Rr]eturn up to 1 Character.*?(\d+)\s*power or less.*?hand/i);
-    if (bouncePowerMatch && !bounceCostMatch) {
-      bounceByPower(opp, parseInt(bouncePowerMatch[1]), game, card.name);
-    }
-
-    // Look at X cards from top of deck — open scry window
-    if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
-
-    // Play character from hand (interactive)
-    const playMatch = effect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
-    if (playMatch) {
-      openPlayFromHand(game, playerId, {
-        costThreshold: parseInt(playMatch[1]),
-        typeName: extractTypeFilter(effect),
-        nameMatch: extractNameFilter(effect),
-        sourceCardName: card.name,
-      });
-    }
-
-    // MANDATORY trash from hand — fires LAST so any draws/searches above have
-    // already enlarged the hand the player picks from. No "you may" → no skip.
-    // resumeTiming is null because the trash IS the final step; nothing else
-    // needs to re-fire after the player picks (no risk of re-entering this
-    // block and double-drawing).
-    const mandTrash = parseMandatoryTrashFromHand(effect);
-    if (mandTrash && !opts.mandatoryTrashDone) {
-      openTrashFromHand(game, playerId, {
-        count: mandTrash.count, optional: false,
-        filterType: mandTrash.filterType, filterPowerMin: mandTrash.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: null, resumeCardUid: null,
-      });
-    }
-  }
-
-  // ── [On K.O.] effects ──
-  if (timing === 'onKO' && ab.includes('[On K.O.]')) {
-    let effect = extractEffect(ab, '[On K.O.]');
-    if (!effect) return;
-
-    // Check DON!! cost for On K.O.
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
-    if (donCostMatch && !opts.donCostPaid) {
-      const donCost = parseInt(donCostMatch[1]);
-      if (!openDonReturn(game, playerId, card, donCost, 'onKO')) return;
-      return;
-    }
-    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
-
-    // Bug 5 — trash-from-hand cost on [On K.O.] effects.
-    const trashCost = parseTrashFromHandCost(effect);
-    if (trashCost && !opts.trashCostPaid) {
-      if (openTrashFromHand(game, playerId, {
-        count: trashCost.count, optional: true,
-        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: 'onKO', resumeCardUid: card.uid,
-      })) return;
-      return;
-    }
-    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
-
-    // Bug 6 — bounce target on [On K.O.] effects.
-    const bounce = parseBounceTarget(effect);
-    if (bounce && !opts.bounceResolved) {
-      if (openBounceTarget(game, playerId, {
-        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
-        resumeTiming: 'onKO', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Bug 8 — temp power buff at [On K.O.].
-    const buff = parseTempPowerBuff(effect);
-    if (buff && !opts.tempBuffApplied) {
-      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
-      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
-      opts.tempBuffApplied = true;
-    }
-
-    // Draw N cards
-    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
-    if (drawMatch) {
-      drawCards(p, parseInt(drawMatch[1]), game, card.name);
-    }
-
-    // Add DON rested — matches "Add N DON!!" and "Add up to N DON!!" so
-    // Merchant Dam ("Add 1 DON!! ... rest it") and any future card using
-    // the up-to shape both resolve here.
-    if (/[Aa]dd (?:up to )?(\d+) DON!!.*rest/i.test(effect)) {
-      const donMatch = effect.match(/[Aa]dd (?:up to )?(\d+) DON!!/i);
-      addDonFromDeck(p, donMatch ? parseInt(donMatch[1]) : 1, true, game, card.name);
-    }
-    // Add DON active
-    else if (/[Aa]dd (?:up to )?(\d+) DON!!.*active/i.test(effect)) {
-      const donMatch = effect.match(/[Aa]dd (?:up to )?(\d+) DON!!/i);
-      addDonFromDeck(p, donMatch ? parseInt(donMatch[1]) : 1, false, game, card.name);
-    }
-
-    // Play this character from trash as rested
-    if (/[Pp]lay this character from the trash as rested/i.test(effect)) {
-      const inTrash = p.trash.find(c => c.uid === card.uid);
-      if (inTrash) {
-        p.trash = p.trash.filter(c => c.uid !== card.uid);
-        inTrash.rested = true;
-        inTrash.attachedDon = 0;
-        p.field.push(inTrash);
-        log(game, `${card.name}: returned to the field from trash (rested)!`);
-      }
-    }
-
-    // Play character from hand with cost threshold (interactive)
-    const playMatch = effect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
-    if (playMatch) {
-      openPlayFromHand(game, playerId, {
-        costThreshold: parseInt(playMatch[1]),
-        typeName: extractTypeFilter(effect),
-        nameMatch: extractNameFilter(effect),
-        sourceCardName: card.name,
-      });
-    }
-
-    // Play character from trash with cost threshold
-    const playTrashMatch = effect.match(/[Pp]lay up to 1.*?Character.*?cost of (\d+) or less.*?trash/i);
-    if (playTrashMatch) {
-      const costThreshold = parseInt(playTrashMatch[1]);
-      const idx = p.trash.findIndex(c => c.type === 'CHARACTER' && (c.cost || 0) <= costThreshold);
-      if (idx !== -1) {
-        const revived = p.trash.splice(idx, 1)[0];
-        revived.rested = true;
-        revived.attachedDon = 0;
-        p.field.push(revived);
-        log(game, `${card.name}: played ${revived.name} from trash (rested).`);
-      }
-    }
-
-    // K.O. opponent character by power — interactive
-    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*power or less/i);
-    if (koPowerMatch && !effect.includes('cost of') && !opts.koResolved) {
-      const count = parseInt(koPowerMatch[1]);
-      const threshold = parseInt(koPowerMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'power', filterValue: threshold,
-        resumeTiming: 'onKO', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // K.O. opponent character by cost — interactive
-    const koCostMatch = effect.match(/K\.O\.\s+up to (\d+).*?(?:base )?cost of (\d+) or less/i);
-    if (koCostMatch && !opts.koResolved) {
-      const count = parseInt(koCostMatch[1]);
-      const threshold = parseInt(koCostMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.cost || 0) <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'cost', filterValue: threshold,
-        resumeTiming: 'onKO', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Look at cards (simplified: draw 1)
-    if (/[Ll]ook at.*?(\d+) cards? from the top/i.test(effect) && !drawMatch) {
-      if (p.deck.length > 0) {
-        p.hand.push(p.deck.shift());
-        log(game, `${card.name}: searched top of deck (simplified).`);
-      }
-    }
-
-    // Add life card
-    if (/[Aa]dd up to 1 card from the top of your deck to.*?[Ll]ife/i.test(effect)) {
-      if (p.deck.length > 0) {
-        p.life.push(p.deck.shift());
-        log(game, `${card.name}: added a card to life (now ${p.life.length}).`);
-      }
-    }
-
-    // "Add up to N [Event|Character] from your trash to your hand." Scalable
-    // to every [On K.O.] card with this phrase. Optional affiliation gate
-    // "If your Leader has the {AFFIL} type," is checked first — fails
-    // silently when the leader doesn't match (George the Brave outside a
-    // Duchess of Brittany leader, etc.).
-    const addFromTrash = parseAddFromTrashToHand(effect);
-    if (addFromTrash) {
-      if (leaderAffiliationGatePasses(effect, p)) {
-        openAddFromTrash(game, playerId, {
-          count: addFromTrash.count,
-          filterType: addFromTrash.filterType,
-          optional: true,
-          sourceCardName: card.name,
-        });
-      } else {
-        log(game, `${card.name}: leader affiliation does not match — effect skipped.`);
-      }
-    }
-
-    // MANDATORY trash from hand (e.g. Monet OP14-074: "Draw 2 cards and trash
-    // 1 card from your hand"). Same scalable resolver as [On Play] — no skip.
-    const mandTrash = parseMandatoryTrashFromHand(effect);
-    if (mandTrash && !opts.mandatoryTrashDone) {
-      openTrashFromHand(game, playerId, {
-        count: mandTrash.count, optional: false,
-        filterType: mandTrash.filterType, filterPowerMin: mandTrash.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: null, resumeCardUid: null,
-      });
-    }
-  }
-
-  // ── [When Attacking] effects ──
-  if (timing === 'whenAttacking' && ab.includes('[When Attacking]')) {
-    // Bug 9 — [DON!! xN] [When Attacking] gate. Effect ONLY fires if attached DON!! ≥ N.
-    // Pattern matches both orderings just in case (the deck always uses [DON!! xN] first).
-    const donReqMatch = ab.match(/\[DON!!\s*x(\d+)\]\s*\[When Attacking\]/)
-                     || ab.match(/\[When Attacking\]\s*\[DON!!\s*x(\d+)\]/);
-    if (donReqMatch) {
-      const required = parseInt(donReqMatch[1]);
-      if ((card.attachedDon || 0) < required) {
-        log(game, `${card.name}: [When Attacking] requires ${required} attached DON!! (have ${card.attachedDon || 0}).`);
-        return;
-      }
-    }
-
-    let effect = extractEffect(ab, '[When Attacking]');
-    if (!effect) return;
-
-    // Check DON!! cost to activate
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
-    if (donCostMatch && !opts.donCostPaid) {
-      const donCost = parseInt(donCostMatch[1]);
-      if (!openDonReturn(game, playerId, card, donCost, 'whenAttacking')) return;
-      return;
-    }
-    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
-
-    // Bug 5 + 9 — "You may trash N cards from your hand: <effect>" cost.
-    const trashCost = parseTrashFromHandCost(effect);
-    if (trashCost && !opts.trashCostPaid) {
-      if (openTrashFromHand(game, playerId, {
-        count: trashCost.count, optional: true,
-        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: 'whenAttacking', resumeCardUid: card.uid,
-      })) return;
-      return;
-    }
-    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
-
-    // Power reduction to opponent's character
-    const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
-    if (powerRedMatch) {
-      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
-    }
-
-    // K.O. by power — interactive
-    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch && !opts.koResolved) {
-      const count = parseInt(koPowerMatch[1]);
-      const threshold = parseInt(koPowerMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'power', filterValue: threshold,
-        resumeTiming: 'whenAttacking', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Self power boost
-    const selfBoostMatch = effect.match(/\+(\d+000)\s*power/i);
-    if (selfBoostMatch && !powerRedMatch) {
-      const boost = parseInt(selfBoostMatch[1]);
-      card.power += boost;
-      log(game, `${card.name}: gained +${boost} power this turn! (now ${card.power})`);
-    }
-
-    // Draw cards
-    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
-    if (drawMatch) {
-      drawCards(p, parseInt(drawMatch[1]), game, card.name);
-    }
-
-    // Scry: "Look at top N → reveal up to M {Type} type [Event|Character|Stage] card
-    // → add to hand → place rest at the bottom in any order". Same resolver used by
-    // [On Play] / [Activate: Main]; here it fires on attack declaration so e.g. Queen
-    // Victoria pulls a {Duchess of Brittany} type Event card when she attacks with DON.
-    if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
-
-    // MANDATORY trash from hand at [When Attacking] (scalable for any future card).
-    const mandTrash = parseMandatoryTrashFromHand(effect);
-    if (mandTrash && !opts.mandatoryTrashDone) {
-      openTrashFromHand(game, playerId, {
-        count: mandTrash.count, optional: false,
-        filterType: mandTrash.filterType, filterPowerMin: mandTrash.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: null, resumeCardUid: null,
-      });
-    }
-  }
-
-  // ── [Counter] effects for EVENTs ──
-  if (timing === 'counter') {
-    let counterEffect = extractEffect(ab, '[Counter]');
-    if (!counterEffect) return;
-
-    // DON!! -N cost on a [Counter] effect (e.g. NoroNoro Beam Sword: "[Counter] DON!! -1: ...").
-    const donCostMatch = counterEffect.match(/^DON!!\s*-(\d+)\s*:/);
-    if (donCostMatch && !opts.donCostPaid) {
-      const donCost = parseInt(donCostMatch[1]);
-      if (!openDonReturn(game, playerId, card, donCost, 'counter')) return;
-      return;
-    }
-    if (donCostMatch && opts.donCostPaid) counterEffect = counterEffect.substring(donCostMatch[0].length).trim();
-
-    // Bug 5 — trash-from-hand cost on [Counter] effects (e.g. Divine Departure OP13-076).
-    const trashCost = parseTrashFromHandCost(counterEffect);
-    if (trashCost && !opts.trashCostPaid) {
-      if (openTrashFromHand(game, playerId, {
-        count: trashCost.count, optional: true,
-        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: 'counter', resumeCardUid: card.uid,
-      })) return;
-      return;
-    }
-    if (trashCost && opts.trashCostPaid) counterEffect = trashCost.rest;
-
-    // Bug 8 — temp power buff (e.g. "Up to 1 of your Leader gains +3000 power during this battle").
-    const buff = parseTempPowerBuff(counterEffect);
-    if (buff && !opts.tempBuffApplied) {
-      // Counter buffs are auto-applied to the OWN leader (the most common target);
-      // for action-style counters during a battle, this stacks on bs.counterBonus
-      // when the defender's effective power is recomputed.
-      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
-      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
-      // For "during this battle" buffs from counters by the defender, also add to
-      // counterBonus so the immediate battle math reflects the buff.
-      if (buff.expiresOn === 'thisBattle' && game.battleState
-          && game.battleState.targetUid === targetUid) {
-        game.battleState.counterBonus = (game.battleState.counterBonus || 0) + buff.amount;
-      }
-      opts.tempBuffApplied = true;
-    }
-
-    // Bug 6 — bounce target picker.
-    const bounce = parseBounceTarget(counterEffect);
-    if (bounce && !opts.bounceResolved) {
-      if (openBounceTarget(game, playerId, {
-        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
-        resumeTiming: 'counter', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Draw cards from counter effect
-    const drawMatch = counterEffect.match(/[Dd]raw (\d+) card/);
-    if (drawMatch) {
-      drawCards(p, parseInt(drawMatch[1]), game, card.name);
-    }
-
-    // Rest opponent character
-    if (/rest up to 1.*opponent/i.test(counterEffect)) {
-      restOpponentCharacter(opp, game, card.name);
-    }
-
-    // Power reduction in counter
-    const powerRedMatch = counterEffect.match(/opponent.*?-(\d+000)\s*power/i);
-    if (powerRedMatch) {
-      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
-    }
-
-    // K.O. in counter — interactive
-    const koPowerMatch = counterEffect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch && !opts.koResolved) {
-      const count = parseInt(koPowerMatch[1]);
-      const threshold = parseInt(koPowerMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'power', filterValue: threshold,
-        resumeTiming: 'counter', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Play character from hand (interactive — opens playFromHandWindow for the player)
-    const playMatch = counterEffect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
-    if (playMatch) {
-      openPlayFromHand(game, playerId, {
-        costThreshold: parseInt(playMatch[1]),
-        typeName: extractTypeFilter(counterEffect),
-        nameMatch: extractNameFilter(counterEffect),
-        sourceCardName: card.name,
-      });
-    }
-
-    // Nullify effects + power reduction
-    const nullifyPowerMatch = counterEffect.match(/[Nn]ullify.*?-(\d+000)\s*power/i);
-    if (nullifyPowerMatch) {
-      givePowerReduction(opp, parseInt(nullifyPowerMatch[1]), game, card.name);
-    }
-  }
-
-  // ── [Trigger] effects ──
-  if (timing === 'trigger') {
-    if (!ab.includes('[Trigger]')) return;
-    const effect = extractEffect(ab, '[Trigger]');
-    if (!effect) return;
-
-    // Draw cards
-    const drawMatch = effect.match(/[Dd]raw (\d+) card/i);
-    if (drawMatch) {
-      drawCards(p, parseInt(drawMatch[1]), game, card.name);
-    }
-
-    // Add DON active
-    if (/[Aa]dd up to 1.*?DON!!.*active/i.test(effect)) {
-      addDonFromDeck(p, 1, false, game, card.name);
-    }
-    // Add DON rested
-    else if (/[Aa]dd up to 1.*?DON!!/i.test(effect)) {
-      addDonFromDeck(p, 1, true, game, card.name);
-    }
-
-    // Power reduction
-    const powerRedMatch = effect.match(/-(\d+000)\s*power/i);
-    if (powerRedMatch) {
-      givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
-    }
-
-    // Bug 6 — interactive bounce target picker for [Trigger] bounces.
-    const bounce = parseBounceTarget(effect);
-    if (bounce && !opts.bounceResolved) {
-      if (openBounceTarget(game, playerId, {
-        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
-        resumeTiming: 'trigger', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Activate Main effect (for triggers that say "Activate this card's [Main] effect")
-    if (/[Aa]ctivate this card's \[Main\] effect/i.test(effect)) {
-      parseEventMain(game, playerId, card, opp);
-    }
-
-    // Activate Counter effect (forwards to the existing 'counter' timing parser).
-    // Note: many [Counter] effects are "+N power during this battle" — when fired off life
-    // outside an active battle, those have no effect today. Action-style counters
-    // (bounce/play-from-hand/K.O.) still resolve.
-    if (/[Aa]ctivate this card's \[Counter\] effect/i.test(effect)) {
-      parseAndApply('counter', game, playerId, card, opp);
-    }
-
-    // Bug 8 — temp power buff from [Trigger] (e.g. "Choose up to 1 of your leader
-    // or character, it gets +1000 during this turn"). Auto-target the leader.
-    const buff = parseTempPowerBuff(effect);
-    if (buff && !opts.tempBuffApplied) {
-      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
-      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
-      opts.tempBuffApplied = true;
-    }
-
-    // Effect negation — TODO: needs per-card "effects negated this turn" flag.
-    if (/[Nn]egate the effect|[Nn]ullify the effects?/.test(effect)) {
-      log(game, `${card.name}: opponent effect negation (TODO — flag not yet wired).`);
-    }
-  }
-
-  // ── Event [Main] effects (for PLAY_CARD EVENT) ──
-  if (timing === 'eventMain') {
-    parseEventMain(game, playerId, card, opp, opts);
-  }
-
-  // ── [Activate: Main] effects (for ACTIVATE_MAIN action) ──
-  if (timing === 'activateMain' && ab.includes('[Activate: Main]')) {
-    let effect = extractEffect(ab, '[Activate: Main]');
-    if (!effect) return;
-
-    // DON!! -N cost (interactive: open the return-DON window)
-    const donCostMatch = effect.match(/^DON!!\s*-(\d+)\s*:/);
-    if (donCostMatch && !opts.donCostPaid) {
-      const donCost = parseInt(donCostMatch[1]);
-      if (!openDonReturn(game, playerId, card, donCost, 'activateMain')) {
-        send(playerId, {type:'ERROR', msg:`Need ${donCost} DON!! to activate.`});
-        return;
-      }
-      return;
-    }
-    if (donCostMatch && opts.donCostPaid) effect = effect.substring(donCostMatch[0].length).trim();
-
-    // Bug 5 — trash-from-hand cost on [Activate: Main] effects.
-    const trashCost = parseTrashFromHandCost(effect);
-    if (trashCost && !opts.trashCostPaid) {
-      if (openTrashFromHand(game, playerId, {
-        count: trashCost.count, optional: true,
-        filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
-        sourceCardName: card.name,
-        resumeTiming: 'activateMain', resumeCardUid: card.uid,
-      })) return;
-      return;
-    }
-    if (trashCost && opts.trashCostPaid) effect = trashCost.rest;
-
-    // Bug 6 — bounce target picker.
-    const bounce = parseBounceTarget(effect);
-    if (bounce && !opts.bounceResolved) {
-      if (openBounceTarget(game, playerId, {
-        filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-        optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
-        resumeTiming: 'activateMain', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Bug 8 — temp power buff.
-    const buff = parseTempPowerBuff(effect);
-    if (buff && !opts.tempBuffApplied) {
-      const targetUid = (buff.target === 'self') ? card.uid : p.leader.uid;
-      applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
-      opts.tempBuffApplied = true;
-    }
-
-    // BUG 5 (this batch) — interactive rest-opponent-character picker for
-    // Activate Main effects. Parses "Rest [up to] N of your opponent's
-    // Character(s)" (optional threshold). Must be placed BEFORE the Draw
-    // block so Anna's "Rest … Draw 1 card" resolves in order (rest first,
-    // then draw on resume). Scales to every "rest opponent character"
-    // effect on this timing.
-    const restMatch = effect.match(/[Rr]est (?:up to )?(\d+) of your opponent'?s? Character/i);
-    if (restMatch && !opts.restResolved) {
-      const costMatch = effect.match(/cost of (\d+) or less/);
-      const isOpt = /\b(?:you may|up to)\b/i.test(effect);
-      if (openRestTargetWindow(game, playerId, {
-        sourceCardName: card.name,
-        optional: isOpt,
-        costThreshold: costMatch ? parseInt(costMatch[1]) : null,
-        resumeTiming: 'activateMain', resumeCardUid: card.uid,
-      })) return;
-      // No valid targets → block the whole activation by returning early.
-      // openRestTargetWindow already logged "no active opponent characters".
-      if (!isOpt) {
-        send(playerId, {type:'ERROR', msg:'No active opponent characters to rest.'});
-        return;
-      }
-    }
-
-    // Draw N cards
-    const drawMatch = effect.match(/[Dd]raw (\d+) card/);
-    if (drawMatch) drawCards(p, parseInt(drawMatch[1]), game, card.name);
-
-    // BUG 6 (this batch) — Constable Jack and any card with the pattern
-    // "Trash up to N of your opponent's Life cards". Moves top N life
-    // cards straight to the opponent's trash — no hand, no [Trigger]
-    // activation. Scales to every "trash life" effect that bypasses
-    // Trigger; if a future effect explicitly says "add to hand" or
-    // "activate Trigger" we'd need a separate branch.
-    const lifeTrashMatch = effect.match(/[Tt]rash up to (\d+) of your opponent'?s? Life cards?/i);
-    if (lifeTrashMatch && !opts.lifeTrashResolved) {
-      const want = Math.min(parseInt(lifeTrashMatch[1]), opp.life.length);
-      for (let i = 0; i < want; i++) {
-        const lifeCard = opp.life.pop();
-        if (!lifeCard) break;
-        opp.trash.push(lifeCard);
-        log(game, `${card.name}: trashed opponent's life card ${lifeCard.name}. ${opp.life.length} life remaining.`);
-      }
-      opts.lifeTrashResolved = true;
-    }
-
-    // Look at top N → reveal {Type} → add to hand → place rest
-    if (!drawMatch) tryOpenScryFromEffect(game, playerId, card, effect);
-
-    // Add up to N DON!! from deck
-    if (/[Aa]dd up to 1 DON!!.*set it as active/i.test(effect)) {
-      addDonFromDeck(p, 1, false, game, card.name);
-    } else if (/[Aa]dd up to 1 DON!!/i.test(effect)) {
-      addDonFromDeck(p, 1, true, game, card.name);
-    }
-
-    // K.O. opponent character — interactive
-    const koPowerMatch = effect.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
-    if (koPowerMatch && !opts.koResolved) {
-      const count = parseInt(koPowerMatch[1]);
-      const threshold = parseInt(koPowerMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'power', filterValue: threshold,
-        resumeTiming: 'activateMain', resumeCardUid: card.uid,
-      })) return;
-    }
-    const koCostMatch = effect.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
-    if (koCostMatch && !opts.koResolved) {
-      const count = parseInt(koCostMatch[1]);
-      const threshold = parseInt(koCostMatch[2]);
-      if (openKoTargetWindow(game, playerId, {
-        filter: c => (c.cost || 0) <= threshold,
-        sourceCardName: card.name, count, optional: true,
-        filterKind: 'cost', filterValue: threshold,
-        resumeTiming: 'activateMain', resumeCardUid: card.uid,
-      })) return;
-    }
-
-    // Power reduction to opponent character
-    const powerRedMatch = effect.match(/[Gg]ive.*?opponent.*?-(\d+000)\s*power/i);
-    if (powerRedMatch) givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
-
-    // Play character from hand (interactive)
-    const playMatch = effect.match(/[Pp]lay up to 1.*?cost of (\d+) or less.*?hand/i);
-    if (playMatch) {
-      openPlayFromHand(game, playerId, {
-        costThreshold: parseInt(playMatch[1]),
-        typeName: extractTypeFilter(effect),
-        nameMatch: extractNameFilter(effect),
-        sourceCardName: card.name,
-      });
-    }
-  }
-}
-
-// Separate parser for Event [Main] effects.
-// Routed through `opts` like parseAndApply so trash-cost / DON-cost / bounce / KO
-// resolvers can pause + resume. The resume path (TRASH_FROM_HAND_RESOLVE,
-// RETURN_DON, etc.) calls back into this function via parseAndApply('eventMain').
-function parseEventMain(game, playerId, card, opp, opts = {}) {
-  const ab = card.ability || '';
-  const p = game.players[playerId];
-  if (!ab.includes('[Main]')) return;
-
-  // Extract just the [Main] block (cut at [Counter] / [Trigger]).
-  const mainIdx = ab.indexOf('[Main]');
-  let mainText = ab.substring(mainIdx + 6).trim();
-  for (const stop of ['[Counter]', '[Trigger]']) {
-    const si = mainText.indexOf(stop);
-    if (si > 0) mainText = mainText.substring(0, si).trim();
-  }
-
-  // DON!! -N: cost (active+rested+attached DON returns to deck).
-  const donCostMatch = mainText.match(/^DON!!\s*-(\d+)\s*:/);
-  if (donCostMatch && !opts.donCostPaid) {
-    const donCost = parseInt(donCostMatch[1]);
-    if (!openDonReturn(game, playerId, card, donCost, 'eventMain')) return;
-    return;
-  }
-  if (donCostMatch && opts.donCostPaid) mainText = mainText.substring(donCostMatch[0].length).trim();
-
-  // "You may rest N of your DON!! cards:" cost — pay or abort.
-  const restDonMatch = mainText.match(/^You may rest (\d+)(?:\s*of your)?\s*DON!!.*?:/i);
-  if (restDonMatch && !opts.restDonCostPaid) {
-    const restCost = parseInt(restDonMatch[1]);
-    if (p.donActive < restCost) {
-      log(game, `${card.name}: not enough active DON!! to rest (need ${restCost}, have ${p.donActive}).`);
-      return;
-    }
-    p.donActive -= restCost;
-    p.donRested += restCost;
-    log(game, `${card.name}: rested ${restCost} DON!!.`);
-    mainText = mainText.substring(restDonMatch[0].length).trim();
-    opts.restDonCostPaid = true;
-  } else if (restDonMatch && opts.restDonCostPaid) {
-    mainText = mainText.substring(restDonMatch[0].length).trim();
-  }
-
-  // Bug 5 — trash-from-hand cost on [Main] events.
-  const trashCost = parseTrashFromHandCost(mainText);
-  if (trashCost && !opts.trashCostPaid) {
-    if (openTrashFromHand(game, playerId, {
-      count: trashCost.count, optional: true,
-      filterType: trashCost.filterType, filterPowerMin: trashCost.filterPowerMin,
-      sourceCardName: card.name,
-      resumeTiming: 'eventMain', resumeCardUid: card.uid,
-    })) return;
-    return;
-  }
-  if (trashCost && opts.trashCostPaid) mainText = trashCost.rest;
-
-  // Bug 6 — bounce target picker for "Return up to N character" event mains
-  // (e.g. Cig Break: "[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand").
-  const bounce = parseBounceTarget(mainText);
-  if (bounce && !opts.bounceResolved) {
-    if (openBounceTarget(game, playerId, {
-      filterKind: bounce.filterKind, filterValue: bounce.filterValue,
-      optional: bounce.optional, scope: bounce.scope, sourceCardName: card.name,
-      resumeTiming: 'eventMain', resumeCardUid: card.uid,
-    })) return;
-  }
-
-  // Bug 8 — temp power buff from [Main] event.
-  const buff = parseTempPowerBuff(mainText);
-  if (buff && !opts.tempBuffApplied) {
-    const targetUid = p.leader.uid;
-    applyTempPower(game, targetUid, buff.amount, buff.expiresOn, card.name);
-    opts.tempBuffApplied = true;
-  }
-
-  // K.O. by power — interactive
-  const koPowerMatch = mainText.match(/K\.O\.\s+up to (\d+).*?(\d+)\s*[Pp]ower or less/i);
-  if (koPowerMatch && !mainText.includes('cost of') && !opts.koResolved) {
-    const count = parseInt(koPowerMatch[1]);
-    const threshold = parseInt(koPowerMatch[2]);
-    if (openKoTargetWindow(game, playerId, {
-      filter: c => (c.power || 0) + (c.attachedDon || 0) * 1000 + tempPowerSum(game, c.uid) <= threshold,
-      sourceCardName: card.name, count, optional: true,
-      filterKind: 'power', filterValue: threshold,
-      resumeTiming: 'eventMain', resumeCardUid: card.uid,
-    })) return;
-  }
-
-  // K.O. by cost — interactive
-  const koCostMatch = mainText.match(/K\.O\.\s+up to (\d+).*?cost of (\d+) or less/i);
-  if (koCostMatch && !opts.koResolved) {
-    const count = parseInt(koCostMatch[1]);
-    const threshold = parseInt(koCostMatch[2]);
-    if (openKoTargetWindow(game, playerId, {
-      filter: c => (c.cost || 0) <= threshold,
-      sourceCardName: card.name, count, optional: true,
-      filterKind: 'cost', filterValue: threshold,
-      resumeTiming: 'eventMain', resumeCardUid: card.uid,
-    })) return;
-  }
-
-  // Rest opponent character (with optional cost threshold)
-  if (/rest up to 1.*opponent/i.test(mainText)) {
-    const costMatch = mainText.match(/cost of (\d+) or less/);
-    if (costMatch) restOpponentCharacter(opp, game, card.name, parseInt(costMatch[1]));
-    else restOpponentCharacter(opp, game, card.name);
-  }
-
-  // Power reduction
-  const powerRedMatch = mainText.match(/-(\d+000)\s*power/i);
-  if (powerRedMatch && !koPowerMatch) {
-    givePowerReduction(opp, parseInt(powerRedMatch[1]), game, card.name);
-  }
-
-  // Draw cards
-  const drawMatch = mainText.match(/[Dd]raw (\d+) card/);
-  if (drawMatch) {
-    drawCards(p, parseInt(drawMatch[1]), game, card.name);
-  }
-
-  // Look at top N, add card to hand (search)
-  if (/[Ll]ook at.*?(\d+) cards?/i.test(mainText) && !drawMatch) {
-    if (p.deck.length > 0) {
-      p.hand.push(p.deck.shift());
-      log(game, `${card.name}: searched top of deck (simplified).`);
-    }
-  }
-
-  // Add DON active / rested
-  if (/[Aa]dd up to (\d+) (?:Active )?DON!!.*(?:set it as active|active)/i.test(mainText)) {
-    const m = mainText.match(/[Aa]dd up to (\d+) (?:Active )?DON!!/i);
-    addDonFromDeck(p, m ? parseInt(m[1]) : 1, false, game, card.name);
-  } else if (/[Aa]dd up to (\d+) DON!!.*rest/i.test(mainText)) {
-    const m = mainText.match(/[Aa]dd up to (\d+) DON!!/i);
-    addDonFromDeck(p, m ? parseInt(m[1]) : 1, true, game, card.name);
-  }
-}
 
 // Sum of temp power effects on a given uid (used by K.O. eligibility filters
 // so a buffed character isn't K.O.'d when the threshold says otherwise).
@@ -4100,14 +3002,7 @@ function triggerOnKO(game, ownerId, card, killerId) {
   const owner = game.players[ownerId];
   const opp = game.players[killerId];
   if (!owner || !opp) return;
-  // Phase-4 routing: cards migrated to the new pipeline handle their own
-  // onKO via runPipeline. parseAndApply stays authoritative for everyone
-  // else.
-  if (card.useNewPipeline) {
-    runPipeline('onKO', game, ownerId, card);
-    return;
-  }
-  parseAndApply('onKO', game, ownerId, card, opp);
+  runPipeline('onKO', game, ownerId, card);
 }
 
 // Check and apply [Trigger] when a life card is flipped
