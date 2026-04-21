@@ -615,6 +615,22 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
    so the chosen pile is obvious without changing the card widget itself. */
 .scry-card.scry-top   {border-color:#70b8ff;box-shadow:0 0 10px rgba(90,160,255,.6);}
 .scry-card.scry-bottom{border-color:#ffa070;box-shadow:0 0 10px rgba(255,130,80,.55);}
+/* Per-card stacking wrapper used in 'either' mode: card on top, two
+   small pile-indicator buttons beneath. */
+.scry-stack{display:flex;flex-direction:column;align-items:center;gap:3px;flex-shrink:0;}
+.scry-pile-row{display:flex;gap:2px;}
+.scry-pile-btn{
+  padding:2px 6px;border-radius:3px;font-size:.58rem;
+  font-family:'Barlow Condensed',sans-serif;letter-spacing:.5px;
+  border:1px solid var(--gold-dim);background:rgba(20,14,4,.85);
+  color:var(--muted);cursor:pointer;transition:all .1s;
+  text-transform:uppercase;font-weight:600;line-height:1;
+}
+.scry-pile-btn:hover{border-color:var(--gold);color:var(--gold);}
+.scry-pile-btn.selected{
+  background:var(--gold);color:#0f0a04;border-color:var(--gold);
+  box-shadow:0 0 5px rgba(255,210,80,.6);
+}
 /* Pin scry overlay directly above the player hand while scry is active */
 .gb-left.scry-active .gb-self-hand{flex:0 0 auto;}
 .gb-left.scry-active .gb-card-preview.has-card{flex:0 1 auto;}
@@ -1371,8 +1387,8 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 ════════════════════════════════════════════════════ -->
 <script>
 // ─── BUNDLE VERSION TAG (loud so you can tell which build the browser is running) ───
-console.log('%c[BUNDLE v2025-04-20-QV-MATCH]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
-window.__BUNDLE_VERSION = '2025-04-20-QV-MATCH';
+console.log('%c[BUNDLE v2025-04-20-PILE-BTNS]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
+window.__BUNDLE_VERSION = '2025-04-20-PILE-BTNS';
 
 // ─── CONFIG ───
 const WS_URL = 'wss://game.boohawtcg.com';
@@ -2914,19 +2930,17 @@ function renderScry() {
   };
 
   const isEither = sw.placement === 'either';
+  // FiFi Cat shape: no keep step, each card must end up Top or Bottom.
+  // We still render the same .scry-card widget Queen Victoria uses, but
+  // underneath we add two small indicator buttons (Top/Bottom). The
+  // selected one highlights gold and the number badge on the card shows
+  // the stacking order within its chosen pile.
+  const pileMode = isEither && (sw.keepCount || 0) === 0;
 
   const container = document.getElementById('scryCards');
   container.innerHTML = '';
 
-  // Every card renders as a standard .scry-card tile — exactly the same
-  // widget Queen Victoria / Schola / Sugar use. Differences between shapes
-  // live purely in scryCardClick's dispatch:
-  //   keepCount > 0, placement='bottom' — click toggles keep, then
-  //     click remaining cards in bottom order.
-  //   keepCount === 0, placement='either' (FiFi Cat) — click CYCLES
-  //     the card through Top → Bottom → Unassigned. T1/B1/T2 badges
-  //     on the card face show the pile + order.
-  sw.cards.forEach((card, idx) => {
+  const buildCard = (card, idx) => {
     const el = document.createElement('div');
     el.className = 'scry-card';
     if (sw.keepCount > 0 && isKeepEligible(card)) el.classList.add('keep-eligible');
@@ -2935,11 +2949,11 @@ function renderScry() {
     el.innerHTML = imgSrc
       ? `<img src="${imgSrc}" onerror="this.parentElement.style.background='var(--card-back)';">`
       : '';
-    el.addEventListener('click', (ev) => {
+    el.addEventListener('click', () => {
       console.log('[SCRY CARD CLICKED]', {
         idx, cardName: card.name, cardUid: card.uid,
         keepCount: sw.keepCount, keepEligible: isKeepEligible(card),
-        isEither,
+        isEither, pileMode,
         currentKeep: [...scryKeep], currentOrder: [...scryOrder],
         currentTop: [...scryTopOrder], currentBottom: [...scryBottomOrder],
       });
@@ -2947,7 +2961,36 @@ function renderScry() {
     });
     el.addEventListener('mouseenter', e => showTooltip(card, e));
     el.addEventListener('mouseleave', hideTooltip);
-    container.appendChild(el);
+    return el;
+  };
+
+  sw.cards.forEach((card, idx) => {
+    if (pileMode) {
+      // Wrap card + small indicator buttons in a vertical stack.
+      const stack = document.createElement('div');
+      stack.className = 'scry-stack';
+      stack.appendChild(buildCard(card, idx));
+      const row = document.createElement('div');
+      row.className = 'scry-pile-row';
+      const topB = document.createElement('button');
+      topB.className = 'scry-pile-btn';
+      topB.dataset.pile = 'top';
+      topB.dataset.idx = idx;
+      topB.textContent = 'Top';
+      topB.onclick = (ev) => { ev.stopPropagation(); scryAssignTop(idx); };
+      const botB = document.createElement('button');
+      botB.className = 'scry-pile-btn';
+      botB.dataset.pile = 'bottom';
+      botB.dataset.idx = idx;
+      botB.textContent = 'Bottom';
+      botB.onclick = (ev) => { ev.stopPropagation(); scryAssignBottom(idx); };
+      row.appendChild(topB);
+      row.appendChild(botB);
+      stack.appendChild(row);
+      container.appendChild(stack);
+    } else {
+      container.appendChild(buildCard(card, idx));
+    }
   });
   document.getElementById('scryConfirm').style.display = 'none';
   // Skip is only meaningful when the player can opt out without committing to a placement —
@@ -3084,13 +3127,13 @@ function updateScryDisplay() {
     } else if (isEither && scryTopOrder.includes(idx)) {
       const badge = document.createElement('div');
       badge.className = 'scry-order';
-      badge.textContent = `T${scryTopOrder.indexOf(idx) + 1}`;
+      badge.textContent = `${scryTopOrder.indexOf(idx) + 1}`;
       badge.style.background = 'rgba(30,90,150,.9)';
       el.appendChild(badge);
     } else if (isEither && scryBottomOrder.includes(idx)) {
       const badge = document.createElement('div');
       badge.className = 'scry-order';
-      badge.textContent = `B${scryBottomOrder.indexOf(idx) + 1}`;
+      badge.textContent = `${scryBottomOrder.indexOf(idx) + 1}`;
       badge.style.background = 'rgba(150,60,30,.9)';
       el.appendChild(badge);
     } else if (scryOrder.includes(idx)) {
@@ -3117,6 +3160,16 @@ function updateScryDisplay() {
     if (eitherBtn) eitherBtn.style.display = 'none';
     confirm.style.display = scryOrder.length === remainingCount ? 'flex' : 'none';
   }
+
+  // Paint the per-card Top/Bottom indicator buttons (pile-mode only).
+  document.querySelectorAll('#scryCards .scry-pile-btn').forEach(btn => {
+    const idx = Number(btn.dataset.idx);
+    const pile = btn.dataset.pile;
+    const inPile = pile === 'top'
+      ? scryTopOrder.includes(idx)
+      : scryBottomOrder.includes(idx);
+    btn.classList.toggle('selected', inPile);
+  });
 }
 
 function confirmScry(placement) {
