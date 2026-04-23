@@ -324,9 +324,7 @@ const CARD_DB = [
   // ══════════════════════════════
   { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'), useNewPipeline:true,
-    // Bug 2 — clarified wording: rest an opponent's Character; if the opponent
-    // has no Characters on the field, draw 1 card instead (scalable fallback).
-    ability:"[Activate: Main] [Once Per Turn] Rest 1 of your opponent's Characters. If your opponent has no Characters on the field, draw 1 card instead." },
+    ability:"[Activate: Main] [Once Per Turn] DON!! -4: Return up to 1 Character with a cost of 5 or less to the owner's hand." },
 
   { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'), useNewPipeline:true,

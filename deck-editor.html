@@ -140,50 +140,58 @@
             box-shadow: 0 4px 14px rgba(0,0,0,0.35);
         }
 
+        /* Hover preview text — light-gold / white on the darkened parchment
+           panel so text is readable against the deep-orange wood backdrop. */
         .card-preview .cp-name {
             font-size: 17px;
             font-weight: 700;
-            color: #2a1a08;
+            color: #f0d080;
             margin-top: 8px;
             text-align: center;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.55);
         }
 
         .card-preview .cp-stats {
             font-size: 12px;
-            color: #4a3a20;
+            color: #ffffff;
             margin-top: 4px;
             text-align: center;
             line-height: 1.6;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         }
 
         .card-preview .cp-stats span {
             display: inline-block;
-            background: rgba(0,0,0,0.07);
+            background: rgba(0,0,0,0.45);
+            color: #ffffff;
             padding: 2px 7px;
             border-radius: 3px;
             margin: 2px 2px;
+            border: 1px solid rgba(240,208,128,0.35);
         }
 
         .card-preview .cp-ability {
             font-size: 13px;
-            color: #3c2e1e;
+            color: #ffffff;
             line-height: 1.5;
             margin-top: 8px;
             padding: 8px 10px;
             text-align: left;
-            background: rgba(255,245,220,0.55);
-            border: 1px solid rgba(196,180,138,0.5);
+            background: rgba(20,12,4,0.78);
+            border: 1px solid rgba(240,208,128,0.55);
             border-radius: 4px;
             width: 100%;
             max-width: 300px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
         }
 
         .card-preview .cp-placeholder {
-            color: rgba(60,46,30,0.4);
+            color: #f0d080;
             font-size: 13px;
             font-weight: 500;
             margin-top: 40px;
             text-align: center;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
         }
 
         .sidebar .bottom-btns {
@@ -369,217 +377,238 @@
 
     // ── Card Database ──
     const CARD_DB = [
-      // DOFLAMINGO (Purple)
-      { id:'OP14-060', name:'Donquixote Doflamingo', type:'LEADER', color:'Purple', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png',
-        ability:"[On Your Opponent's Attack] [Once Per Turn] DON!! -1: Select your Leader or 1 of your {Donquixote Pirates} type Characters. Change the attack target to the selected card." },
-      { id:'OP10-065', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'jpg',
-        ability:'[Activate: Main] You may rest 1 of your DON!! and this Character: Look at the top 5 cards of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand.' },
-      { id:'OP14-067', name:'Dellinger', type:'CHARACTER', color:'Purple', attribute:'Strike', power:2000, cost:1, counter:1000, imgExt:'png',
-        ability:'[On K.O.] Add up to 1 DON!! card from your DON!! deck and rest it.' },
-      { id:'ST18-001', name:'Usohachi', type:'CHARACTER', color:'Yellow', attribute:'Ranged', power:3000, cost:3, counter:2000, imgExt:'png',
-        ability:"[On Play] If you have 8 or more DON!! cards, rest up to 1 of your opponent's Characters with a cost of 5 or less." },
-      { id:'OP10-076', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:3, counter:2000, imgExt:'jpg',
-        ability:"[On Play] You may discard 1 card from your hand: add up to 1 DON!! from your DON!! deck and set it as active." },
-      { id:'OP14-072', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:4, counter:1000, imgExt:'png',
-        ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] DON!! -1: Add up to 1 card from the top of your deck to the top of your Life cards.' },
-      { id:'OP14-063', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:4, counter:1000, imgExt:'png',
-        ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active." },
-      { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike', power:7000, cost:5, counter:0, imgExt:'png',
-        ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead." },
-      { id:'OP10-072', name:'Donquixote Rosinante', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'jpg',
-        ability:'[On Play] You may trash 1 event card from your hand: Draw 2 cards.' },
-      { id:'OP14-074', name:'Monet', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png',
-        ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] Draw 2 cards and trash 1 card from your hand." },
-      { id:'OP14-068', name:'Trebol', type:'CHARACTER', color:'Purple', attribute:'Special', power:5000, cost:5, counter:2000, imgExt:'png',
-        ability:"[Opponent's Turn] [Once Per Turn] When a DON!! card is returned to your DON!! deck, add up to 1 DON!! card from your DON!! deck and rest it." },
-      { id:'OP10-071', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special', power:9000, cost:8, counter:0, imgExt:'jpg',
-        ability:"[On Play] DON!! -1: Play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand." },
-      { id:'OP11-067', name:'Charlotte Katakuri', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:8, counter:0, imgExt:'jpg',
-        ability:'[Blocker] [End of Your Turn] Set up to 2 of your {Big Mom Pirates} type Characters as active.' },
-      { id:'OP14-069', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special', power:10000, cost:10, counter:0, imgExt:'png',
-        ability:"[On Play] DON!! -3: K.O. up to 1 of your opponent's Characters with a cost of 8 or less." },
-      { id:'OP10-078', name:'I can never forgive anyone...', type:'EVENT', color:'Purple', power:0, cost:1, counter:0, imgExt:'jpg',
-        ability:"[Main] [Counter] Look at 3 cards from the top of your deck; reveal up to 1 {Donquixote Pirates} type card and add it to your hand." },
-      { id:'OP13-076', name:'Divine Departure', type:'EVENT', color:'Purple', power:0, cost:0, counter:0, imgExt:'png',
-        ability:"[Main] You may rest 5 of your DON!! cards: Give up to 1 of your opponent's Characters -8000 power during this turn." },
-      { id:'OP07-076', name:'NoroNoro Beam Sword', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png',
-        ability:"[Counter] DON!! -1: Give up to 1 of your Leader or Character cards +2000 power for this battle." },
-      { id:'OP14-078', name:'Bullet String', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png',
-        ability:"[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-      { id:'OP10-079', name:'God Thread', type:'EVENT', color:'Purple', power:0, cost:5, counter:0, imgExt:'jpg',
-        ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 5 or less." },
+      // OP14
+      { id:'OP14-060', name:'Donquixote Doflamingo', type:'LEADER', color:'Purple', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[On Your Opponent's Attack] [Once Per Turn] DON!! -1: Select your Leader or 1 of your {Donquixote Pirates} type Characters. Change the attack target to the selected card." },
+      { id:'OP14-067', name:'Dellinger', type:'CHARACTER', color:'Purple', attribute:'Strike', power:2000, cost:1, counter:1000, imgExt:'png', ability:'[On K.O.] Add up to 1 DON!! card from your DON!! deck and rest it; look at 5 cards from the top of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand.' },
+      { id:'OP14-072', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:4, counter:1000, imgExt:'png', ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] DON!! -1: Add up to 1 card from the top of your deck to the top of your Life cards.' },
+      { id:'OP14-063', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:4, counter:1000, imgExt:'png', ability:'[On Play] Add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] If your opponent has 6 or more DON!! cards on their field, play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand.' },
+      { id:'OP14-061', name:'Vergo', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Donquixote Pirates', power:7000, cost:5, counter:0, imgExt:'png', ability:"[Once Per Turn] If your {Donquixote Pirates} type Character would be removed from the field by your opponent's effect, you may return 1 DON!! card from your field to your DON!! deck instead. [When Attacking] DON!! -1: Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'OP14-074', name:'Monet', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png', ability:'[On Play] If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and set it as active. [On K.O.] Draw 2 cards and trash 1 card from your hand. Then, add up to 2 DON!! cards from your DON!! deck and rest them.' },
+      { id:'OP14-068', name:'Trebol', type:'CHARACTER', color:'Purple', attribute:'Special', power:5000, cost:5, counter:2000, imgExt:'png', ability:"[Opponent's Turn] [Once Per Turn] When a DON!! card on your field is returned to your DON!! deck, if your Leader has the {Donquixote Pirates} type, add up to 1 DON!! card from your DON!! deck and rest it." },
+      { id:'OP14-069', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special', power:10000, cost:10, counter:0, imgExt:'png', ability:"[On Play] DON!! -3: Choose one: • If your Leader has the {Donquixote Pirates} type, K.O. up to 1 of your opponent's Characters with a cost of 8 or less. • Rest up to 3 of your opponent's Characters with a cost of 7 or less." },
+      { id:'OP14-078', name:'Bullet String', type:'EVENT', color:'Purple', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:'[Counter] DON!! -1: If your Leader has the {Donquixote Pirates} type, up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
 
-      // SHANKS (Red)
-      { id:'OP09-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'jpg',
-        ability:"[Once Per Turn] When your opponent attacks, give up to 1 of your opponent's leader or characters -1000 power." },
-      { id:'OP09-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'jpg',
-        ability:"[On Play] Look at the top 5 cards of your deck, reveal up to 1 {Red Hair Pirates} type card and add it to your hand." },
-      { id:'OP01-006', name:'Otama', type:'CHARACTER', color:'Red', attribute:'Special', power:0, cost:1, counter:2000, imgExt:'png',
-        ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
-      { id:'OP09-008', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash', power:2000, cost:1, counter:0, imgExt:'jpg',
-        ability:"[Activate: Main] Place this character on the bottom of its owner's deck: Give up to one of your opponent's characters -3000 power." },
-      { id:'OP09-011', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Strike', power:3000, cost:3, counter:2000, imgExt:'jpg',
-        ability:"[Activate: Main] Rest this character: Give up to 1 of your opponent's characters -2000 power." },
-      { id:'OP09-014', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Special', power:3000, cost:3, counter:2000, imgExt:'jpg',
-        ability:"[On Play] Up to one of your opponents characters with power 4000 or less cannot activate [Blocker]." },
-      { id:'OP12-008', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:4, counter:0, imgExt:'jpg',
-        ability:"[Blocker] [On Your Opponent's Attack] [Once Per Turn] Trash 1 card: Give opponent -2000 power." },
-      { id:'OP09-015', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged', power:5000, cost:4, counter:1000, imgExt:'jpg',
-        ability:"[Blocker] [On K.O.] K.O. up to 1 of your opponent's Characters with an original power of 6000 or less." },
-      { id:'OP10-011', name:'Tony Tony Chopper', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:4000, cost:4, counter:2000, imgExt:'jpg',
-        ability:"[Blocker] [Opponent's Turn] This character has +2000 power." },
-      { id:'PRB02-003', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:4, counter:1000, imgExt:'jpg',
-        ability:"[Blocker] [On Play] Trash 1 Character card with power 6000+: Draw 2 cards." },
-      { id:'OP03-013', name:'Marco', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png',
-        ability:"[Your Turn] [On Play] K.O. up to 1 of your opponent's Characters with 3000 Power or less." },
-      { id:'OP09-013', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:6000, cost:5, counter:1000, imgExt:'jpg',
-        ability:"[On Play] Leader gains +1000 power until end of opponent's next turn." },
-      { id:'ST15-005', name:'Portgas D. Ace', type:'CHARACTER', color:'Red', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png',
-        ability:"[Once Per Turn] If this character would be removed by opponent's effect, give -2000 power instead." },
-      { id:'ST23-001', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:4000, cost:6, counter:2000, imgExt:'jpg',
-        ability:"If you have a Character with 10000+ power, this card costs -4. [Blocker]" },
-      { id:'PRB02-002', name:'Trafalgar Law', type:'CHARACTER', color:'Red', attribute:'Slash', power:7000, cost:6, counter:1000, imgExt:'jpg',
-        ability:"[Once Per Turn] Can't be removed by opponent's effect (take -2000 instead). [When Attacking] Give opponent's character -2000." },
-      { id:'OP09-009', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged', power:7000, cost:7, counter:1000, imgExt:'jpg',
-        ability:"[On Play] K.O. up to 1 of your opponents Characters with power 6000 or less." },
-      { id:'ST15-002', name:'Edward Newgate', type:'CHARACTER', color:'Red', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png',
-        ability:"[On Play] Give your leader or one character up to one rested DON!!." },
-      { id:'OP08-118', name:'Silvers Rayleigh', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:8000, cost:8, counter:0, imgExt:'png',
-        ability:"[On Play] Choose up to two opponent's characters: give one -3000 and the other -2000 power." },
-      { id:'ST23-002', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:10000, cost:9, counter:0, imgExt:'jpg',
-        ability:"If opponent has 8000+ base power character, this costs -3. [On Play] Leader gains +2000 power." },
-      { id:'OP06-007', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:12000, cost:10, counter:0, imgExt:'png',
-        ability:"[On Play] K.O. up to 1 of your opponent's characters with 10000 power or less." },
-      { id:'OP09-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:12000, cost:10, counter:0, imgExt:'jpg',
-        ability:"All of your opponents characters have -1000 power. [Rush]" },
-      { id:'OP09-021', name:'Red Force', type:'STAGE', color:'Red', attribute:'', power:0, cost:2, counter:0, imgExt:'jpg',
-        ability:"[Activate: Main] Rest this stage: Give opponent's character -1000 power." },
-      { id:'OP04-016', name:'Bad Manners Kick Course', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png',
-        ability:"[Counter] Trash 1 card: Give +3000 Power this battle." },
-      { id:'OP10-018', name:'Kamakura Jussoushi', type:'EVENT', color:'Red', power:0, cost:2, counter:0, imgExt:'jpg',
-        ability:"[Counter] +3000 power this battle. Give opponent -2000 during this turn." },
-      { id:'OP10-019', name:'Divine Departure', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'jpg',
-        ability:"[Main] Rest 5 DON!!: K.O. opponent's character with 8000 Power or less." },
-      { id:'OP01-026', name:'Gum-Gum Red Hawk', type:'EVENT', color:'Red', power:0, cost:2, counter:0, imgExt:'png',
-        ability:"[Counter] +4000 power this battle. K.O. opponent's character with 4000 or less." },
-      { id:'OP09-020', name:"Come on!! We'll fight you!!", type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'jpg',
-        ability:"[Activate: Main] Look at top 5, reveal 1 {Red Hair Pirates} card." },
-      { id:'ST21-017', name:'Gum-Gum Mole Gun', type:'EVENT', color:'Red', power:0, cost:4, counter:0, imgExt:'jpg',
-        ability:"[Main] Give opponent's character -5000 power." },
+      // OP10
+      { id:'OP10-065', name:'Sugar', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'jpg', ability:'[Activate: Main] You may rest 1 of your DON!! and this Character: Look at the top 5 cards of your deck, reveal up to 1 {Donquixote Pirates} type card and add it to your hand. Place the rest at the bottom of your deck in any order.' },
+      { id:'OP10-076', name:'Baby 5', type:'CHARACTER', color:'Purple', attribute:'Special', power:1000, cost:3, counter:2000, imgExt:'jpg', ability:'[On Play] You may discard 1 card from your hand: If your Leader has the {Donquixote Pirates} type, add up to 1 DON!! from your DON!! deck and set it as active.' },
+      { id:'OP10-072', name:'Donquixote Rosinante', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'jpg', ability:'[On Play] You may trash 1 event card from your hand: Draw 2 cards. [End of Your Turn] If you have 7 or more DON!! cards, set up to 2 of them as active.' },
+      { id:'OP10-071', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Purple', attribute:'Special', power:9000, cost:8, counter:0, imgExt:'jpg', ability:"[On Play] DON!! -1: Play up to 1 {Donquixote Pirates} type Character card with a cost of 5 or less from your hand. [Opponent's Turn] [Once Per Turn] You may rest 1 of your DON!!: add up to 1 Active DON!! from your DON!! deck." },
+      { id:'OP10-078', name:'I can never forgive anyone who laughs at my family...!!', type:'EVENT', color:'Purple', attribute:"", power:0, cost:1, counter:0, imgExt:'jpg', ability:'[Main] [Counter] Look at 3 cards from the top of your deck; reveal up to 1 {Donquixote Pirates} type card other than this card and add it to your hand. Place the rest at the bottom of your deck in any order.' },
+      { id:'OP10-079', name:'God Thread', type:'EVENT', color:'Purple', attribute:"", power:0, cost:5, counter:0, imgExt:'jpg', ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 5 or less. Then, add up to 1 Active DON!! from your DON!! deck. [Trigger] Add up to 1 Active DON!! from your DON!! deck." },
+      { id:'OP10-011', name:'Tony Tony Chopper', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:4000, cost:4, counter:2000, imgExt:'jpg', ability:"[Blocker] [Opponent's Turn] This character has +2000 power." },
+      { id:'OP10-018', name:'Kamakura Jussoushi', type:'EVENT', color:'Red', attribute:"", power:0, cost:2, counter:0, imgExt:'jpg', ability:"[Counter] Choose up to 1 of your leader or character, it gains +3000 during this battle. Afterwards, one of your opponent's leader or character gets -2000 during this turn. [Trigger] Choose up to 1 of your leader or character, it gets +1000 during this turn." },
+      { id:'OP10-019', name:'Divine Departure', type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'jpg', ability:"[Main] You may rest 5 DON!!: K.O. up to 1 of your opponent's characters with 8000 Power or less. [Counter] Up to 1 of your Leaders gains +3000 Power during this battle." },
+      { id:'OP10-082', name:'Kuzan', type:'CHARACTER', color:'Purple', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'jpg', ability:"This Character cannot be removed from the field by your opponent's effects. [Activate: Main] You may trash this Character: Draw 1 card. Then, play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less other than [Kuzan] from your trash." },
 
-      // BLACKBEARD (Black/Multi)
-      { id:'OP09-081', name:'Marshall D. Teach', type:'LEADER', color:'Black', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'jpg',
-        ability:"Your [On Play] abilities don't activate. [Activate: Main] Trash 1 card: opponent's [On Play] don't activate." },
-      { id:'OP05-086', name:'Nefertari Vivi', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:1000, cost:1, counter:1000, imgExt:'png',
-        ability:"If your trash has 10+ cards, this character gains [Blocker]." },
-      { id:'OP09-095', name:'Laffitte', type:'CHARACTER', color:'Purple', attribute:'Strike', power:1000, cost:1, counter:1000, imgExt:'jpg',
-        ability:"[Activate: Main] Rest this and 1 DON!!: Look at top 5, reveal 1 {Blackbeard Pirates} card." },
-      { id:'OP11-083', name:'Caribou', type:'CHARACTER', color:'Black', attribute:'Special', power:2000, cost:1, counter:2000, imgExt:'jpg',
-        ability:"[Blocker] [On Play] Trash 2 cards from your hand." },
-      { id:'OP09-089', name:'Stronger', type:'CHARACTER', color:'Blue', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'jpg',
-        ability:"[Activate: Main] Trash 1 card and this character: Draw 1 card. Give opponent's character -2 cost." },
-      { id:'OP09-088', name:'Shiryuu', type:'CHARACTER', color:'Black', attribute:'Slash', power:4000, cost:3, counter:2000, imgExt:'jpg',
-        ability:"[DON!! x1] [When Attacking] Trash 2 cards: Draw 2 cards." },
-      { id:'OP09-086', name:'Jesus Burgess', type:'CHARACTER', color:'Purple', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'jpg',
-        ability:"Can't be K.O'd by opponent's effects. Gets +1000 power per 4 cards in trash." },
-      { id:'PRB02-015', name:'Shiryu', type:'CHARACTER', color:'Black', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'jpg',
-        ability:"Gains [Blocker] if leader is {Blackbeard Pirates}. [On K.O.] K.O. opponent's character cost 4 or less." },
-      { id:'OP10-082', name:'Kuzan', type:'CHARACTER', color:'Purple', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'jpg',
-        ability:"Can't be removed by opponent. [Activate: Main] Trash this: Draw 1 card. Play {Blackbeard Pirates} cost 5 or less from trash." },
-      { id:'OP09-084', name:'Catarina Devon', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'jpg',
-        ability:"[Activate: Main] [Once Per Turn] Gains [Double Attack]+[Banish] or [Blocker] until end of opponent's next turn." },
-      { id:'ST27-003', name:'Kuzan', type:'CHARACTER', color:'Blue', attribute:'Special', power:6000, cost:6, counter:1000, imgExt:'jpg',
-        ability:"[Blocker] [On K.O.] Play {Blackbeard Pirates} cost 5 or less from trash rested." },
-      { id:'OP09-093', name:'Marshall D. Teach', type:'CHARACTER', color:'Black', attribute:'Special', power:12000, cost:10, counter:0, imgExt:'jpg',
-        ability:"[Blocker] [Activate: Main] [Once Per Turn] Negate opponent's leader and character effects." },
-      { id:'OP09-096', name:"This is MY AGE!!!!", type:'EVENT', color:'Yellow', power:0, cost:1, counter:0, imgExt:'jpg',
-        ability:"[Main] Look at top 3, reveal 1 {Blackbeard Pirates} card." },
-      { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black', power:0, cost:3, counter:0, imgExt:'jpg',
-        ability:"[Counter] +4000 power this battle. Trash top 2 cards." },
-      { id:'OP09-098', name:'Black Hole', type:'EVENT', color:'Black', power:0, cost:5, counter:0, imgExt:'jpg',
-        ability:"[Main] Return opponent's character to bottom of deck." },
-      { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:'', power:0, cost:1, counter:0, imgExt:'jpg',
-        ability:"[Activate: Main] Trash 1 card and rest this: Look at top 3, reveal 1 {Blackbeard Pirates} card." },
+      // ST18
+      { id:'ST18-001', name:'Usohachi', type:'CHARACTER', color:'Yellow', attribute:'Ranged', power:3000, cost:3, counter:2000, imgExt:'png', ability:"[On Play] If you have 8 or more DON!! cards, rest up to 1 of your opponent's Characters with a cost of 5 or less." },
 
-      // ── Starter Deck cards (ST01-ST07) ──
-      // ST01 - Straw Hat Crew (Red)
-      { id:'ST01-001', name:'Monkey D. Luffy', type:'LEADER', color:'Red', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] Give up to 1 of your Characters +1000 power during this turn." },
+      // OP11
+      { id:'OP11-067', name:'Charlotte Katakuri', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:8, counter:0, imgExt:'jpg', ability:'[Blocker] [End of Your Turn] Set up to 2 of your {Big Mom Pirates} type Characters with a cost of 3 or more as active. Then, add up to 1 DON!! card from your DON!! deck and rest it.' },
+      { id:'OP11-083', name:'Caribou', type:'CHARACTER', color:'Black', attribute:'Special', power:2000, cost:1, counter:2000, imgExt:'jpg', ability:'[Blocker] [On Play] Trash 2 cards from your hand.' },
+
+      // OP13
+      { id:'OP13-076', name:'Divine Departure', type:'EVENT', color:'Purple', attribute:"", power:0, cost:0, counter:0, imgExt:'png', ability:"[Main] You may rest 5 of your DON!! cards: Give up to 1 of your opponent's Characters -8000 power during this turn. [Counter] You may trash 1 card from your hand: Up to 1 of your Leader or Character cards gains +3000 power during this battle." },
+
+      // OP07
+      { id:'OP07-076', name:'NoroNoro Beam Sword', type:'EVENT', color:'Purple', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] DON!! -1: Give up to 1 of your Leader or Character cards +2000 power for this battle. Then, rest up to 1 of your opponent's Characters. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
+      { id:'OP07-036', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
+
+      // OP09
+      { id:'OP09-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'jpg', ability:"[Once Per Turn] You may activate this effect when your opponent attacks. Give up to 1 of your opponent's leader or characters -1000 power for the turn." },
+      { id:'OP09-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'jpg', ability:'[On Play] Look at the top 5 cards of your deck, reveal up to 1 {Red Hair Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order.' },
+      { id:'OP09-008', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash', power:2000, cost:1, counter:0, imgExt:'jpg', ability:"[Activate: Main] You may place this character on the bottom of its owner's deck: Give up to one of your opponent's characters -3000 power for this turn." },
+      { id:'OP09-011', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Strike', power:3000, cost:3, counter:2000, imgExt:'jpg', ability:"[Activate: Main] You may rest this character: If your leader has the {Red Hair Pirates} type, give up to 1 of your opponent's characters -2000 power during this turn." },
+      { id:'OP09-014', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Special', power:3000, cost:3, counter:2000, imgExt:'jpg', ability:'[On Play] Up to one of your opponents characters with power 4000 or less cannot activate [Blocker] the rest of this turn.' },
+      { id:'OP09-015', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged', power:5000, cost:4, counter:1000, imgExt:'jpg', ability:"[Blocker] [On K.O.] If your Leader has the {Red Hair Pirates} type, K.O. up to 1 of your opponent's Characters with an original power of 6000 or less." },
+      { id:'OP09-013', name:'Yasopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:6000, cost:5, counter:1000, imgExt:'jpg', ability:"[On Play] Up to one of your leaders gains +1000 power until the end of your opponent's next turn. [DON!! x1] [When Attacking] Up to one of your opponent's characters gets -1000 power for this turn." },
+      { id:'OP09-009', name:'Benn Beckman', type:'CHARACTER', color:'Red', attribute:'Ranged', power:7000, cost:7, counter:1000, imgExt:'jpg', ability:'[On Play] K.O. up to 1 of your opponents Characters with a power of 6000 or less.' },
+      { id:'OP09-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:12000, cost:10, counter:0, imgExt:'jpg', ability:'All of your opponents characters have -1000 power. [Rush]' },
+      { id:'OP09-021', name:'Red Force', type:'STAGE', color:'Red', attribute:"", power:0, cost:2, counter:0, imgExt:'jpg', ability:"[Activate: Main] You may rest this stage: If your leader has the {Red Hair Pirates} type, give up to one of your opponent's characters -1000 power for this turn." },
+      { id:'OP09-020', name:"Come on!! We'll fight you!!", type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'jpg', ability:'[Activate: Main] Look at the top 5 cards of your deck, reveal and add one {Red Hair Pirates} type card to your hand. Place the rest at the bottom of the deck in any order. [Trigger] Draw one card.' },
+      { id:'OP09-081', name:'Marshall D. Teach', type:'LEADER', color:'Black', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'jpg', ability:"Your [On Play] abilities don't activate. [Activate: Main] You may trash one card from your hand: Until the end of your opponent's next turn, your opponent's [On Play] abilities don't activate." },
+      { id:'OP09-095', name:'Laffitte', type:'CHARACTER', color:'Purple', attribute:'Strike', power:1000, cost:1, counter:1000, imgExt:'jpg', ability:'[Activate: Main] You may rest this character and one of your DON!!: Look at the top 5 cards of your deck, reveal up to one {Blackbeard Pirates} type card and put it into your hand. Place the rest at the bottom of your deck in any order.' },
+      { id:'OP09-089', name:'Stronger', type:'CHARACTER', color:'Blue', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'jpg', ability:'[Activate: Main] You may trash one card from your hand and this character: If your leader has the {Blackbeard Pirates} type, draw one card. Then give up to one of your opponents characters -2 cost for the turn.' },
+      { id:'OP09-088', name:'Shiryuu', type:'CHARACTER', color:'Black', attribute:'Slash', power:4000, cost:3, counter:2000, imgExt:'jpg', ability:'[DON!! x1] [When Attacking] You may trash 2 cards from your hand: Draw 2 cards.' },
+      { id:'OP09-086', name:'Jesus Burgess', type:'CHARACTER', color:'Purple', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'jpg', ability:"This character cannot be K.O'd by your opponents effects. If your leader has the {Blackbeard Pirates} type, this character gets +1000 power for every 4 cards in your trash." },
+      { id:'OP09-084', name:'Catarina Devon', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'jpg', ability:"[Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type, until the end of your opponent's next turn this character gains [Double Attack] and [Banish] or [Blocker]." },
+      { id:'OP09-093', name:'Marshall D. Teach', type:'CHARACTER', color:'Black', attribute:'Special', power:12000, cost:10, counter:0, imgExt:'jpg', ability:"[Blocker] [Activate: Main] [Once Per Turn] If your leader has the {Blackbeard Pirates} type and this character was played this turn, up to one of your opponent's leader effects are negated for the rest of the turn. Then, up to one of your opponent's characters effects are negated until the end of your opponent's next turn, that character also cannot attack." },
+      { id:'OP09-096', name:'This is MY AGE!!!!', type:'EVENT', color:'Yellow', attribute:"", power:0, cost:1, counter:0, imgExt:'jpg', ability:"[Main] Look at the top 3 cards of your deck and reveal up to one {Blackbeard Pirates} type card other than [This is MY AGE!!!!] and put it into your hand. Then put the rest of the cards into your trash. [Trigger] Activate this card's [Main] effect." },
+      { id:'OP09-097', name:'Black Spiral', type:'EVENT', color:'Black', attribute:"", power:0, cost:2, counter:0, imgExt:'jpg', ability:"[Counter] Nullify the effects of up to 1 of your opponent's leader or character and give them -4000 power during this turn. [Trigger] Nullify the effects of up to 1 of your opponent's leader or character during this turn." },
+      { id:'OP09-098', name:'Black Hole', type:'EVENT', color:'Black', attribute:"", power:0, cost:4, counter:0, imgExt:'jpg', ability:"[Main] If your Leader has the {Blackbeard Pirates} type, negate the effect of up to 1 of your opponent's Characters during this turn. Then, if that Character has a cost of 4 or less, K.O. it. [Trigger] Negate the effect of up to 1 of your opponent's Leader or Character cards during this turn." },
+      { id:'OP09-099', name:'Fullalead', type:'STAGE', color:'Blue', attribute:"", power:0, cost:1, counter:0, imgExt:'jpg', ability:'[Activate: Main] You may trash 1 card from your hand and rest this Stage: Look at 3 cards from the top of your deck; reveal up to 1 {Blackbeard Pirates} type card and add it to your hand. Then, place the rest at the bottom of your deck in any order.' },
+      { id:'OP09-005', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:3000, cost:2, counter:2000, imgExt:'jpg', ability:"" },
+      { id:'OP09-107', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"" },
+
+      // OP01
+      { id:'OP01-006', name:'Otama', type:'CHARACTER', color:'Red', attribute:'Special', power:0, cost:1, counter:2000, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'OP01-026', name:'Gum-Gum Red Hawk', type:'EVENT', color:'Red', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Your Leader or up to 1 of your Characters gains +4000 power during this battle. Then, K.O. up to 1 of your opponent's Characters with 4000 power or less. [Trigger] Give up to 1 of your opponent's Leader or Characters -10000 power during this turn." },
+      { id:'OP01-001', name:'Roronoa Zoro', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:'[DON!! x1] [When Attacking] Give this Leader +1000 power during this battle.' },
+      { id:'OP01-004', name:'Usopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'OP01-013', name:'Sanji', type:'CHARACTER', color:'Red', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-014', name:'Jinbe', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-016', name:'Nami', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:2000, imgExt:'png', ability:'[On Play] Look at 5 cards from the top of your deck; reveal up to 1 card with a cost of 1 and add it to your hand.' },
+      { id:'OP01-017', name:'Nico Robin', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:1000, imgExt:'png', ability:'[On Play] Draw 2 cards and trash 1 card from your hand.' },
+      { id:'OP01-021', name:'Franky', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-022', name:'Brook', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:2, counter:2000, imgExt:'png', ability:"" },
+      { id:'OP01-024', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:'[Rush]' },
+      { id:'OP01-025', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:'[DON!! x1] [When Attacking] The opponent cannot activate [Blocker].' },
+      { id:'OP01-029', name:'In 2 years!!! To Sabaody', type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Main] Draw 2 cards and trash 1 card from your hand.' },
+      { id:'OP01-030', name:'In 2 years!!! To Sabaody', type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Main] If your Leader is {Straw Hat Crew}, draw 2 cards and trash 1.' },
+      { id:'OP01-033', name:'Izou', type:'CHARACTER', color:'Red', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:'[On Play] Look at 5 cards from the top of your deck.' },
+      { id:'OP01-039', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP01-047', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:'[On Play] Play up to 1 Character with a cost of 3 or less from your hand.' },
+      { id:'OP01-051', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:'[Rush]' },
+      { id:'OP01-054', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:'[On Play] You may rest 2 of your DON!!: Play up to 1 green Character with a cost of 3 or less from your hand.' },
+      { id:'OP01-057', name:'Paradise Waterfall', type:'EVENT', color:'Green', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
+      { id:'OP01-058', name:'Punk Gibson', type:'EVENT', color:'Green', attribute:"", power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Rest up to 1 of your opponent's Characters with 6000 power or less." },
+      { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:7000, cost:7, counter:1000, imgExt:'png', hasAlt:true, ability:'[Banish] [DON!! x1] Give blue Events in your hand -1 cost.' },
+      { id:'OP01-070', name:'Anna, Master of FiFi', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:9000, cost:9, counter:0, imgExt:'png', ability:"[On Play] Place up to 1 Character with a cost of 7 or less at the bottom of the owner's deck." },
+      { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:1000, cost:2, counter:1000, imgExt:'png', ability:'[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order.' },
+      { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:1000, cost:3, counter:1000, imgExt:'png', ability:'[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand.' },
+      { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:3000, cost:2, counter:1000, imgExt:'png', ability:'[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash.' },
+      { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:4000, cost:3, counter:2000, imgExt:'png', ability:'[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order.' },
+      { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] If your Leader has the {Duchess of Brittany} type, rest up to 1 of your opponent's Characters with a cost of 4 or less." },
+      { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue', attribute:"", affiliation:'Duchess of Brittany', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
+      { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:"", affiliation:'Duchess of Brittany', power:0, cost:1, counter:0, imgExt:'png', ability:'[Activate: Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order.' },
+      { id:'OP01-094', name:'Jack, Master of Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:12000, cost:10, counter:0, imgExt:'png', ability:'[On Play] DON!! -6: If your Leader has the {Holy Roman Empire} type, K.O. all Characters other than this Character.' },
+      { id:'OP01-096', name:'Commander Sam', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:7000, cost:7, counter:0, imgExt:'png', ability:"[On Play] DON!! -2: K.O. up to 1 of your opponent's Characters with a cost of 3 or less and up to 1 of your opponent's Characters with a cost of 2 or less." },
+      { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire', power:3000, cost:2, counter:1000, imgExt:'png', ability:'[Blocker] [On K.O.] Add 1 DON!! card from your DON!! deck and rest it.' },
+      { id:'OP01-101', name:'Shawn the Whimsical', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:4000, cost:3, counter:2000, imgExt:'png', ability:'[DON!! x1] [When Attacking] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and rest it.' },
+      { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple', attribute:"", affiliation:'Holy Roman Empire', power:0, cost:2, counter:0, imgExt:'png', hasAlt:true, ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
+      { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple', attribute:"", affiliation:'Holy Roman Empire', power:0, cost:2, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, if you have 2 or less Life cards, add up to 1 DON!! card from your DON!! deck and rest it. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active.' },
+
+      // OP12
+      { id:'OP12-008', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:4, counter:0, imgExt:'jpg', ability:"[Blocker] [On Your Opponent's Attack] [Once Per Turn] You may trash 1 card from your hand: Give up to 1 of your opponent's Leader or Characters -2000 power during this turn." },
+
+      // PRB02
+      { id:'PRB02-003', name:'Lucky Roux', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:4, counter:1000, imgExt:'jpg', ability:'[Blocker] [On Play] You may trash 1 Character card with a power of 6000 or more from your hand: Draw 2 cards.' },
+      { id:'PRB02-002', name:'Trafalgar Law', type:'CHARACTER', color:'Red', attribute:'Slash', power:7000, cost:6, counter:1000, imgExt:'jpg', ability:"[Once Per Turn] If this Character would be removed from the field by your opponent's effect, you may give this Character -2000 power during this turn instead. [When Attacking] Give up to 1 of your opponent's Characters -2000 power during this turn." },
+      { id:'PRB02-015', name:'Shiryu', type:'CHARACTER', color:'Black', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'jpg', ability:"If your Leader has the {Blackbeard Pirates} type, this Character gains [Blocker]. [On K.O.] If your Leader has the {Blackbeard Pirates} type, K.O. up to 1 of your opponent's Characters with a base cost of 4 or less." },
+
+      // OP03
+      { id:'OP03-013', name:'Marco', type:'CHARACTER', color:'Purple', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png', ability:"[Your Turn] [On Play] K.O. up to 1 of your opponent's Characters with 3000 Power or less. [On K.O.] You may trash 1 Event card from your hand. Play this character from the trash as rested." },
+      { id:'OP03-031', name:'Boa Hancock', type:'CHARACTER', color:'Green', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP03-033', name:'Nico Robin', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP03-120', name:'Thunder Bagua', type:'EVENT', color:'Purple', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:"" },
+
+      // ST15
+      { id:'ST15-005', name:'Portgas D. Ace', type:'CHARACTER', color:'Red', attribute:'Special', power:6000, cost:5, counter:1000, imgExt:'png', ability:"[Once Per Turn] If this character would be removed from play by one of your opponent's effects, instead you may give this character -2000 power for this turn." },
+      { id:'ST15-002', name:'Edward Newgate', type:'CHARACTER', color:'Red', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] Give your leader or one of your characters up to one rested DON!!. [Activate: Main] You may rest this character: K.O. up to one of your opponent's characters with 5000 or less power." },
+
+      // ST23
+      { id:'ST23-001', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:4000, cost:6, counter:2000, imgExt:'jpg', ability:'If you have a Character with 10000 power or more, give this card in your hand -4 cost. [Blocker]' },
+      { id:'ST23-002', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:10000, cost:9, counter:0, imgExt:'jpg', ability:"If your opponent has a Character with 8000 base power or more, give this card in your hand -3 cost. [On Play] If your Leader has the {Red-Haired Pirates} type, your Leader gains +2000 power until the end of your opponent's next End Phase." },
+
+      // OP08
+      { id:'OP08-118', name:'Silvers Rayleigh', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:8000, cost:8, counter:0, imgExt:'png', ability:'[On Play] Choose up to two of your opponents characters: Until the end of your opponents next turn, give one -3000 power and the other -2000 power. After this, K.O. up to one of your opponents characters with a power of 3000 or lower.' },
+      { id:'OP08-111', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP08-036', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP08-039', name:'Shambles', type:'EVENT', color:'Green', attribute:"", power:0, cost:3, counter:0, imgExt:'png', ability:"" },
+
+      // OP06
+      { id:'OP06-007', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:12000, cost:10, counter:0, imgExt:'png', ability:"[On Play] K.O. up to 1 of your opponent's characters with 10000 power or less." },
+      { id:'OP06-022', name:'Yamato', type:'LEADER', color:'Green', attribute:'Strike', power:5000, life:4, cost:0, counter:0, imgExt:'png', ability:"" },
+      { id:'OP06-035', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP06-101', name:'Ace', type:'CHARACTER', color:'Red', attribute:'Special', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP06-104', name:'Sabo', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP06-115', name:'Namuji Ice Breaker', type:'EVENT', color:'Green', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:"" },
+
+      // OP04
+      { id:'OP04-016', name:'Bad Manners Kick Course', type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] You may trash 1 card from your hand: Give up to 1 of your leaders or characters +3000 Power this battle. [Trigger] Give up to one of your opponent's leaders or characters -3000 power for this turn." },
+      { id:'OP04-021', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Green', attribute:'Special', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+      { id:'OP04-104', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:9000, cost:8, counter:0, imgExt:'png', ability:"" },
+
+      // ST21
+      { id:'ST21-017', name:'Gum-Gum Mole Gun', type:'EVENT', color:'Red', attribute:"", power:0, cost:4, counter:0, imgExt:'jpg', ability:"[Main] Give up to one of your opponents characters -5000 power during this turn. Then, if you have a character with 6000 power or more, K.O. up to one of your opponents characters with a power of 2000 or less. [Trigger] Activate this card's [Main] effect." },
+
+      // OP05
+      { id:'OP05-086', name:'Nefertari Vivi', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:1000, cost:1, counter:1000, imgExt:'png', ability:'If your trash has 10 cards or more, this character gains [Blocker].' },
+      { id:'OP05-099', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'OP05-100', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:7000, cost:6, counter:0, imgExt:'png', ability:"" },
+      { id:'OP05-105', name:'Thunder Bagua', type:'EVENT', color:'Green', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:"" },
+
+      // ST27
+      { id:'ST27-003', name:'Kuzan', type:'CHARACTER', color:'Blue', attribute:'Special', power:6000, cost:6, counter:1000, imgExt:'jpg', ability:'[Blocker] [On K.O.] Play up to 1 {Blackbeard Pirates} type Character card with a cost of 5 or less from your trash rested.' },
+
+      // ST01
+      { id:'ST01-001', name:'Monkey D. Luffy', type:'LEADER', color:'Red', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:'[Activate: Main] [Once Per Turn] Give up to 1 of your Characters +1000 power during this turn.' },
       { id:'ST01-002', name:'Usopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST01-003', name:'Karoo', type:'CHARACTER', color:'Red', attribute:'Strike', power:1000, cost:1, counter:1000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST01-003', name:'Karoo', type:'CHARACTER', color:'Red', attribute:'Strike', power:1000, cost:1, counter:1000, imgExt:'png', ability:'[Blocker]' },
       { id:'ST01-004', name:'Sanji', type:'CHARACTER', color:'Red', attribute:'Strike', power:2000, cost:2, counter:2000, imgExt:'png', ability:"" },
       { id:'ST01-005', name:'Jinbe', type:'CHARACTER', color:'Red', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST01-006', name:'Tony Tony Chopper', type:'CHARACTER', color:'Red', attribute:'Strike', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
-      { id:'ST01-007', name:'Nami', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck; reveal up to 1 {Straw Hat Crew} type card and add it to your hand." },
+      { id:'ST01-006', name:'Tony Tony Chopper', type:'CHARACTER', color:'Red', attribute:'Strike', power:1000, cost:1, counter:2000, imgExt:'png', ability:'[Blocker]' },
+      { id:'ST01-007', name:'Nami', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:'[On Play] Look at 5 cards from the top of your deck; reveal up to 1 {Straw Hat Crew} type card and add it to your hand.' },
       { id:'ST01-008', name:'Nico Robin', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:1000, imgExt:'png', ability:"" },
       { id:'ST01-009', name:'Franky', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
       { id:'ST01-010', name:'Brook', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST01-011', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"[Rush]" },
-      { id:'ST01-012', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:7000, cost:7, counter:0, imgExt:'png', ability:"[DON!! x2] This Character gains [Rush]." },
+      { id:'ST01-011', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:'[Rush]' },
+      { id:'ST01-012', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:7000, cost:7, counter:0, imgExt:'png', ability:'[DON!! x2] This Character gains [Rush].' },
       { id:'ST01-013', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:5000, cost:3, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST01-014', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] Your opponent cannot activate [Blocker] during this battle." },
-      { id:'ST01-015', name:'Jet Pistol', type:'EVENT', color:'Red', power:0, cost:4, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
-      { id:'ST01-016', name:'Guard Point', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-      { id:'ST01-017', name:'Thousand Sunny', type:'STAGE', color:'Red', attribute:'', power:0, cost:2, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your Characters +1000 power during this turn." },
+      { id:'ST01-014', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:'[DON!! x1] [When Attacking] Your opponent cannot activate [Blocker] during this battle.' },
+      { id:'ST01-015', name:'Jet Pistol', type:'EVENT', color:'Red', attribute:"", power:0, cost:4, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle.' },
+      { id:'ST01-016', name:'Guard Point', type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
+      { id:'ST01-017', name:'Thousand Sunny', type:'STAGE', color:'Red', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:'[Activate: Main] You may rest this Stage: Give up to 1 of your Characters +1000 power during this turn.' },
 
-      // ST02 - Worst Generation (Green)
-      { id:'ST02-001', name:'Eustass "Captain" Kid', type:'LEADER', color:'Green', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[DON!! x1] [Activate: Main] [Once Per Turn] Set up to 1 of your rested DON!! cards as active." },
+      // ST02
+      { id:'ST02-001', name:'Eustass "Captain" Kid', type:'LEADER', color:'Green', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:'[DON!! x1] [Activate: Main] [Once Per Turn] Set up to 1 of your rested DON!! cards as active.' },
       { id:'ST02-002', name:'Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
       { id:'ST02-003', name:'Capone "Gang" Bege', type:'CHARACTER', color:'Green', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
       { id:'ST02-004', name:'Capone "Gang" Bege', type:'CHARACTER', color:'Green', attribute:'Ranged', power:2000, cost:1, counter:2000, imgExt:'png', ability:"" },
       { id:'ST02-005', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST02-006', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] You may rest 1 of your DON!!: Set up to 1 of your Characters as active." },
+      { id:'ST02-006', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:2, counter:1000, imgExt:'png', ability:'[On Play] You may rest 1 of your DON!!: Set up to 1 of your Characters as active.' },
       { id:'ST02-007', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:3000, cost:1, counter:2000, imgExt:'png', ability:"" },
       { id:'ST02-008', name:'Scratchmen Apoo', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST02-009', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:3, counter:1000, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] Rest 1 DON!!: Set this Character as active." },
+      { id:'ST02-009', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:3, counter:1000, imgExt:'png', ability:'[Activate: Main] [Once Per Turn] Rest 1 DON!!: Set this Character as active.' },
       { id:'ST02-010', name:'Basil Hawkins', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:1000, imgExt:'png', ability:"" },
       { id:'ST02-011', name:'Urouge', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST02-012', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Set up to 1 of your DON!! as active." },
-      { id:'ST02-013', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] Set up to 1 of your DON!! as active." },
+      { id:'ST02-012', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:'[On Play] Set up to 1 of your DON!! as active.' },
+      { id:'ST02-013', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:'[DON!! x1] [When Attacking] Set up to 1 of your DON!! as active.' },
       { id:'ST02-014', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST02-015', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"[DON!! x2] This Character gains [Rush]." },
-      { id:'ST02-016', name:'Punk Gibson', type:'EVENT', color:'Green', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Rest up to 1 of your opponent's Characters with 5000 power or less." },
-      { id:'ST02-017', name:'Shambles', type:'EVENT', color:'Green', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
+      { id:'ST02-015', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:'[DON!! x2] This Character gains [Rush].' },
+      { id:'ST02-016', name:'Punk Gibson', type:'EVENT', color:'Green', attribute:"", power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Rest up to 1 of your opponent's Characters with 5000 power or less." },
+      { id:'ST02-017', name:'Shambles', type:'EVENT', color:'Green', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
 
-      // ST03 - Seven Warlords (Blue)
-      { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] Once per turn: Rest 1 of your opponent's Characters. Draw 1 card." },
+      // ST03
+      { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] DON!! -4: Return up to 1 Character with a cost of 5 or less to the owner's hand." },
       { id:'ST03-002', name:'Dracule Mihawk', type:'CHARACTER', color:'Blue', attribute:'Slash', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', power:6000, cost:5, counter:0, imgExt:'png', ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
+      { id:'ST03-003', name:'Noble Shlawger', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:6000, cost:5, counter:0, imgExt:'png', ability:"[Blocker] [DON!! x1] [On Block] Place up to 1 Character with a cost of 2 or less at the bottom of the owner's deck." },
       { id:'ST03-004', name:'Jinbe', type:'CHARACTER', color:'Blue', attribute:'Strike', power:4000, cost:3, counter:2000, imgExt:'png', ability:"" },
       { id:'ST03-005', name:'Gecko Moria', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:2, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST03-006', name:'Boa Hancock', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:3, counter:1000, imgExt:'png', ability:"[On Play] Draw 1 card, then place 1 card from your hand on the top of your deck." },
+      { id:'ST03-006', name:'Boa Hancock', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:3, counter:1000, imgExt:'png', ability:'[On Play] Draw 1 card, then place 1 card from your hand on the top of your deck.' },
       { id:'ST03-007', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Blue', attribute:'Special', power:5000, cost:5, counter:1000, imgExt:'png', ability:"" },
       { id:'ST03-008', name:'Bartholomew Kuma', type:'CHARACTER', color:'Blue', attribute:'Wisdom', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
       { id:'ST03-009', name:'Dracule Mihawk', type:'CHARACTER', color:'Blue', attribute:'Slash', power:7000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Return up to 1 Character with 3000 power or less to its owner's hand." },
       { id:'ST03-010', name:'Mr. 1 (Daz Bones)', type:'CHARACTER', color:'Blue', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
       { id:'ST03-011', name:'Marshall D. Teach', type:'CHARACTER', color:'Blue', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST03-012', name:'Buggy', type:'CHARACTER', color:'Blue', attribute:'Slash', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST03-012', name:'Buggy', type:'CHARACTER', color:'Blue', attribute:'Slash', power:1000, cost:1, counter:2000, imgExt:'png', ability:'[Blocker]' },
       { id:'ST03-013', name:'Perona', type:'CHARACTER', color:'Blue', attribute:'Special', power:1000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
-      { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', power:4000, cost:4, counter:1000, imgExt:'png', ability:"[On Play] Return 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
-      { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
-      { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
-      { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand." },
+      { id:'ST03-014', name:'Ball the Berserk', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany', power:4000, cost:4, counter:1000, imgExt:'png', ability:"[On Play] Return 1 of your opponent's Characters with a cost of 3 or less to the owner's hand." },
+      { id:'ST03-015', name:'Cig Break', type:'EVENT', color:'Blue', attribute:"", affiliation:'Duchess of Brittany', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Return up to 1 Character with a cost of 7 or less to the owner's hand. [Trigger] Activate this card's [Main] effect." },
+      { id:'ST03-016', name:'Siege of Londinium', type:'EVENT', color:'Blue', attribute:"", affiliation:'Duchess of Brittany', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Return up to 1 Character with a cost of 3 or less to the owner's hand. [Trigger] Activate this card's [Counter] effect." },
+      { id:'ST03-017', name:'Leave Me To My Studies', type:'EVENT', color:'Blue', attribute:"", affiliation:'Duchess of Brittany', power:0, cost:2, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, draw 1 card if you have 3 or less cards in your hand.' },
 
-      // ST04 - Holy Roman Empire (Purple)
-      { id:'ST04-001', name:'Kaido', type:'LEADER', color:'Purple', attribute:'Strike', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] You may trash 1 of your Characters: Add up to 1 DON!! card from your DON!! deck and rest it." },
-      { id:'ST04-002', name:'Ulti', type:'CHARACTER', color:'Purple', attribute:'Strike', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST04-003', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
-      { id:'ST04-004', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Add up to 1 DON!! card from your DON!! deck and rest it." },
-      { id:'ST04-005', name:'Queen', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
+      // ST04
+      { id:'ST04-001', name:'Constable Jack', type:'LEADER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] DON!! -7: Trash up to 1 of your opponent's Life cards." },
+      { id:'ST04-002', name:'Dabby the Domeless', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:5000, cost:4, counter:2000, imgExt:'png', ability:'[On Play] DON!! -1: Play up to 1 [Toad Wizzy] card with a cost of 4 or less from your hand.' },
+      { id:'ST04-003', name:'Gee, Infernal Hound-Shlawg', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:10000, cost:9, counter:0, imgExt:'png', ability:"[On Play] DON!! -5: K.O. up to 1 of your opponent's Characters with a cost of 6 or less. This Character gains [Rush] during this turn." },
+      { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:7000, cost:6, counter:0, imgExt:'png', ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 4 or less." },
+      { id:'ST04-005', name:'Sam the Tall', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire', power:6000, cost:5, counter:1000, imgExt:'png', ability:'[Blocker] [On Play] DON!! -1: Draw 2 cards and trash 1 card from your hand.' },
       { id:'ST04-006', name:'Sasaki', type:'CHARACTER', color:'Purple', attribute:'Strike', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
       { id:'ST04-007', name:'Sheepshead', type:'CHARACTER', color:'Purple', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST04-008', name:'Jack', type:'CHARACTER', color:'Purple', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
+      { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:4000, cost:3, counter:1000, imgExt:'png', ability:'[On Play] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and set it as active.' },
       { id:'ST04-009', name:'Ginrummy', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST04-010', name:"Who's Who", type:'CHARACTER', color:'Purple', attribute:'Strike', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST04-011', name:'Black Maria', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
-      { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike', power:6000, cost:4, counter:1000, imgExt:'png', hasAlt:true, ability:"" },
+      { id:'ST04-010', name:'Monk Matt', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:3000, cost:3, counter:0, imgExt:'png', ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 3 or less. [Trigger] Play this card." },
+      { id:'ST04-011', name:'Black Maria', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:1000, cost:1, counter:2000, imgExt:'png', ability:'[Blocker]' },
+      { id:'ST04-012', name:'Toad Wizzy', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire', power:6000, cost:4, counter:1000, imgExt:'png', hasAlt:true, ability:"" },
       { id:'ST04-013', name:'Speed', type:'CHARACTER', color:'Purple', attribute:'Ranged', power:3000, cost:2, counter:2000, imgExt:'png', ability:"" },
       { id:'ST04-014', name:'Babanuki', type:'CHARACTER', color:'Purple', attribute:'Ranged', power:5000, cost:5, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST04-015', name:'Brachio Bomber', type:'EVENT', color:'Purple', power:0, cost:4, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +6000 power during this battle." },
-      { id:'ST04-016', name:'Blast Breath', type:'EVENT', color:'Purple', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-      { id:'ST04-017', name:'The Canals', type:'STAGE', color:'Purple', attribute:'', power:0, cost:3, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it." },
+      { id:'ST04-015', name:'Blessed Thy Men', type:'EVENT', color:'Purple', attribute:"", affiliation:'Holy Roman Empire', power:0, cost:6, counter:0, imgExt:'png', ability:"[Main] K.O. up to 1 of your opponent's Characters with a cost of 6 or less, then add up to 1 DON!! card from your DON!! deck and set it as active. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
+      { id:'ST04-016', name:'Off to the Market', type:'EVENT', color:'Purple', attribute:"", affiliation:'Holy Roman Empire', power:0, cost:1, counter:0, imgExt:'png', ability:'[Counter] DON!! -1: Up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
+      { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:"", affiliation:'Holy Roman Empire', power:0, cost:3, counter:0, imgExt:'png', ability:'[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it.' },
 
-      // ST05 - Film Red (Red)
-      { id:'ST05-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] Rest 1 DON!!: Give up to 1 of your Characters +1000 power during this turn." },
+      // ST05
+      { id:'ST05-001', name:'Shanks', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:'[Activate: Main] [Once Per Turn] Rest 1 DON!!: Give up to 1 of your Characters +1000 power during this turn.' },
       { id:'ST05-002', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:"" },
       { id:'ST05-003', name:'Gordon', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'png', ability:"" },
       { id:'ST05-004', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
@@ -589,18 +618,18 @@
       { id:'ST05-008', name:'Rockstar', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
       { id:'ST05-009', name:'Hongo', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
       { id:'ST05-010', name:'Limejuice', type:'CHARACTER', color:'Red', attribute:'Ranged', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST05-011', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[Rush]" },
+      { id:'ST05-011', name:'Building Snake', type:'CHARACTER', color:'Red', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:'[Rush]' },
       { id:'ST05-012', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST05-013', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:7000, cost:5, counter:0, imgExt:'png', ability:"[Rush]" },
+      { id:'ST05-013', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:7000, cost:5, counter:0, imgExt:'png', ability:'[Rush]' },
       { id:'ST05-014', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:7000, cost:7, counter:0, imgExt:'png', ability:"[On Play] K.O. up to 1 of your opponent's Characters with 3000 power or less." },
-      { id:'ST05-015', name:'Uta Uta no Mi', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +3000 power during this battle." },
-      { id:'ST05-016', name:'New Genesis', type:'EVENT', color:'Red', power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Draw 2 cards." },
-      { id:'ST05-017', name:'Red Force', type:'STAGE', color:'Red', attribute:'', power:0, cost:2, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your Characters +1000 power during this turn." },
+      { id:'ST05-015', name:'Uta Uta no Mi', type:'EVENT', color:'Red', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +3000 power during this battle.' },
+      { id:'ST05-016', name:'New Genesis', type:'EVENT', color:'Red', attribute:"", power:0, cost:3, counter:0, imgExt:'png', ability:'[Main] Draw 2 cards.' },
+      { id:'ST05-017', name:'Red Force', type:'STAGE', color:'Red', attribute:"", power:0, cost:2, counter:0, imgExt:'png', ability:'[Activate: Main] You may rest this Stage: Give up to 1 of your Characters +1000 power during this turn.' },
 
-      // ST06 - Navy (Black)
+      // ST06
       { id:'ST06-001', name:'Sakazuki', type:'LEADER', color:'Black', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] You may trash 1 card from your hand: Give up to 1 of your opponent's Characters -2000 power during this turn." },
       { id:'ST06-002', name:'Hina', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST06-003', name:'Tashigi', type:'CHARACTER', color:'Black', attribute:'Slash', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST06-003', name:'Tashigi', type:'CHARACTER', color:'Black', attribute:'Slash', power:1000, cost:1, counter:2000, imgExt:'png', ability:'[Blocker]' },
       { id:'ST06-004', name:'Smoker', type:'CHARACTER', color:'Black', attribute:'Special', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
       { id:'ST06-005', name:'Sentomaru', type:'CHARACTER', color:'Black', attribute:'Strike', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
       { id:'ST06-006', name:'Helmeppo', type:'CHARACTER', color:'Black', attribute:'Slash', power:2000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -2000 power during this turn." },
@@ -612,101 +641,51 @@
       { id:'ST06-012', name:'Tsuru', type:'CHARACTER', color:'Black', attribute:'Wisdom', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
       { id:'ST06-013', name:'Kuzan', type:'CHARACTER', color:'Black', attribute:'Special', power:6000, cost:6, counter:0, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -5000 power during this turn." },
       { id:'ST06-014', name:'Sakazuki', type:'CHARACTER', color:'Black', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] Give up to 1 of your opponent's Characters -3000 power during this turn." },
-      { id:'ST06-015', name:'Great Eruption', type:'EVENT', color:'Black', power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Give up to 1 of your opponent's Characters -5000 power during this turn." },
-      { id:'ST06-016', name:'Ice Age', type:'EVENT', color:'Black', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-      { id:'ST06-017', name:'Navy HQ', type:'STAGE', color:'Black', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your opponent's Characters -1000 power during this turn." },
+      { id:'ST06-015', name:'Great Eruption', type:'EVENT', color:'Black', attribute:"", power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Give up to 1 of your opponent's Characters -5000 power during this turn." },
+      { id:'ST06-016', name:'Ice Age', type:'EVENT', color:'Black', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
+      { id:'ST06-017', name:'Navy HQ', type:'STAGE', color:'Black', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: Give up to 1 of your opponent's Characters -1000 power during this turn." },
 
-      // ST07 - Big Mom (Yellow)
-      { id:'ST07-001', name:'Charlotte Linlin', type:'LEADER', color:'Yellow', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[Activate: Main] [Once Per Turn] You may add 1 card from the top of your Life cards to your hand: Play up to 1 Character with a cost of 4 or less from your hand." },
+      // ST07
+      { id:'ST07-001', name:'Charlotte Linlin', type:'LEADER', color:'Yellow', attribute:'Special', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:'[Activate: Main] [Once Per Turn] You may add 1 card from the top of your Life cards to your hand: Play up to 1 Character with a cost of 4 or less from your hand.' },
       { id:'ST07-002', name:'Charlotte Katakuri', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:2000, cost:2, counter:1000, imgExt:'png', ability:"" },
       { id:'ST07-003', name:'Charlotte Cracker', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:3000, cost:3, counter:2000, imgExt:'png', ability:"" },
       { id:'ST07-004', name:'Charlotte Smoothie', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
       { id:'ST07-005', name:'Charlotte Daifuku', type:'CHARACTER', color:'Yellow', attribute:'Special', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
-      { id:'ST07-006', name:'Charlotte Pudding', type:'CHARACTER', color:'Yellow', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck; reveal up to 1 {Big Mom Pirates} type card and add it to your hand." },
+      { id:'ST07-006', name:'Charlotte Pudding', type:'CHARACTER', color:'Yellow', attribute:'Special', power:1000, cost:1, counter:1000, imgExt:'png', ability:'[On Play] Look at 5 cards from the top of your deck; reveal up to 1 {Big Mom Pirates} type card and add it to your hand.' },
       { id:'ST07-007', name:'Charlotte Perospero', type:'CHARACTER', color:'Yellow', attribute:'Special', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST07-008', name:'Zeus', type:'CHARACTER', color:'Yellow', attribute:'Special', power:2000, cost:1, counter:2000, imgExt:'png', ability:"[Blocker]" },
+      { id:'ST07-008', name:'Zeus', type:'CHARACTER', color:'Yellow', attribute:'Special', power:2000, cost:1, counter:2000, imgExt:'png', ability:'[Blocker]' },
       { id:'ST07-009', name:'Prometheus', type:'CHARACTER', color:'Yellow', attribute:'Special', power:1000, cost:2, counter:2000, imgExt:'png', ability:"" },
       { id:'ST07-010', name:'Charlotte Oven', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
       { id:'ST07-011', name:'Charlotte Katakuri', type:'CHARACTER', color:'Yellow', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
-      { id:'ST07-012', name:'Charlotte Linlin', type:'CHARACTER', color:'Yellow', attribute:'Special', power:7000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] You may add 1 card from the top of your Life cards to your hand: This Character gains +1000 power during this turn." },
-      { id:'ST07-013', name:'Charlotte Linlin', type:'CHARACTER', color:'Yellow', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png', ability:"[On Play] You may trash 1 of your Characters: Play up to 1 {Big Mom Pirates} type Character with a cost of 4 or less from your deck and place the rest at the bottom of your deck." },
+      { id:'ST07-012', name:'Charlotte Linlin', type:'CHARACTER', color:'Yellow', attribute:'Special', power:7000, cost:5, counter:0, imgExt:'png', ability:'[DON!! x1] [When Attacking] You may add 1 card from the top of your Life cards to your hand: This Character gains +1000 power during this turn.' },
+      { id:'ST07-013', name:'Charlotte Linlin', type:'CHARACTER', color:'Yellow', attribute:'Special', power:8000, cost:7, counter:0, imgExt:'png', ability:'[On Play] You may trash 1 of your Characters: Play up to 1 {Big Mom Pirates} type Character with a cost of 4 or less from your deck and place the rest at the bottom of your deck.' },
       { id:'ST07-014', name:'Napoleon', type:'CHARACTER', color:'Yellow', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Set up to 1 of your opponent's Characters with a cost of 4 or less face down at the bottom of the owner's Life area." },
-      { id:'ST07-015', name:'Heavenly Fire', type:'EVENT', color:'Yellow', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-      { id:'ST07-016', name:'Thunder Bolt', type:'EVENT', color:'Yellow', power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Set up to 1 of your opponent's Characters with a cost of 3 or less face down at the bottom of the owner's Life area." },
-      { id:'ST07-017', name:'Whole Cake Island', type:'STAGE', color:'Yellow', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] You may rest this Stage: If you have 2 or less Life cards, give up to 1 of your Characters +2000 power during this turn." },
+      { id:'ST07-015', name:'Heavenly Fire', type:'EVENT', color:'Yellow', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle.' },
+      { id:'ST07-016', name:'Thunder Bolt', type:'EVENT', color:'Yellow', attribute:"", power:0, cost:3, counter:0, imgExt:'png', ability:"[Main] Set up to 1 of your opponent's Characters with a cost of 3 or less face down at the bottom of the owner's Life area." },
+      { id:'ST07-017', name:'Whole Cake Island', type:'STAGE', color:'Yellow', attribute:"", power:0, cost:1, counter:0, imgExt:'png', ability:'[Activate: Main] You may rest this Stage: If you have 2 or less Life cards, give up to 1 of your Characters +2000 power during this turn.' },
 
-      // Additional OP cards referenced in decks
-      { id:'OP01-001', name:'Roronoa Zoro', type:'LEADER', color:'Red', attribute:'Slash', power:5000, life:5, cost:0, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] Give this Leader +1000 power during this battle." },
-      { id:'OP01-004', name:'Usopp', type:'CHARACTER', color:'Red', attribute:'Ranged', power:2000, cost:2, counter:2000, imgExt:'png', ability:"" },
-      { id:'OP01-013', name:'Sanji', type:'CHARACTER', color:'Red', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP01-014', name:'Jinbe', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP01-016', name:'Nami', type:'CHARACTER', color:'Red', attribute:'Special', power:1000, cost:1, counter:2000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck; reveal up to 1 card with a cost of 1 and add it to your hand." },
-      { id:'OP01-017', name:'Nico Robin', type:'CHARACTER', color:'Red', attribute:'Wisdom', power:3000, cost:3, counter:1000, imgExt:'png', ability:"[On Play] Draw 2 cards and trash 1 card from your hand." },
-      { id:'OP01-021', name:'Franky', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP01-022', name:'Brook', type:'CHARACTER', color:'Red', attribute:'Slash', power:4000, cost:2, counter:2000, imgExt:'png', ability:"" },
-      { id:'OP01-024', name:'Monkey D. Luffy', type:'CHARACTER', color:'Red', attribute:'Strike', power:6000, cost:5, counter:0, imgExt:'png', ability:"[Rush]" },
-      { id:'OP01-025', name:'Roronoa Zoro', type:'CHARACTER', color:'Red', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] The opponent cannot activate [Blocker]." },
-      { id:'OP01-029', name:'In 2 years!!! To Sabaody', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Main] Draw 2 cards and trash 1 card from your hand." },
-      { id:'OP01-030', name:'In 2 years!!! To Sabaody', type:'EVENT', color:'Red', power:0, cost:1, counter:0, imgExt:'png', ability:"[Main] If your Leader is {Straw Hat Crew}, draw 2 cards and trash 1." },
-      { id:'OP01-033', name:'Izou', type:'CHARACTER', color:'Red', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck." },
-      { id:'OP01-039', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP01-047', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] Play up to 1 Character with a cost of 3 or less from your hand." },
-      { id:'OP01-051', name:'Eustass "Captain" Kid', type:'CHARACTER', color:'Green', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"[Rush]" },
-      { id:'OP01-054', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:5, counter:0, imgExt:'png', ability:"[On Play] You may rest 2 of your DON!!: Play up to 1 green Character with a cost of 3 or less from your hand." },
-      { id:'OP01-057', name:'Paradise Waterfall', type:'EVENT', color:'Green', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-      { id:'OP01-058', name:'Punk Gibson', type:'EVENT', color:'Green', power:0, cost:4, counter:0, imgExt:'png', ability:"[Main] Rest up to 1 of your opponent's Characters with 6000 power or less." },
-      { id:'OP01-067', name:'Constable Anna', type:'CHARACTER', color:'Blue', attribute:'Special', power:7000, cost:7, counter:1000, imgExt:'png', hasAlt:true, ability:"[Banish] [DON!! x1] Give blue Events in your hand -1 cost." },
-      { id:'OP01-070', name:'Anna, Master of FiFi', type:'CHARACTER', color:'Blue', attribute:'Special', power:9000, cost:9, counter:0, imgExt:'png', ability:"[On Play] Place up to 1 Character with a cost of 7 or less at the bottom of the owner's deck." },
-      { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', power:1000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] Look at 5 cards from the top of your deck and return them to the top or bottom of the deck in any order." },
-      { id:'OP01-079', name:'George the Brave', type:'CHARACTER', color:'Blue', attribute:'Special', power:1000, cost:3, counter:1000, imgExt:'png', ability:"[Blocker] [On K.O.] If your Leader has the {Duchess of Brittany} type, add up to 1 Event from your trash to your hand." },
-      { id:'OP01-083', name:'Jesse the Jester', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[DON!! x1] [Your Turn] If your Leader has the {Duchess of Brittany} type, this Character gains +1000 power for every 2 Events in your trash." },
-      { id:'OP01-084', name:'Queen Victoria', type:'CHARACTER', color:'Blue', attribute:'Special', power:4000, cost:3, counter:2000, imgExt:'png', ability:"[DON!! x1] [When Attacking] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type Event card and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
-      { id:'OP01-085', name:'Sarra the Wise', type:'CHARACTER', color:'Blue', attribute:'Special', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[On Play] If your Leader has the {Duchess of Brittany} type, rest up to 1 of your opponent's Characters with a cost of 4 or less." },
-      { id:'OP01-087', name:'Snow Merchant', type:'EVENT', color:'Blue', power:0, cost:2, counter:0, imgExt:'png', ability:"[Counter] Play up to 1 {Duchess of Brittany} type Character card with a cost of 3 or less from your hand. [Trigger] Activate this card's [Counter] effect." },
-      { id:'OP01-090', name:'Schola Montis Belli', type:'STAGE', color:'Blue', attribute:'', power:0, cost:1, counter:0, imgExt:'png', ability:"[Activate: Main] Look at 5 cards from the top of your deck; reveal up to 1 {Duchess of Brittany} type card other than [Schola Montis Belli] and add it to your hand. Then, place the rest at the bottom of your deck in any order." },
-      { id:'OP01-094', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:12000, cost:10, counter:0, imgExt:'png', ability:"[Rush] [On Play] K.O. up to 1 of your opponent's Characters." },
-      { id:'OP01-096', name:'King', type:'CHARACTER', color:'Purple', attribute:'Strike', power:7000, cost:6, counter:0, imgExt:'png', ability:"[DON!! x1] [When Attacking] K.O. up to 1 of your opponent's Characters with 2000 power or less." },
-      { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', power:3000, cost:2, counter:1000, imgExt:'png', ability:"[Blocker] [On K.O.] Add 1 DON!! card from your DON!! deck and rest it." },
-      { id:'OP01-101', name:'Sasaki', type:'CHARACTER', color:'Purple', attribute:'Strike', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP01-117', name:'Guard Off Duty', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png', hasAlt:true, ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
-      { id:'OP01-119', name:'Thunder Bagua', type:'EVENT', color:'Purple', power:0, cost:1, counter:0, imgExt:'png', ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle." },
-
-      // Additional cards from other decks
+      // EB01
       { id:'EB01-003', name:'Shanks', type:'CHARACTER', color:'Red', attribute:'Slash', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
       { id:'EB01-014', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
+
+      // OP02
       { id:'OP02-034', name:'Izou', type:'CHARACTER', color:'Green', attribute:'Ranged', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
       { id:'OP02-036', name:'Killer', type:'CHARACTER', color:'Green', attribute:'Slash', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
       { id:'OP02-040', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
       { id:'OP02-041', name:'X Drake', type:'CHARACTER', color:'Green', attribute:'Slash', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP03-031', name:'Boa Hancock', type:'CHARACTER', color:'Green', attribute:'Special', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
-      { id:'OP03-033', name:'Nico Robin', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:4000, cost:3, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP04-021', name:'Donquixote Doflamingo', type:'CHARACTER', color:'Green', attribute:'Special', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
+
+      // ST11
       { id:'ST11-001', name:'Uta', type:'LEADER', color:'Green', attribute:'Special', power:5000, life:4, cost:0, counter:0, imgExt:'png', ability:"" },
       { id:'ST11-002', name:'Shanks', type:'CHARACTER', color:'Green', attribute:'Slash', power:3000, cost:2, counter:1000, imgExt:'png', ability:"" },
       { id:'ST11-003', name:'Gordon', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:0, cost:1, counter:2000, imgExt:'png', ability:"" },
       { id:'ST11-004', name:'Uta', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:1000, imgExt:'png', ability:"" },
+
+      // ST16
       { id:'ST16-001', name:'Nami', type:'CHARACTER', color:'Green', attribute:'Special', power:2000, cost:1, counter:1000, imgExt:'png', ability:"" },
       { id:'ST16-003', name:'Luffy', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
       { id:'ST16-004', name:'Robin', type:'CHARACTER', color:'Green', attribute:'Wisdom', power:4000, cost:3, counter:2000, imgExt:'png', ability:"" },
       { id:'ST16-005', name:'Zoro', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
-      { id:'OP09-005', name:'Uta', type:'CHARACTER', color:'Red', attribute:'Special', power:3000, cost:2, counter:2000, imgExt:'jpg', ability:"" },
 
-      // Yamato deck cards
-      { id:'OP06-022', name:'Yamato', type:'LEADER', color:'Green', attribute:'Strike', power:5000, life:4, cost:0, counter:0, imgExt:'png', ability:"" },
-      { id:'OP06-035', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
-      { id:'OP04-104', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:9000, cost:8, counter:0, imgExt:'png', ability:"" },
-      { id:'OP05-099', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP05-100', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:7000, cost:6, counter:0, imgExt:'png', ability:"" },
-      { id:'OP05-105', name:'Thunder Bagua', type:'EVENT', color:'Green', power:0, cost:1, counter:0, imgExt:'png', ability:"" },
-      { id:'OP06-101', name:'Ace', type:'CHARACTER', color:'Red', attribute:'Special', power:5000, cost:4, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP06-104', name:'Sabo', type:'CHARACTER', color:'Red', attribute:'Strike', power:5000, cost:5, counter:0, imgExt:'png', ability:"" },
-      { id:'OP08-111', name:'Yamato', type:'CHARACTER', color:'Green', attribute:'Strike', power:6000, cost:5, counter:1000, imgExt:'png', ability:"" },
-      { id:'OP09-107', name:'Kaido', type:'CHARACTER', color:'Purple', attribute:'Strike', power:8000, cost:7, counter:0, imgExt:'png', ability:"" },
-      { id:'OP07-036', name:'Jewelry Bonney', type:'CHARACTER', color:'Green', attribute:'Special', power:4000, cost:4, counter:2000, imgExt:'png', ability:"" },
-      { id:'OP08-036', name:'Trafalgar Law', type:'CHARACTER', color:'Green', attribute:'Slash', power:6000, cost:5, counter:0, imgExt:'png', ability:"" },
-      { id:'OP03-120', name:'Thunder Bagua', type:'EVENT', color:'Purple', power:0, cost:2, counter:0, imgExt:'png', ability:"" },
-      { id:'OP06-115', name:'Namuji Ice Breaker', type:'EVENT', color:'Green', power:0, cost:2, counter:0, imgExt:'png', ability:"" },
-      { id:'OP08-039', name:'Shambles', type:'EVENT', color:'Green', power:0, cost:3, counter:0, imgExt:'png', ability:"" },
     ];
 
     // Build lookup
