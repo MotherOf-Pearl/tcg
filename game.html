@@ -1739,6 +1739,17 @@ function handleMsg(msg) {
       if (msg.cardDb) cardDb = msg.cardDb;
       hint('Reconnected.');
       break;
+    // Room expiry — the 10-minute idle grace period elapsed without any
+    // reconnect, so the server evicted the room. Stop the reconnect loop
+    // and surface a user-friendly "session expired" message.
+    case 'ROOM_EXPIRED':
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+      if (_heartbeatWatchdog) { clearInterval(_heartbeatWatchdog); _heartbeatWatchdog = null; }
+      roomId = null;
+      try { if (ws) ws.close(); } catch (_) {}
+      alert('Session expired — please start a new game.');
+      window.location.href = '/index.html';
+      break;
     case 'ROOM_CREATED':
       roomId = msg.roomId; myId = msg.playerId;
       document.getElementById('waitCode').textContent = roomId;

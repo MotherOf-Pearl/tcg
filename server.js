@@ -3257,6 +3257,38 @@ function applyTriggerEffect(game, playerId, card) {
   log(game, `[Trigger] ${card.name} revealed off life — defender may activate.`);
 }
 
+// ─── Room expiry ───────────────────────────────────────────────────────────
+// Bug 4 (this batch) — rooms are NOT deleted on disconnect. Instead, when
+// every player's socket closes we start a 10-minute expiry timer; any
+// REJOIN while the timer is running cancels it and restores the session.
+// Once the timer fires the room is evicted and future REJOINs get a
+// ROOM_EXPIRED response (the client surfaces "Session expired — please
+// start a new game").
+const ROOM_EXPIRY_MS = 10 * 60 * 1000;
+const roomExpiryTimers = new Map();
+function _someoneConnectedToRoom(room) {
+  if (!room || !Array.isArray(room.players)) return false;
+  return room.players.some(pid => {
+    const sock = clients.get(pid);
+    return sock && sock.readyState === WebSocket.OPEN;
+  });
+}
+function scheduleRoomExpiry(roomId) {
+  const prev = roomExpiryTimers.get(roomId);
+  if (prev) clearTimeout(prev);
+  const t = setTimeout(() => {
+    roomExpiryTimers.delete(roomId);
+    rooms.delete(roomId);
+    console.log('[ROOM EXPIRED]', roomId, '— evicted after 10 min idle');
+  }, ROOM_EXPIRY_MS);
+  roomExpiryTimers.set(roomId, t);
+  console.log('[ROOM EXPIRY SCHEDULED]', roomId, 'in', ROOM_EXPIRY_MS / 1000, 's');
+}
+function cancelRoomExpiry(roomId) {
+  const prev = roomExpiryTimers.get(roomId);
+  if (prev) { clearTimeout(prev); roomExpiryTimers.delete(roomId); console.log('[ROOM EXPIRY CANCELLED]', roomId); }
+}
+
 // ─── WEBSOCKET ───
 wss.on('connection', (ws) => {
   const clientId = uuidv4();
@@ -3291,15 +3323,23 @@ wss.on('connection', (ws) => {
       }
       // Bug 5 — auto-reconnect support. Client sends REJOIN with the
       // original playerId + roomCode. Server re-maps the old playerId
-      // onto this fresh socket and replays current game state so the
-      // player resumes where they left off.
+      // onto this fresh socket, cancels any pending expiry timer, and
+      // replays current game state.  If the room genuinely expired
+      // (>10 min idle) we respond with ROOM_EXPIRED so the client can
+      // surface "Session expired — please start a new game" instead of
+      // the legacy "room not found" message.
       case 'REJOIN': {
         const room = rooms.get(msg.roomCode);
-        if (!room) { ws.send(JSON.stringify({type:'ERROR',msg:'Room not found'})); return; }
-        if (!room.players.includes(msg.playerId)) {
-          ws.send(JSON.stringify({type:'ERROR',msg:'Not a member of that room'}));
+        if (!room) {
+          ws.send(JSON.stringify({ type: 'ROOM_EXPIRED', roomCode: msg.roomCode }));
           return;
         }
+        if (!room.players.includes(msg.playerId)) {
+          ws.send(JSON.stringify({ type:'ERROR', msg:'Not a member of that room' }));
+          return;
+        }
+        // A player is back — cancel any pending expiry for this room.
+        cancelRoomExpiry(msg.roomCode);
         // Point the original playerId at this fresh socket. Drop the
         // temporary clientId assigned on connect — the rejoined session
         // uses the original playerId for all further sends.
@@ -3352,7 +3392,14 @@ wss.on('connection', (ws) => {
     // a fresh socket; in that case do not delete the newer entry.
     const id = ws.clientId || clientId;
     if (clients.get(id) === ws) clients.delete(id);
-    if (ws.roomId) broadcast(ws.roomId, {type:'PLAYER_LEFT', playerId:id});
+    if (ws.roomId) {
+      broadcast(ws.roomId, {type:'PLAYER_LEFT', playerId:id});
+      // Bug 4 (this batch) — if every player's socket is now closed, start
+      // the 10-minute expiry timer. Any REJOIN before it fires cancels it;
+      // fire == room evicted and REJOINs respond with ROOM_EXPIRED.
+      const room = rooms.get(ws.roomId);
+      if (room && !_someoneConnectedToRoom(room)) scheduleRoomExpiry(ws.roomId);
+    }
   });
 });
 
@@ -4928,6 +4975,36 @@ function agentApplyEffect(effect, ctx, resume) {
     case 'powerBuff': {
       if (effect.target === 'self') {
         applyTempPower(ctx.game, ctx.card.uid, effect.value, effect.duration, ctx.card.name);
+        return { status: 'applied' };
+      }
+      // Counter-step auto-apply — during COUNTER_STEP, the defender's +N
+      // power counter always lands on the card being attacked
+      // (battleState.targetUid), which is always defender-owned (their
+      // leader or their chosen blocker). Skip the picker entirely.
+      // Scales to every counter event whose effect shape is a powerBuff.
+      if (ctx.game.phase === 'COUNTER_STEP'
+          && ctx.game.battleState
+          && ctx.game.battleState.targetUid) {
+        applyTempPower(
+          ctx.game,
+          ctx.game.battleState.targetUid,
+          effect.value,
+          effect.duration || 'thisBattle',
+          ctx.card.name,
+        );
+        // Keep battleState.targetPower in sync so the overlay + client
+        // power display reflect the new total immediately (effectivePowerOf
+        // consults tempPowerEffects, so we recompute against the now-buffed
+        // card).
+        if (ctx.game.battleState.targetUid) {
+          const meId = ctx.playerId;
+          const me = ctx.game.players[meId];
+          let target = null;
+          if (me.leader && me.leader.uid === ctx.game.battleState.targetUid) target = me.leader;
+          else target = (me.field || []).find(c => c.uid === ctx.game.battleState.targetUid);
+          if (target) ctx.game.battleState.targetPower = effectivePowerOf(target, ctx.game);
+        }
+        log(ctx.game, `${ctx.card.name}: +${effect.value} power auto-applied to defending card.`);
         return { status: 'applied' };
       }
       const opened = openPowerBuffTarget(ctx.game, ctx.playerId, {
