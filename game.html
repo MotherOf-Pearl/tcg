@@ -3494,14 +3494,19 @@ function selectCard(uid, source) {
       document.getElementById('btnDeploy').style.display = 'none';
       document.getElementById('btnPlayEvent').style.display = 'none';
       deployHint.textContent = "Counter events can only be used during opponent's attack";
-    } else if (me.donActive >= card.cost) {
-      document.getElementById('btnDeploy').style.display = isEvent ? 'none' : 'block';
-      document.getElementById('btnPlayEvent').style.display = isEvent ? 'block' : 'none';
-      deployHint.textContent = `Cost: ${card.cost} DON!!`;
     } else {
-      document.getElementById('btnDeploy').style.display = 'none';
-      document.getElementById('btnPlayEvent').style.display = 'none';
-      deployHint.textContent = `Not enough DON!! (need ${card.cost}, have ${me.donActive})`;
+      const effCost = handPlayCostFor(me, card);
+      const discounted = effCost !== (card.cost || 0);
+      const costLabel = discounted ? `${effCost} (was ${card.cost})` : `${effCost}`;
+      if (me.donActive >= effCost) {
+        document.getElementById('btnDeploy').style.display = isEvent ? 'none' : 'block';
+        document.getElementById('btnPlayEvent').style.display = isEvent ? 'block' : 'none';
+        deployHint.textContent = `Cost: ${costLabel} DON!!`;
+      } else {
+        document.getElementById('btnDeploy').style.display = 'none';
+        document.getElementById('btnPlayEvent').style.display = 'none';
+        deployHint.textContent = `Not enough DON!! (need ${costLabel}, have ${me.donActive})`;
+      }
     }
   } else if (source === 'field' || source === 'leader') {
     // Field card / leader / stage. Decide which buttons to show.
@@ -3588,6 +3593,33 @@ function totalAvailableDonFor(player) {
   const sumAttached = (player.leader?.attachedDon || 0)
     + (player.field || []).reduce((s, c) => s + (c.attachedDon || 0), 0);
   return (player.donActive || 0) + (player.donRested || 0) + sumAttached;
+}
+
+// Client-side mirror of server's handPlayCostFor for display only —
+// lets the deploy hint / counter-step affordance reflect aura discounts
+// like Constable Anna's "[DON!! x1] Give blue Events in your hand -1
+// cost." (OP01-067). Server remains authoritative; this exists so the
+// UI does not show "Not enough DON!!" for a card the server would let
+// you play. Parses ability text directly — no PASSIVE_EFFECTS cache
+// shipped to the client.
+function handPlayCostFor(player, card) {
+  if (!card) return 0;
+  let cost = Number(card.cost) || 0;
+  if (!player) return Math.max(0, cost);
+  const sources = [player.leader, ...(player.field || [])].filter(Boolean);
+  for (const src of sources) {
+    const ab = src.ability || '';
+    const m = ab.match(/\[DON!!\s*x(\d+)\]\s*[Gg]ive\s+(\w+)\s+Events?\s+in your hand\s*-(\d+)\s*cost/i);
+    if (!m) continue;
+    const donNeeded = parseInt(m[1], 10);
+    const color = m[2];
+    const discount = parseInt(m[3], 10);
+    if ((src.attachedDon || 0) < donNeeded) continue;
+    if (card.type !== 'EVENT') continue;
+    if (String(card.color || '').toLowerCase() !== color.toLowerCase()) continue;
+    cost -= discount;
+  }
+  return Math.max(0, cost);
 }
 
 function deploySelected() {

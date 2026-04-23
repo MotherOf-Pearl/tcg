@@ -1320,8 +1320,10 @@ function handleAction(roomId, playerId, action) {
       // BUG 4 — Event counter cards cost DON equal to their printed cost;
       // Character counters (trash from hand for their Counter value) cost 0.
       // Enforce before splicing so the card stays in hand on failure.
+      // Anna aura: handPlayCostFor applies handCostDiscountAura so blue
+      // Events are discounted when paid as counters too.
       if (card.type === 'EVENT') {
-        const cost = card.cost || 0;
+        const cost = handPlayCostFor(defender, card, game);
         if (cost > defender.donActive) {
           send(playerId, {type:'ERROR', msg:`Not enough active DON (need ${cost}, have ${defender.donActive})`});
           return;
@@ -2832,22 +2834,41 @@ function isOnPlaySuppressed(game, playerId) {
 // Track-P Phase 4 — effective hand-play cost for a card. Base card.cost
 // minus any handCostDiscount passive entries whose conditions evaluate
 // true in the current game state (Uta ST23-001: own char ≥10k power;
-// Shanks ST23-002: opp char ≥8k base power).
+// Shanks ST23-002: opp char ≥8k base power), and minus any
+// handCostDiscountAura emitted by the owner's field/leader cards
+// (Constable Anna OP01-067: -1 cost to blue Events in hand per Anna
+// with ≥1 DON!! attached — stacks).
 function handPlayCostFor(player, card, game) {
   if (!card) return 0;
   let cost = Number(card.cost) || 0;
-  if (!game) return Math.max(0, cost);
-  const passives = PASSIVE_EFFECTS.get(card.id) || [];
-  if (passives.length === 0) return Math.max(0, cost);
-  // Locate the player's id so condition helpers can reach across.
+  if (!game || !player) return Math.max(0, cost);
   const playerId = Object.keys(game.players).find(id => game.players[id] === player);
   const owner = { playerId, player };
-  for (const p of passives) {
+
+  // Self-discount: passive entries on the card being played.
+  for (const p of (PASSIVE_EFFECTS.get(card.id) || [])) {
     if (p.type !== 'handCostDiscount') continue;
     if (_passiveConditionsOk(p.conditions, card, game, owner)) {
       cost -= (p.discount || 0);
     }
   }
+
+  // Aura discount: passive entries on the player's leader or field
+  // cards that reduce the cost of OTHER cards sitting in hand. The
+  // donAttached condition is checked against the source card (Anna),
+  // not the card being played. Stacks per source.
+  const sources = [player.leader, ...(player.field || [])].filter(Boolean);
+  for (const src of sources) {
+    for (const p of (PASSIVE_EFFECTS.get(src.id) || [])) {
+      if (p.type !== 'handCostDiscountAura') continue;
+      if (!_passiveConditionsOk(p.conditions, src, game, owner)) continue;
+      const f = p.filter || {};
+      if (f.type && card.type !== f.type) continue;
+      if (f.color && String(card.color || '').toLowerCase() !== String(f.color).toLowerCase()) continue;
+      cost -= (p.discount || 0);
+    }
+  }
+
   return Math.max(0, cost);
 }
 
@@ -3636,6 +3657,23 @@ function parsePassive(text) {
       type: 'handCostDiscount',
       conditions: [{ type: 'oppCharacterPowerMin', value: parseInt(m[1]) }],
       discount: parseInt(m[2]),
+    });
+  }
+
+  // handCostDiscountAura — emitted by a field/leader card to reduce the
+  // cost of OTHER cards in the owner's hand (filtered by type/color).
+  //   Constable Anna OP01-067:
+  //     "[Banish] [DON!! x1] Give blue Events in your hand -1 cost."
+  // The [DON!! xN] gate is a condition on the source card (Anna) —
+  // checked against Anna's attachedDon at evaluation time, so multiple
+  // Annas each with DON!! attached stack.
+  m = text.match(/\[DON!!\s*x(\d+)\]\s*[Gg]ive\s+(\w+)\s+Events?\s+in your hand\s*-(\d+)\s*cost/i);
+  if (m) {
+    out.push({
+      type: 'handCostDiscountAura',
+      conditions: [{ type: 'donAttached', value: parseInt(m[1]) }],
+      filter: { type: 'EVENT', color: m[2] },
+      discount: parseInt(m[3]),
     });
   }
 

@@ -102,6 +102,51 @@ test('parsePassive: handCostDiscount with oppCharacterPowerMin base-power (Shank
   assert.deepEqual(disc.conditions, [{ type: 'oppCharacterPowerMin', value: 8000 }]);
 });
 
+test('parsePassive: handCostDiscountAura for Constable Anna OP01-067', () => {
+  const passives = srv.parsePassive('[Banish] [DON!! x1] Give blue Events in your hand -1 cost.');
+  const aura = passives.find(p => p.type === 'handCostDiscountAura');
+  assert.ok(aura, 'expected handCostDiscountAura entry');
+  assert.equal(aura.discount, 1);
+  assert.deepEqual(aura.filter, { type: 'EVENT', color: 'blue' });
+  assert.deepEqual(aura.conditions, [{ type: 'donAttached', value: 1 }]);
+});
+
+test('handPlayCostFor: Anna aura discounts blue Events in hand when ≥1 DON!! attached; stacks per Anna', () => {
+  const srvMod = require('../server.js');
+  const anna = srvMod.CARD_DB.find(c => c.id === 'OP01-067');
+  const cig = srvMod.CARD_DB.find(c => c.id === 'ST03-015'); // blue EVENT, cost 4
+  assert.ok(anna && cig, 'expected OP01-067 Constable Anna and ST03-015 Cig Break in CARD_DB');
+
+  // No Anna on field — base cost.
+  const player0 = { leader: null, field: [], hand: [] };
+  const game0 = { players: { p1: player0 } };
+  assert.equal(srvMod.handPlayCostFor(player0, cig, game0), cig.cost);
+
+  // One Anna with 0 DON!! attached — condition fails, no discount.
+  const annaNoDon = { ...anna, uid: 'anna-a', attachedDon: 0 };
+  const player1 = { leader: null, field: [annaNoDon], hand: [] };
+  const game1 = { players: { p1: player1 } };
+  assert.equal(srvMod.handPlayCostFor(player1, cig, game1), cig.cost);
+
+  // One Anna with 1 DON!! attached — -1 cost.
+  const annaOne = { ...anna, uid: 'anna-b', attachedDon: 1 };
+  const player2 = { leader: null, field: [annaOne], hand: [] };
+  const game2 = { players: { p1: player2 } };
+  assert.equal(srvMod.handPlayCostFor(player2, cig, game2), cig.cost - 1);
+
+  // Two Annas, each with 1 DON!! — stacks to -2.
+  const annaTwoA = { ...anna, uid: 'anna-c', attachedDon: 1 };
+  const annaTwoB = { ...anna, uid: 'anna-d', attachedDon: 2 };
+  const player3 = { leader: null, field: [annaTwoA, annaTwoB], hand: [] };
+  const game3 = { players: { p1: player3 } };
+  assert.equal(srvMod.handPlayCostFor(player3, cig, game3), cig.cost - 2);
+
+  // Does not discount non-EVENT cards.
+  const annaChar = srvMod.CARD_DB.find(c => c.id === 'OP01-077'); // blue CHARACTER
+  assert.ok(annaChar);
+  assert.equal(srvMod.handPlayCostFor(player2, annaChar, game2), annaChar.cost);
+});
+
 test('parsePassive: removalProtection (Kuzan OP10-082 anyRemoval vs Burgess koOnly)', () => {
   const kuzan = srv.parsePassive(
     "This Character cannot be removed from the field by your opponent's effects. [Activate: Main] …"
