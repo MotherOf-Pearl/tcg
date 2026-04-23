@@ -2122,16 +2122,21 @@ function renderGame() {
       );
       document.getElementById('btnUseBlocker').style.display = hasViableBlocker ? 'block' : 'none';
     }
-    // Show arrow + power overlays on both sides after the DOM settles (cards are just rendered).
-    requestAnimationFrame(() => {
-      // Raise attacker/target above adjacent absolutely-positioned elements (like .don-area).
-      [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
-      drawBattleArrow(bs.attackerUid, bs.targetUid);
-      showPowerOverlay(bs.attackerUid, bs.attackerPower);
-      showPowerOverlay(bs.targetUid, bs.targetPower);
-    });
+    // Raise attacker/target above adjacent absolutely-positioned elements (like .don-area).
+    // Synchronous (no rAF) so the clear-then-show pair is atomic per render —
+    // matches the COUNTER_STEP path and avoids the accumulation race that
+    // caused the defender's power to grow by counterBonus each re-render.
+    [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
+    drawBattleArrow(bs.attackerUid, bs.targetUid);
+    showPowerOverlay(bs.attackerUid, bs.attackerPower);
+    showPowerOverlay(bs.targetUid, bs.targetPower);
   } else if (bs && game.phase === 'COUNTER_STEP') {
     // Phase 3 + 4 — counter step. Defender plays counters; either side sees the running totals.
+    // Fresh-render invariant: the defender's displayed power is ALWAYS computed
+    // from battleState.targetPower + (battleState.counterBonus || 0) on each
+    // render, never accumulated across renders. clearPowerOverlays has already
+    // wiped prior overlays at the top of this render — showPowerOverlay below
+    // also removes any stale per-uid overlay defensively.
     const defenderId = Object.keys(game.players).find(id => id !== bs.attackerId);
     const bonus = bs.counterBonus || 0;
     const totalDef = bs.targetPower + bonus;
@@ -2150,13 +2155,13 @@ function renderGame() {
       document.getElementById('counterStepAtkPower').innerHTML =
         `Attacker: <b>${bs.attackerPower.toLocaleString()}</b><br>Defender: <b>${breakdown}</b>`;
     }
-    requestAnimationFrame(() => {
-      [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
-      drawBattleArrow(bs.attackerUid, bs.targetUid);
-      showPowerOverlay(bs.attackerUid, bs.attackerPower);
-      // Defender power overlay reflects counter bonus in real time.
-      showPowerOverlay(bs.targetUid, totalDef);
-    });
+    // Run synchronously so the clear-then-show happens in the same tick that
+    // rebuilt the field DOM — no rAF race window where two pending renders
+    // could both append overlays before either's clear runs.
+    [bs.attackerUid, bs.targetUid].forEach(uid => findCardEl(uid)?.classList.add('battle-active'));
+    drawBattleArrow(bs.attackerUid, bs.targetUid);
+    showPowerOverlay(bs.attackerUid, bs.attackerPower);
+    showPowerOverlay(bs.targetUid, bs.targetPower + (bs.counterBonus || 0));
   }
 
   // Task #1 [Trigger] window — defender chose to activate or skip the trigger.
@@ -4267,10 +4272,12 @@ function showPowerOverlay(uid, power) {
   const el = findCardEl(uid);
   const host = document.getElementById('battleOverlays');
   if (!el || !host) return;
-  // BUG 4 — only one power number per card. Counter bonus re-renders call
-  // showPowerOverlay on the same uid; without this the old number stays
-  // under the new one and both are visible.
-  host.querySelectorAll(`.power-overlay[data-uid="${uid}"]`).forEach(p => p.remove());
+  // Idempotent: remove ANY existing overlay for this uid (document-wide,
+  // not scoped to host) before appending the fresh number. Counter-step
+  // re-renders drove an accumulation bug where the displayed defender
+  // power grew by counterBonus each tick — the fix is to always render
+  // the power fresh from battleState, never accumulate.
+  document.querySelectorAll(`.power-overlay[data-uid="${uid}"]`).forEach(p => p.remove());
   const r = el.getBoundingClientRect();
   const div = document.createElement('div');
   div.className = 'power-overlay';
@@ -4282,7 +4289,7 @@ function showPowerOverlay(uid, power) {
 }
 
 function clearPowerOverlays() {
-  document.querySelectorAll('#battleOverlays .power-overlay').forEach(p => p.remove());
+  document.querySelectorAll('.power-overlay').forEach(p => p.remove());
 }
 
 function clearBattleActive() {

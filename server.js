@@ -1383,15 +1383,6 @@ function handleAction(roomId, playerId, action) {
 
       const totalDefense = bs.targetPower + (bs.counterBonus || 0);
       const isBanish = attackerCard && hasBanish(attackerCard);
-      console.log('[RESOLVE_ATTACK]', {
-        attackerUid: bs.attackerUid,
-        attackerCard: attackerCard?.name,
-        attackerAbility: attackerCard?.ability,
-        isBanish,
-        defenderIsLeader: !!bs.targetIsLeader,
-        finalAttack: bs.attackerPower,
-        finalDefend: totalDefense,
-      });
       // BUG 16 — house rule: attacker wins every tie (leader AND character).
       // Diverges from published OPTCG tie rules (defender usually wins leader
       // ties on a >). User explicitly asked for >= across the board.
@@ -1424,9 +1415,14 @@ function handleAction(roomId, playerId, action) {
             outcome.outcome = 'game_won';
           } else {
             const lifeCard = defender.life.pop();
+            if (isBanish) {
+              defender.trash.push(lifeCard);
+              log(game, `💥 [Banish] ${bs.attackerName} hits the leader! Life card ${lifeCard.name} → trash. ${defender.life.length} life remaining.`);
+            } else {
             defender.hand.push(lifeCard);
             log(game, `\uD83D\uDCA5 ${bs.attackerName} hits the leader! Life card ${lifeCard.name} \u2192 hand. ${defender.life.length} life remaining.`);
             applyTriggerEffect(game, defenderId, lifeCard);
+            }
             outcome.outcome = 'leader_hit';
             outcome.lifeRemaining = defender.life.length;
           }
