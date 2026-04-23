@@ -44,7 +44,7 @@ test('USE_COUNTER → pipeline counter timing → opens trashFromHand cost windo
   assert.ok(game.trashFromHandWindow.pipelineResume);
 });
 
-test('paying the trash cost resumes to powerBuff target picker', () => {
+test('paying the trash cost auto-applies +3000 to defender (COUNTER_STEP auto-apply)', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
   armCounterStep(game, p1, p2);
   const card = { ...srv.CARD_DB.find(c => c.id === 'OP04-016'), uid: 'bmkc-2' };
@@ -56,11 +56,16 @@ test('paying the trash cost resumes to powerBuff target picker', () => {
   srv.handleAction(roomId, p2, { type: 'TRASH_FROM_HAND_RESOLVE',
     cardUids: ['fodder-2'] });
 
+  // Cost paid → powerBuff fires. COUNTER_STEP auto-apply lands the
+  // +3000 on battleState.targetUid (defender leader) as a
+  // tempPowerEffect, skipping the picker.
   assert.equal(game.trashFromHandWindow, null);
-  assert.ok(game.powerBuffTargetWindow, 'powerBuff window opened after cost paid');
-  assert.equal(game.powerBuffTargetWindow.amount, 3000);
-  assert.equal(game.powerBuffTargetWindow.duration, 'thisBattle');
-  assert.equal(game.powerBuffTargetWindow.targetKind, 'leaderOrCharacter');
+  assert.ok(!game.powerBuffTargetWindow, 'picker skipped — auto-applied');
+  const tp = (game.tempPowerEffects || []).find(
+    e => e.targetUid === game.players[p2].leader.uid && e.amount === 3000
+  );
+  assert.ok(tp, '+3000 tempPowerEffect landed on defender leader');
+  assert.equal(tp.kind, 'battle');
 });
 
 test('skipping the trash cost aborts the block — no powerBuff fires', () => {

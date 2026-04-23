@@ -1200,10 +1200,14 @@ function handleAction(roomId, playerId, action) {
       if (target.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Cannot attack a stage'}); return; }
       // Rulebook: DON!! attachment bonuses only apply during the card
       // owner's turn. A card being attacked does NOT get its DON bonus,
-      // nor any attacker-turn tempPowerEffects. Use the raw printed
-      // power as the defender's base — counterBonus is added on top
-      // during RESOLVE_ATTACK.
-      const targetPower = target.power || 0;
+      // but [Opponent's Turn] scoped passive buffs (Chopper OP03-062
+      // "this character has +N power") still count — those carry their
+      // own turn gating via _passiveScopeOk, so effectivePowerOf honours
+      // them. Strategy: take effectivePowerOf and subtract just the DON
+      // portion — keeps passive buffs + tempPowerEffects (counter cards
+      // apply their own +N via tempPowerEffects on the defender uid),
+      // drops only DON.
+      const targetPower = Math.max(0, effectivePowerOf(target, game) - (target.attachedDon || 0) * 1000);
       game.battleState.targetUid = target.uid;
       game.battleState.targetName = target.name;
       game.battleState.targetPower = targetPower;
@@ -1225,10 +1229,9 @@ function handleAction(roomId, playerId, action) {
             ? Object.keys(game.players)[1] : Object.keys(game.players)[0], c);
         }
       }
-      // Refresh target power in case an effect lowered it. Still raw
-      // printed power per the rule above — DON bonuses don't apply on
-      // defense.
-      if (game.battleState) game.battleState.targetPower = target.power || 0;
+      // Refresh target power in case an effect lowered it. Same rule
+      // as initial set above — effective minus DON portion.
+      if (game.battleState) game.battleState.targetPower = Math.max(0, effectivePowerOf(target, game) - (target.attachedDon || 0) * 1000);
       break;
     }
 
@@ -1271,7 +1274,9 @@ function handleAction(roomId, playerId, action) {
       blocker.rested = true;
       game.battleState.targetUid     = blocker.uid;
       game.battleState.targetName    = blocker.name;
-      game.battleState.targetPower   = effectivePowerOf(blocker, game);
+      // Blocker is on the defender's side — still opponent's turn, so
+      // DON bonus doesn't apply. Passive [Opponent's Turn] buffs do.
+      game.battleState.targetPower   = Math.max(0, effectivePowerOf(blocker, game) - (blocker.attachedDon || 0) * 1000);
       game.battleState.targetIsLeader = false;
       // BUG 5 — flag so RESOLVE_ATTACK can distinguish "blocked by blocker"
       // from "defender won through raw power" in its outcome broadcast.
@@ -1853,7 +1858,9 @@ function handleAction(roomId, playerId, action) {
       }
       game.battleState.targetUid = newTarget.uid;
       game.battleState.targetName = newTarget.name;
-      game.battleState.targetPower = effectivePowerOf(newTarget, game);
+      // Redirect still lands on defender's side — no DON bonus, but
+      // passive opponent's-turn buffs count.
+      game.battleState.targetPower = Math.max(0, effectivePowerOf(newTarget, game) - (newTarget.attachedDon || 0) * 1000);
       game.battleState.targetIsLeader = (me.leader && me.leader.uid === newTarget.uid);
       log(game, `${w.sourceCardName}: attack redirected to ${newTarget.name}.`);
       game.attackRedirectWindow = null;
@@ -5053,7 +5060,11 @@ function agentApplyEffect(effect, ctx, resume) {
           let target = null;
           if (me.leader && me.leader.uid === ctx.game.battleState.targetUid) target = me.leader;
           else target = (me.field || []).find(c => c.uid === ctx.game.battleState.targetUid);
-          if (target) ctx.game.battleState.targetPower = effectivePowerOf(target, ctx.game);
+          // Counter-applied buff lives in tempPowerEffects (applyTempPower
+          // just ran above); rebuild targetPower using the defender rule
+          // — effective minus DON, so counter buff is included via temp
+          // effects, [Opponent's Turn] passives stay, DON stays stripped.
+          if (target) ctx.game.battleState.targetPower = Math.max(0, effectivePowerOf(target, ctx.game) - (target.attachedDon || 0) * 1000);
         }
         log(ctx.game, `${ctx.card.name}: +${effect.value} power auto-applied to defending card.`);
         return { status: 'applied' };

@@ -71,7 +71,7 @@ function armCounterStep(game, p1, p2) {
   };
 }
 
-test('Bullet String — useNewPipeline flag + USE_COUNTER → DON cost + powerBuff picker', () => {
+test('Bullet String — useNewPipeline flag + USE_COUNTER → DON cost + auto-applies +4000 to defender', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
   const src = srv.CARD_DB.find(c => c.id === 'OP14-078');
   assert.equal(src.useNewPipeline, true);
@@ -90,11 +90,16 @@ test('Bullet String — useNewPipeline flag + USE_COUNTER → DON cost + powerBu
     type: 'RETURN_DON',
     selections: { fromActive: 1, fromRested: 0, fromCards: [] },
   });
+  // After cost paid, powerBuff fires. COUNTER_STEP auto-apply lands
+  // the +4000 on battleState.targetUid (defender leader) as a
+  // tempPowerEffect with kind='battle'; picker is skipped.
   assert.equal(game.donReturnWindow, null);
-  assert.ok(game.powerBuffTargetWindow, 'power-buff picker opens after cost');
-  assert.equal(game.powerBuffTargetWindow.amount, 4000);
-  assert.equal(game.powerBuffTargetWindow.duration, 'thisBattle');
-  assert.equal(game.powerBuffTargetWindow.targetKind, 'leaderOrCharacter');
+  assert.ok(!game.powerBuffTargetWindow, 'picker skipped — auto-applied');
+  const tp = (game.tempPowerEffects || []).find(
+    e => e.targetUid === game.players[p2].leader.uid && e.amount === 4000
+  );
+  assert.ok(tp, '+4000 tempPowerEffect landed on defender leader');
+  assert.equal(tp.kind, 'battle');
 });
 
 // ─── Lucky Roux (OP09-015) — onKO leader gate + koTarget by power ───

@@ -47,7 +47,7 @@ test('USE_COUNTER routes NoroNoro through runPipeline → opens DON return windo
   assert.ok(game.donReturnWindow.pipelineResume);
 });
 
-test('paying 1 DON → opens power-buff target picker for leaderOrCharacter', () => {
+test('paying 1 DON → auto-applies +2000 to defender (COUNTER_STEP auto-apply)', () => {
   const { roomId, p1, p2, game } = twoPlayerGame();
   armCounterStep(game, p1, p2);
   const card = { ...srv.CARD_DB.find(c => c.id === 'OP07-076'), uid: 'noro-2' };
@@ -61,14 +61,18 @@ test('paying 1 DON → opens power-buff target picker for leaderOrCharacter', ()
     selections: { fromActive: 1, fromRested: 0, fromCards: [] },
   });
 
-  // Pipeline resumed → powerBuff opened. Candidates are p2's leader +
-  // any characters on p2's field (none here, so just the leader).
+  // Pipeline resumed → powerBuff. Since phase is COUNTER_STEP and
+  // battleState.targetUid is set, the buff auto-applies to the
+  // defender (no picker). See server.js powerBuff case / counter
+  // auto-apply branch. Effect lands in tempPowerEffects on the
+  // defender's leader uid with amount=2000, duration=thisBattle.
   assert.equal(game.donReturnWindow, null);
-  assert.ok(game.powerBuffTargetWindow, 'power-buff target window opened');
-  assert.equal(game.powerBuffTargetWindow.side, 'self');
-  assert.equal(game.powerBuffTargetWindow.targetKind, 'leaderOrCharacter');
-  assert.equal(game.powerBuffTargetWindow.amount, 2000);
-  assert.equal(game.powerBuffTargetWindow.duration, 'thisBattle');
+  assert.ok(!game.powerBuffTargetWindow, 'picker skipped — auto-applied');
+  const tp = (game.tempPowerEffects || []).find(
+    e => e.targetUid === game.players[p2].leader.uid && e.amount === 2000
+  );
+  assert.ok(tp, '+2000 tempPowerEffect landed on defender leader');
+  assert.equal(tp.kind, 'battle');
 });
 
 test('selecting leader for +2000 then resolves restTarget (if opponent has active chars)', () => {
