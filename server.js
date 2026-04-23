@@ -1198,7 +1198,7 @@ function handleAction(roomId, playerId, action) {
       }
       if (!target) { send(playerId, {type:'ERROR', msg:'Invalid target'}); return; }
       if (target.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Cannot attack a stage'}); return; }
-      const targetPower = effectivePowerOf(target, game);
+      const targetPower = defensivePowerOf(target, game);
       game.battleState.targetUid = target.uid;
       game.battleState.targetName = target.name;
       game.battleState.targetPower = targetPower;
@@ -1221,7 +1221,7 @@ function handleAction(roomId, playerId, action) {
         }
       }
       // Refresh target power in case an effect lowered it.
-      if (game.battleState) game.battleState.targetPower = effectivePowerOf(target, game);
+      if (game.battleState) game.battleState.targetPower = defensivePowerOf(target, game);
       break;
     }
 
@@ -1264,7 +1264,7 @@ function handleAction(roomId, playerId, action) {
       blocker.rested = true;
       game.battleState.targetUid     = blocker.uid;
       game.battleState.targetName    = blocker.name;
-      game.battleState.targetPower   = effectivePowerOf(blocker, game);
+      game.battleState.targetPower   = defensivePowerOf(blocker, game);
       game.battleState.targetIsLeader = false;
       // BUG 5 — flag so RESOLVE_ATTACK can distinguish "blocked by blocker"
       // from "defender won through raw power" in its outcome broadcast.
@@ -1846,7 +1846,7 @@ function handleAction(roomId, playerId, action) {
       }
       game.battleState.targetUid = newTarget.uid;
       game.battleState.targetName = newTarget.name;
-      game.battleState.targetPower = effectivePowerOf(newTarget, game);
+      game.battleState.targetPower = defensivePowerOf(newTarget, game);
       game.battleState.targetIsLeader = (me.leader && me.leader.uid === newTarget.uid);
       log(game, `${w.sourceCardName}: attack redirected to ${newTarget.name}.`);
       game.attackRedirectWindow = null;
@@ -2896,6 +2896,19 @@ function effectivePowerOf(card, game) {
   for (const e of effs) if (e.targetUid === card.uid) p += (e.amount || 0);
   p += passivePowerBuffTyped(card, game);
   return Math.max(0, p);
+}
+
+// Power a card contributes while it is NOT on its owner's turn — used
+// for the defender side of an incoming attack (original target,
+// blockers jumping in, retargets). Per OPTCG rulebook, DON!!
+// attachments grant +1000 power "during your turn" only, so a card
+// being attacked does not get its DON bonus. All other layers
+// (tempPowerEffects, passive buffs — including opponent's-turn scoped
+// ones like Chopper OP03-062) are preserved because each carries its
+// own turn gating.
+function defensivePowerOf(card, game) {
+  if (!card) return 0;
+  return Math.max(0, effectivePowerOf(card, game) - (card.attachedDon || 0) * 1000);
 }
 
 // Track P Phase 2 — typed passive power evaluator. Aggregates every
@@ -5046,7 +5059,7 @@ function agentApplyEffect(effect, ctx, resume) {
           let target = null;
           if (me.leader && me.leader.uid === ctx.game.battleState.targetUid) target = me.leader;
           else target = (me.field || []).find(c => c.uid === ctx.game.battleState.targetUid);
-          if (target) ctx.game.battleState.targetPower = effectivePowerOf(target, ctx.game);
+          if (target) ctx.game.battleState.targetPower = defensivePowerOf(target, ctx.game);
         }
         log(ctx.game, `${ctx.card.name}: +${effect.value} power auto-applied to defending card.`);
         return { status: 'applied' };
@@ -5760,7 +5773,7 @@ module.exports = {
   handleAction, doRefresh, doDraw, doEnd, nextPhase,
   // Keyword detectors
   hasBlocker, hasRush, hasDoubleAttack, hasBanish,
-  effectivePowerOf, effectiveCostOf, handPlayCostFor,
+  effectivePowerOf, defensivePowerOf, effectiveCostOf, handPlayCostFor,
   counterValueOf,
   // Broadcast plumbing (tests replace clients.get(id).send with a spy)
   rooms, clients, send, broadcast, sendState,

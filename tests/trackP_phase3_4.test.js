@@ -8,6 +8,33 @@ const { srv, resetWorld, twoPlayerGame } = require('./helpers');
 
 beforeEach(resetWorld);
 
+// ─── defensivePowerOf: strips DON attachment bonus, keeps everything else ───
+
+test('defensivePowerOf: base power with no DON attached matches effectivePowerOf', () => {
+  const { game } = twoPlayerGame();
+  const card = { ...srv.CARD_DB.find(c => c.id === 'ST03-001'), uid: 'd0', attachedDon: 0 };
+  assert.equal(srv.defensivePowerOf(card, game), srv.effectivePowerOf(card, game));
+  assert.equal(srv.defensivePowerOf(card, game), card.power);
+});
+
+test('defensivePowerOf: strips +1000 per attached DON (leader 5000 + 4 DON = 5000 on defense)', () => {
+  const { game } = twoPlayerGame();
+  const card = { ...srv.CARD_DB.find(c => c.id === 'ST03-001'), uid: 'd1', attachedDon: 4 };
+  // effectivePowerOf: base (5000) + 4*1000 = 9000. defensivePowerOf: 5000.
+  assert.equal(srv.effectivePowerOf(card, game), card.power + 4000);
+  assert.equal(srv.defensivePowerOf(card, game), card.power);
+});
+
+test('defensivePowerOf: preserves tempPowerEffects (counter-added buffs still count on defense)', () => {
+  const { game } = twoPlayerGame();
+  const card = { ...srv.CARD_DB.find(c => c.id === 'ST03-001'), uid: 'd2', attachedDon: 2 };
+  game.tempPowerEffects = [{ targetUid: 'd2', amount: 4000, kind: 'battle' }];
+  // effective: 5000 + 2000 (DON) + 4000 (temp) = 11000.
+  // defensive: 5000 + 4000 (temp) = 9000 (temp survives, DON stripped).
+  assert.equal(srv.effectivePowerOf(card, game), card.power + 2000 + 4000);
+  assert.equal(srv.defensivePowerOf(card, game), card.power + 4000);
+});
+
 // ─── P-3: conditional [Blocker] grants ─────────────────────────────────
 
 test('hasBlocker: Vivi OP05-086 gains [Blocker] when trash ≥10 cards', () => {
