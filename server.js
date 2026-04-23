@@ -24,7 +24,15 @@ const server = http.createServer((req, res) => {
     const file = path.join(BASE_DIR, page);
     if (!fs.existsSync(file)) { console.log('File not found:', file); res.writeHead(404); res.end('File not found: ' + file); return; }
     // Force the browser to revalidate HTML on every load so deploys are picked up.
-    res.writeHead(200, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, must-revalidate' });
+    // Aggressive no-store + Pragma + Expires — a stale game.html cached the
+    // old counter-power display formula, which showed players inflated
+    // numbers even after the server fix shipped.
+    res.writeHead(200, {
+      'Content-Type': 'text/html',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     fs.createReadStream(file).pipe(res);
   } else if (pathname.match(/\.(png|jpg|jpeg)$/)) {
     const file = path.join(BASE_DIR, pathname.slice(1));
@@ -35,7 +43,12 @@ const server = http.createServer((req, res) => {
     const file = path.join(BASE_DIR, pathname.slice(1));
     if (!fs.existsSync(file)) { res.writeHead(404); res.end(); return; }
     // Same — JS deploys (e.g. background.js) need to bust the browser cache.
-    res.writeHead(200, { 'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache, must-revalidate' });
+    res.writeHead(200, {
+      'Content-Type': 'application/javascript',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
+    });
     fs.createReadStream(file).pipe(res);
   } else if (pathname.match(/\.(mp3|wav|ogg)$/)) {
     const file = path.join(BASE_DIR, pathname.slice(1));

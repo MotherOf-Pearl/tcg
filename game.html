@@ -934,6 +934,11 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 </head>
 <body>
 
+<!-- Version stamp — bumps let players confirm they're on the fresh
+     build after a cache miss. Bump the string whenever shipping a
+     visible-behaviour fix. -->
+<div style="position:fixed;bottom:2px;right:4px;font-size:9px;opacity:0.4;color:#888;font-family:monospace;pointer-events:none;z-index:10000;">v2025-COUNTER-FIX</div>
+
 <!-- ════════════════════════════════════════════════════
      MAIN MENU
 ════════════════════════════════════════════════════ -->
@@ -2138,10 +2143,9 @@ function renderGame() {
     // wiped prior overlays at the top of this render — showPowerOverlay below
     // also removes any stale per-uid overlay defensively.
     const defenderId = Object.keys(game.players).find(id => id !== bs.attackerId);
-    const bonus = bs.counterBonus || 0;
-    const totalDef = bs.targetPower + bonus;
-    const breakdown = bonus > 0
-      ? `${bs.targetPower.toLocaleString()} + ${bonus.toLocaleString()} = ${totalDef.toLocaleString()}`
+    const totalDef = bs.targetPower + (bs.counterBonus || 0);
+    const breakdown = (bs.counterBonus || 0) > 0
+      ? `${bs.targetPower.toLocaleString()} + ${(bs.counterBonus || 0).toLocaleString()} = ${totalDef.toLocaleString()}`
       : totalDef.toLocaleString();
 
     if (myId === defenderId) {
