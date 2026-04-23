@@ -53,6 +53,14 @@
     return next;
   };
 
+  // Bug 1 — sessionStorage keys for cross-page music persistence. Read on
+  // load; written every ~1s and on track-end so refresh / navigation
+  // resumes seamlessly.
+  const SS_TRACK = 'boohaw_music_track';
+  const SS_POS   = 'boohaw_music_pos';
+  const getSS = (k) => { try { return sessionStorage.getItem(k); } catch (_) { return null; } };
+  const setSS = (k, v) => { try { sessionStorage.setItem(k, v); } catch (_) {} };
+
   const audio   = new Audio();
   audio.preload = 'auto';
   audio.muted   = isMuted();
@@ -85,14 +93,44 @@
     if (p && typeof p.catch === 'function') p.catch(() => { /* autoplay blocked until first interaction */ });
   };
 
-  // Each page load picks a fresh random track — no cross-page resume.
-  audio.src    = pickRandomTrack();
-  audio.volume = TARGET_VOL;
-  tryPlay();
+  // Bug 1 — cross-page music continuity. On load, prefer the track URL +
+  // playback position stashed in sessionStorage; fall back to a fresh
+  // random pick on first navigation of the session.
+  const savedTrack = getSS(SS_TRACK);
+  const savedPos   = parseFloat(getSS(SS_POS) || '0') || 0;
+  const startUrl   = (savedTrack && TRACKS.indexOf(savedTrack) !== -1) ? savedTrack : pickRandomTrack();
+  currentTrackUrl  = startUrl;
+  audio.src        = startUrl;
+  audio.volume     = TARGET_VOL;
+  setSS(SS_TRACK, startUrl);
 
-  // When the track finishes, pick a DIFFERENT random track and play it.
+  // Seek to the saved position once metadata is ready — `currentTime` can
+  // only be set reliably after `loadedmetadata` (duration known).
+  const seekToSaved = () => {
+    if (savedPos > 0 && isFinite(audio.duration) && savedPos < audio.duration - 0.25) {
+      try { audio.currentTime = savedPos; } catch (_) {}
+    }
+    tryPlay();
+  };
+  if (audio.readyState >= 1) seekToSaved();
+  else audio.addEventListener('loadedmetadata', seekToSaved, { once: true });
+
+  // Bug 1 — persist playback position every ~1s so a navigation mid-track
+  // resumes within a second. Skip the write when not playing (paused or
+  // seeking) to keep the value coherent.
+  setInterval(() => {
+    if (!audio.paused && !audio.seeking && isFinite(audio.currentTime)) {
+      setSS(SS_POS, String(audio.currentTime));
+    }
+  }, 1000);
+
+  // When the track finishes, pick a DIFFERENT random track, save it to
+  // sessionStorage with position 0, and play from the start.
   audio.addEventListener('ended', () => {
-    audio.src = pickRandomTrack();
+    const next = pickRandomTrack();
+    audio.src = next;
+    setSS(SS_TRACK, next);
+    setSS(SS_POS, '0');
     tryPlay();
   });
 

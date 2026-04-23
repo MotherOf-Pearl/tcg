@@ -324,7 +324,9 @@ const CARD_DB = [
   // ══════════════════════════════
   { id:'ST03-001', name:'Anna of Brittany', type:'LEADER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:5000, life:5, cost:0, counter:0, image:IMG('ST03','ST03-001','png'), useNewPipeline:true,
-    ability:"[Activate: Main] Once per turn: Rest 1 of your opponent's Characters. Draw 1 card." },
+    // Bug 2 — clarified wording: rest an opponent's Character; if the opponent
+    // has no Characters on the field, draw 1 card instead (scalable fallback).
+    ability:"[Activate: Main] [Once Per Turn] Rest 1 of your opponent's Characters. If your opponent has no Characters on the field, draw 1 card instead." },
 
   { id:'OP01-077', name:'FiFi Cat', type:'CHARACTER', color:'Blue', attribute:'Special', affiliation:'Duchess of Brittany',
     power:1000, cost:2, counter:1000, image:IMG('OP01','OP01-077','png'), useNewPipeline:true,
@@ -2289,6 +2291,13 @@ function handleAction(roomId, playerId, action) {
   // Bug 7 — battleState + BLOCK_STEP without a broadcast is a race-window
   // regression indicator. Re-broadcasting here is cheap and idempotent.
   if (game.battleState && game.phase === 'BLOCK_STEP') broadcastAll(game, room);
+  // Bug 4 — after any pipelineResume that ran during COUNTER_STEP (e.g.
+  // Snow Merchant's counter → playFromHand chain), re-broadcast so the
+  // defender's Resolve Attack button reappears and the attacker's
+  // "Waiting for opponent to counter…" banner comes back once the
+  // secondary window closes. Scales to ALL counter cards with secondary
+  // effects — any pipelineResume re-entering COUNTER_STEP triggers this.
+  if (game.battleState && game.phase === 'COUNTER_STEP') broadcastAll(game, room);
 }
 
 // ─── KEYWORD EFFECT INTERPRETER ───
@@ -4056,6 +4065,23 @@ function _parseBlock(block, unparsed) {
 function _parseEffectList(body, unparsed) {
   if (!body) return [];
 
+  // Bug 2 — scalable "no valid targets" fallback. Extract before segment
+  // splitting so the fallback clause doesn't surface as a stray effect.
+  // Patterns:
+  //   "If your opponent has no Characters on the field, <effect> instead"
+  //   "If there are no valid targets, <effect> instead"
+  //   "If no valid target, <effect> instead"
+  // The <effect> is parsed via the same segment parser and attached to
+  // the first target-requiring effect in the block. When that effect's
+  // opener finds 0 candidates, the sequencer runs the fallback.
+  let extractedFallbackText = null;
+  const fbRe = /\.?\s*[Ii]f (?:your opponent has no Characters?(?:\s+on the (?:field|board))?|there (?:are|is) no valid targets?|no valid target),?\s*([^.]+?)\s+instead\.?/;
+  const fbMatch = body.match(fbRe);
+  if (fbMatch) {
+    extractedFallbackText = fbMatch[1].trim();
+    body = body.replace(fbMatch[0], ' ').replace(/\s+/g, ' ').trim();
+  }
+
   // Phase 5 Priority 8 (3/3) — "Choose one:" branching. Split on the
   // bullet (•) character; each branch may carry its own
   // "If your Leader has the {X} type," condition. Branches return a
@@ -4101,6 +4127,28 @@ function _parseEffectList(body, unparsed) {
   for (const seg of segments) {
     const eff = _parseEffectSegment(seg, unparsed, bodyPlacement);
     if (eff) out.push(eff);
+  }
+
+  // Bug 2 — attach the extracted fallback effect to the first
+  // target-requiring primary effect in the block. The sequencer fires
+  // fallbackEffect when the target picker opens with 0 candidates.
+  if (extractedFallbackText) {
+    const fbEff = _parseEffectSegment(extractedFallbackText, unparsed, bodyPlacement);
+    if (fbEff) {
+      const TARGET_TYPES = new Set([
+        'restTarget', 'koTarget', 'bounceTarget', 'placeAtBottom',
+        'suppressTarget', 'powerBuff', 'powerDebuff',
+        'addFromTrash', 'playFromHand', 'playFromTrash',
+      ]);
+      let attached = false;
+      for (const e of out) {
+        if (TARGET_TYPES.has(e.type)) { e.fallbackEffect = fbEff; attached = true; break; }
+      }
+      // If no primary target effect was found, run the fallback
+      // unconditionally as a trailing effect so the ability still does
+      // something useful.
+      if (!attached) out.push(fbEff);
+    }
   }
   return out;
 }
@@ -5124,6 +5172,20 @@ function agentApplyEffect(effect, ctx, resume) {
       picked.playedThisTurn = true;
       ctx.player.field.push(picked);
       log(ctx.game, `${ctx.card.name}: played from life trigger for free.`);
+      // Bug 3 — fire [On Play] so Monk Matt's "DON!! -1: K.O. up to 1 of
+      // your opponent's Characters with a cost of 3 or less" (and any
+      // future card with onPlay after playSelf) routes through the
+      // standard pipelineResume chain: cost agent opens donReturn window
+      // → player picks DON → sequencer continues to koTarget opener.
+      if (isEffectsSuppressed(picked) || isOnPlaySuppressed(ctx.game, ctx.playerId)) {
+        log(ctx.game, `${picked.name}: [On Play] suppressed.`);
+        return { status: 'applied' };
+      }
+      const onPlayRes = runPipeline('onPlay', ctx.game, ctx.playerId, picked);
+      // Propagate window-open up so the surrounding sequencer waits for
+      // the interactive resolution before continuing; any other status
+      // (applied / no-targets / done) is a synchronous completion.
+      if (onPlayRes && onPlayRes.status === 'window-open') return onPlayRes;
       return { status: 'applied' };
     }
 
@@ -5395,7 +5457,15 @@ function runPipeline(timing, game, playerId, card, opts = {}) {
       // next effect (or past-the-end, which a resume will treat as a
       // block boundary and advance to bi+1).
       const resume = { timing, cardUid: card.uid, blockIndex: bi, effectIndex: ei + 1 };
-      const res = agentApplyEffect(block.effects[ei], ctx, resume);
+      const eff = block.effects[ei];
+      let res = agentApplyEffect(eff, ctx, resume);
+      // Bug 2 — scalable fallback. When an effect reports no valid
+      // targets (its opener returned false) AND the parser attached a
+      // fallbackEffect, execute the fallback in place of the primary.
+      if ((res.status === 'no-targets' || res.status === 'abort-block') && eff.fallbackEffect) {
+        log(ctx.game, `${ctx.card.name}: no valid targets — firing fallback.`);
+        res = agentApplyEffect(eff.fallbackEffect, ctx, resume);
+      }
       if (res.status === 'window-open') return res;
       if (res.status === 'unsupported') return res;
       // 'abort-block' — an effect signaled that the entire block should
