@@ -1198,7 +1198,12 @@ function handleAction(roomId, playerId, action) {
       }
       if (!target) { send(playerId, {type:'ERROR', msg:'Invalid target'}); return; }
       if (target.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Cannot attack a stage'}); return; }
-      const targetPower = effectivePowerOf(target, game);
+      // Rulebook: DON!! attachment bonuses only apply during the card
+      // owner's turn. A card being attacked does NOT get its DON bonus,
+      // nor any attacker-turn tempPowerEffects. Use the raw printed
+      // power as the defender's base — counterBonus is added on top
+      // during RESOLVE_ATTACK.
+      const targetPower = target.power || 0;
       game.battleState.targetUid = target.uid;
       game.battleState.targetName = target.name;
       game.battleState.targetPower = targetPower;
@@ -1220,8 +1225,10 @@ function handleAction(roomId, playerId, action) {
             ? Object.keys(game.players)[1] : Object.keys(game.players)[0], c);
         }
       }
-      // Refresh target power in case an effect lowered it.
-      if (game.battleState) game.battleState.targetPower = effectivePowerOf(target, game);
+      // Refresh target power in case an effect lowered it. Still raw
+      // printed power per the rule above — DON bonuses don't apply on
+      // defense.
+      if (game.battleState) game.battleState.targetPower = target.power || 0;
       break;
     }
 
