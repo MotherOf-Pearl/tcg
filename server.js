@@ -1382,6 +1382,16 @@ function handleAction(roomId, playerId, action) {
       else attackerCard = attackerPlayer.field.find(c => c.uid === bs.attackerUid);
 
       const totalDefense = bs.targetPower + (bs.counterBonus || 0);
+      const isBanish = attackerCard && hasBanish(attackerCard);
+      console.log('[RESOLVE_ATTACK]', {
+        attackerUid: bs.attackerUid,
+        attackerCard: attackerCard?.name,
+        attackerAbility: attackerCard?.ability,
+        isBanish,
+        defenderIsLeader: !!bs.targetIsLeader,
+        finalAttack: bs.attackerPower,
+        finalDefend: totalDefense,
+      });
       // BUG 16 — house rule: attacker wins every tie (leader AND character).
       // Diverges from published OPTCG tie rules (defender usually wins leader
       // ties on a >). User explicitly asked for >= across the board.
