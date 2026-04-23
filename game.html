@@ -4061,8 +4061,22 @@ function showTooltip(card, e) {
   document.getElementById('ttName').textContent    = card.name;
   document.getElementById('ttType').textContent    = `${card.type} · ${card.color||''} · ${card.attribute||''}`;
   document.getElementById('ttAbility').textContent = card.ability || '';
-  // Show effective (buffed) power if it differs from printed.
-  const effPow = clientEffectivePower(card);
+  // Show effective (buffed) power if it differs from printed. During
+  // COUNTER_STEP, the on-board arrow overlay uses battleState's
+  // snapshot (attackerPower; targetPower + counterBonus) — mirror those
+  // exact numbers when hovering the attacker or defender so the tooltip
+  // and the battle arrow never disagree mid-counter. Everywhere else,
+  // fall back to clientEffectivePower which already composes base +
+  // attachedDon*1000 + temp + passive buffs.
+  let effPow = clientEffectivePower(card);
+  const bs = game && game.battleState;
+  if (bs && game.phase === 'COUNTER_STEP') {
+    if (card.uid === bs.attackerUid) {
+      effPow = bs.attackerPower;
+    } else if (card.uid === bs.targetUid) {
+      effPow = bs.targetPower + (bs.counterBonus || 0);
+    }
+  }
   const printedPow = card.power || 0;
   const powHtml = card.power
     ? (effPow !== printedPow
