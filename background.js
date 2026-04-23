@@ -99,11 +99,11 @@
   // Mute button + first-interaction autoplay unlock.
   const isGamePage = /\/game\.html/i.test(location.pathname);
   const setup = () => {
-    // Catch the first user gesture and force a play() — most browsers require
-    // this before any media starts. Bind on capture so we run before app code
-    // can call stopPropagation.
+    // Bug 2 — one-time click listener that starts music if paused and not muted.
+    // Browsers block autoplay until the first user gesture; this gesture IS that
+    // gesture. Bind on capture so we run before app code can call stopPropagation.
     const kick = () => {
-      tryPlay();
+      if (audio.paused && !audio.muted) tryPlay();
       window.removeEventListener('click',      kick, true);
       window.removeEventListener('keydown',    kick, true);
       window.removeEventListener('touchstart', kick, true);

@@ -589,6 +589,35 @@ function broadcast(roomId, msg) {
   room.players.forEach(pid => send(pid, msg));
 }
 
+// Bug 9 — attached DON!! returns to its owner's cost area RESTED whenever a
+// character leaves the field for ANY reason (KO, trash-self, AOE, bounce,
+// placeAtBottom, opponent removal). Keeps the invariant
+//    donDeck + donActive + donRested + Σ attachedDon === 10
+// for every player for the entire game. Must be called BEFORE the card is
+// moved off the field so the ownership attribution is still valid.
+function returnAttachedDon(game, card) {
+  if (!card) return 0;
+  const attached = card.attachedDon || 0;
+  if (attached <= 0) return 0;
+  // Find the card's owner by scanning both players' leader + field. The
+  // caller may have already removed it from field — so also accept cards
+  // passed in mid-removal by falling back to any player whose leader uid
+  // matches.
+  let ownerId = null;
+  for (const pid of Object.keys(game.players)) {
+    const pl = game.players[pid];
+    if (pl.leader && pl.leader.uid === card.uid) { ownerId = pid; break; }
+    if ((pl.field || []).some(c => c.uid === card.uid)) { ownerId = pid; break; }
+  }
+  // If the card has already been moved (e.g. trash/hand), fall back to the
+  // last owner recorded on the card (bounceTarget sets it) or skip.
+  if (!ownerId && card._ownerId) ownerId = card._ownerId;
+  if (!ownerId) return 0;
+  game.players[ownerId].donRested = (game.players[ownerId].donRested || 0) + attached;
+  card.attachedDon = 0;
+  return attached;
+}
+
 function sendState(roomId) {
   const room = rooms.get(roomId);
   if (!room?.game) return;
@@ -603,6 +632,15 @@ function sendState(roomId) {
     recipients: room.players,
   });
   room.players.forEach(pid => send(pid, { type: 'GAME_STATE', game: room.game, yourId: pid }));
+}
+
+// Bug 15 — explicit helper that ships the current game state to every
+// connected socket in the room. Pipeline resume paths call this instead
+// of sending to only the acting socket so defender prompts (Block Step,
+// Counter Step, outcome banners) always reach both sides.
+function broadcastAll(game, room) {
+  if (!room || !Array.isArray(room.players)) return;
+  room.players.forEach(pid => send(pid, { type: 'GAME_STATE', game, yourId: pid }));
 }
 
 function log(game, msg) { game.log.push(msg); if (game.log.length > 30) game.log.shift(); }
@@ -660,7 +698,9 @@ function doEnd(game) {
       runPipeline('endOfTurn', game, endingPlayerId, c);
     }
   }
-  while (p.hand.length > 8) { p.trash.push(p.hand.pop()); }
+  // Bug 11 — One Piece TCG has NO hand-size limit. Never auto-trash cards
+  // at end of turn, regardless of hand size. The hand display handles
+  // visual compression client-side.
   const ids = Object.keys(game.players);
   game.activePlayer = ids.find(id => id !== game.activePlayer);
   game.turn++;
@@ -793,6 +833,8 @@ function resolveCounter(roomId) {
     const target = defender.field.find(c => c.uid === cw.defenderUid);
     if (target) {
       if (finalAttack >= finalDefend) {
+        // Bug 9 — attached DON returns to owner's cost area (rested) before removal.
+        returnAttachedDon(game, target);
         defender.field = defender.field.filter(c => c.uid !== cw.defenderUid);
         defender.trash.push(target);
         log(game, `\uD83D\uDC80 ${target.name} is K.O.'d!`);
@@ -890,6 +932,14 @@ function handleAction(roomId, playerId, action) {
       const cardUid = action.cardUid;
       const idx = p.hand.findIndex(c => c.uid === cardUid);
       const card = idx !== -1 ? p.hand[idx] : null;
+      // Bug 12 — counter-only events ([Counter] with no [Main]) are
+      // unplayable during the Main Phase. Reject before splicing.
+      if (card && card.type === 'EVENT'
+          && card.ability && card.ability.includes('[Counter]')
+          && !card.ability.includes('[Main]')) {
+        send(playerId, {type:'ERROR', msg:'Counter-only events can only be played during the opponent\'s Counter Step.'});
+        return;
+      }
       console.log('PLAY_CARD:', {
         playerId,
         activePlayer: game.activePlayer,
@@ -959,6 +1009,13 @@ function handleAction(roomId, playerId, action) {
     }
 
     case 'ACTIVATE_MAIN': {
+      // Bug 8 — [Activate: Main] is owner-only: non-active players cannot
+      // fire any ACTIVATE_MAIN even on their own cards (e.g. Schola Montis
+      // Belli during opponent's turn). Enforce at the sender level.
+      if (playerId !== game.activePlayer) {
+        send(playerId, {type:'ERROR', msg:'[Activate: Main] can only be used during your own Main Phase.'});
+        return;
+      }
       if (!isActive || game.phase !== 'MAIN') return;
       let card = null;
       let isLeader = false, isStage = false;
@@ -1117,6 +1174,10 @@ function handleAction(roomId, playerId, action) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
       } else runPipeline('whenAttacking', game, playerId, attacker);
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
+      // Bug 6/7/14 — any [When Attacking] pipeline effect may have opened a
+      // window or mutated state only the actor saw. Broadcast now so the
+      // defender's Block Step prompt sees the latest battleState immediately.
+      broadcastAll(game, room);
       break;
     }
 
@@ -1222,6 +1283,10 @@ function handleAction(roomId, playerId, action) {
       } else if (blocker.useNewPipeline) {
         runPipeline('onBlock', game, defenderId, blocker);
       }
+      // Bug 14 — broadcast COUNTER_STEP transition to both players so the
+      // attacker's "Waiting for opponent to counter…" panel flips over
+      // within the same tick as the defender's counter controls.
+      broadcastAll(game, room);
       break;
     }
 
@@ -1231,6 +1296,8 @@ function handleAction(roomId, playerId, action) {
       if (playerId !== defenderId) return;
       game.phase = 'COUNTER_STEP';
       log(game, `Defender declines to block.`);
+      // Bug 14 — broadcast COUNTER_STEP transition to both players.
+      broadcastAll(game, room);
       break;
     }
 
@@ -1287,6 +1354,13 @@ function handleAction(roomId, playerId, action) {
           runPipeline('counter', game, defenderId, card);
         }
       }
+      // Bug 1 — counter step persists: playing a counter does NOT end the
+      // step; defender may stack multiple counters before pressing Resolve
+      // Attack. Re-assert phase defensively in case a pipeline effect moved
+      // it.  Bug 14 — broadcast updated power totals to both players so
+      // the attacker sees the new defender power in real time.
+      if (game.battleState) game.phase = 'COUNTER_STEP';
+      broadcastAll(game, room);
       break;
     }
 
@@ -1348,6 +1422,8 @@ function handleAction(roomId, playerId, action) {
           // Hit a character (the original target or the chosen blocker) — KO it.
           const target = defender.field.find(c => c.uid === bs.targetUid);
           if (target) {
+            // Bug 9 — attached DON returns to owner's cost area (rested).
+            returnAttachedDon(game, target);
             defender.field = defender.field.filter(c => c.uid !== bs.targetUid);
             defender.trash.push(target);
             dropTempEffectsFor(game, target.uid);
@@ -1381,6 +1457,9 @@ function handleAction(roomId, playerId, action) {
       game.battleState = null;
       game.phase = 'MAIN';
       broadcast(roomId, outcome);
+      // Bug 14 — broadcast the resolved state (phase back to MAIN, battle
+      // arrow gone, field/trash/life updates) to both players.
+      broadcastAll(game, room);
       break;
     }
 
@@ -1580,6 +1659,8 @@ function handleAction(roomId, playerId, action) {
         log(game, `${target.name}: self-save available — owner may decide.`);
         break;
       }
+      // Bug 9 — attached DON returns to owner's cost area (rested).
+      returnAttachedDon(game, target);
       oppOfActor.field = oppOfActor.field.filter(c => c.uid !== action.targetUid);
       oppOfActor.trash.push(target);
       dropTempEffectsFor(game, target.uid);
@@ -1785,6 +1866,8 @@ function handleAction(roomId, playerId, action) {
       } else {
         // Proceed with the original K.O.
         if (target) {
+          // Bug 9 — attached DON returns to owner's cost area (rested).
+          returnAttachedDon(game, target);
           oppOfActor.field = oppOfActor.field.filter(c => c.uid !== cont.targetUid);
           oppOfActor.trash.push(target);
           dropTempEffectsFor(game, target.uid);
@@ -1958,8 +2041,10 @@ function handleAction(roomId, playerId, action) {
       }
       if (!ownerOfTarget) { send(playerId, {type:'ERROR', msg:'Target no longer on field.'}); return; }
       const target = ownerOfTarget.field.find(c => c.uid === action.targetUid);
+      // Bug 9 — attached DON returns to owner's cost area (rested). Must
+      // happen before the card leaves the field so ownership is resolvable.
+      returnAttachedDon(game, target);
       ownerOfTarget.field = ownerOfTarget.field.filter(c => c.uid !== action.targetUid);
-      target.attachedDon = 0;
       target.rested = false;
       target.playedThisTurn = false;
       dropTempEffectsFor(game, action.targetUid);
@@ -2152,8 +2237,10 @@ function handleAction(roomId, playerId, action) {
       if (!ownerOfTarget) { send(playerId, {type:'ERROR', msg:'Target no longer on field.'}); return; }
       const idx = ownerOfTarget.field.findIndex(c => c.uid === action.targetUid);
       const target = ownerOfTarget.field[idx];
+      // Bug 9 — attached DON returns to owner's cost area (rested) BEFORE
+      // the card leaves the field so ownership attribution still works.
+      returnAttachedDon(game, target);
       ownerOfTarget.field.splice(idx, 1);
-      target.attachedDon = 0;
       target.rested = false;
       target.playedThisTurn = false;
       dropTempEffectsFor(game, target.uid);
@@ -2194,7 +2281,14 @@ function handleAction(roomId, playerId, action) {
   }
 
   checkWin(game);
-  sendState(roomId);
+  // Bug 7/15 — ALWAYS broadcast to every connected player in the room, never
+  // just to the acting socket. Pipeline resume paths rely on this guarantee
+  // so defender Block Step / Counter Step prompts arrive even when an
+  // effect opened and closed a server-side window between phases.
+  broadcastAll(game, room);
+  // Bug 7 — battleState + BLOCK_STEP without a broadcast is a race-window
+  // regression indicator. Re-broadcasting here is cheap and idempotent.
+  if (game.battleState && game.phase === 'BLOCK_STEP') broadcastAll(game, room);
 }
 
 // ─── KEYWORD EFFECT INTERPRETER ───
@@ -2214,6 +2308,8 @@ function drawCards(p, count, game, cardName) {
 function koByPower(opp, threshold, game, cardName) {
   const target = opp.field.find(c => c.type === 'CHARACTER' && (c.power + (c.attachedDon || 0) * 1000 + tempPowerSum(game, c.uid)) <= threshold);
   if (target) {
+    // Bug 9 — attached DON returns to owner's cost area (rested).
+    returnAttachedDon(game, target);
     opp.field = opp.field.filter(c => c.uid !== target.uid);
     opp.trash.push(target);
     dropTempEffectsFor(game, target.uid);
@@ -2227,6 +2323,8 @@ function koByPower(opp, threshold, game, cardName) {
 function koByCost(opp, threshold, game, cardName) {
   const target = opp.field.find(c => c.type === 'CHARACTER' && (c.cost || 0) <= threshold);
   if (target) {
+    // Bug 9 — attached DON returns to owner's cost area (rested).
+    returnAttachedDon(game, target);
     opp.field = opp.field.filter(c => c.uid !== target.uid);
     opp.trash.push(target);
     dropTempEffectsFor(game, target.uid);
@@ -2256,8 +2354,9 @@ function addDonFromDeck(p, count, rested, game, cardName) {
 function bounceByCost(targetPlayer, threshold, game, cardName) {
   const target = targetPlayer.field.find(c => c.type === 'CHARACTER' && (c.cost || 0) <= threshold);
   if (target) {
+    // Bug 9 — attached DON returns to owner's cost area (rested).
+    returnAttachedDon(game, target);
     targetPlayer.field = targetPlayer.field.filter(c => c.uid !== target.uid);
-    target.attachedDon = 0;
     targetPlayer.hand.push(target);
     log(game, `${cardName}: returned ${target.name} to hand (cost <= ${threshold}).`);
     return target;
@@ -2288,6 +2387,8 @@ function givePowerReduction(opp, amount, game, cardName) {
     target.power = Math.max(0, target.power - amount);
     log(game, `${cardName}: gave ${target.name} -${amount} power! (now ${target.power})`);
     if (target.power <= 0) {
+      // Bug 9 — attached DON returns to owner's cost area (rested).
+      returnAttachedDon(game, target);
       opp.field = opp.field.filter(c => c.uid !== target.uid);
       opp.trash.push(target);
       log(game, `${target.name} was K.O.'d by power reduction!`);
@@ -3181,28 +3282,84 @@ wss.on('connection', (ws) => {
         sendState(msg.roomId);
         break;
       }
+      // Bug 5 — auto-reconnect support. Client sends REJOIN with the
+      // original playerId + roomCode. Server re-maps the old playerId
+      // onto this fresh socket and replays current game state so the
+      // player resumes where they left off.
+      case 'REJOIN': {
+        const room = rooms.get(msg.roomCode);
+        if (!room) { ws.send(JSON.stringify({type:'ERROR',msg:'Room not found'})); return; }
+        if (!room.players.includes(msg.playerId)) {
+          ws.send(JSON.stringify({type:'ERROR',msg:'Not a member of that room'}));
+          return;
+        }
+        // Point the original playerId at this fresh socket. Drop the
+        // temporary clientId assigned on connect — the rejoined session
+        // uses the original playerId for all further sends.
+        const oldWs = clients.get(msg.playerId);
+        if (oldWs && oldWs !== ws && oldWs.readyState === WebSocket.OPEN) {
+          try { oldWs.close(); } catch (_) {}
+        }
+        clients.delete(clientId);
+        clients.set(msg.playerId, ws);
+        ws.clientId = msg.playerId;
+        ws.roomId = msg.roomCode;
+        ws.send(JSON.stringify({ type:'REJOINED', roomId: msg.roomCode, playerId: msg.playerId, cardDb: CARD_DB }));
+        if (room.game) {
+          ws.send(JSON.stringify({ type:'GAME_STATE', game: room.game, yourId: msg.playerId }));
+        }
+        break;
+      }
       case 'ACTION': {
         if (!ws.roomId) return;
-        handleAction(ws.roomId, clientId, msg.action);
+        handleAction(ws.roomId, ws.clientId || clientId, msg.action);
         break;
       }
       case 'CHAT': {
         if (!ws.roomId) return;
-        broadcast(ws.roomId, {type:'CHAT', from:clientId.slice(0,6), text:msg.text});
+        broadcast(ws.roomId, {type:'CHAT', from:(ws.clientId || clientId).slice(0,6), text:msg.text});
         break;
       }
       case 'GET_CARD_DB': {
         ws.send(JSON.stringify({type:'CARD_DB', cards: CARD_DB}));
         break;
       }
+      // Bug 4 — heartbeat. Client responds to server PINGs with PONG; the
+      // server acknowledgement keeps the socket warm in front of
+      // intermediate proxies that idle-close after ~5 minutes.
+      case 'PONG': {
+        ws._lastPong = Date.now();
+        break;
+      }
+      case 'PING': {
+        // Clients may occasionally initiate their own pings too.
+        ws.send(JSON.stringify({type:'PONG'}));
+        break;
+      }
     }
   });
 
   ws.on('close', () => {
-    clients.delete(clientId);
-    if (ws.roomId) broadcast(ws.roomId, {type:'PLAYER_LEFT', playerId:clientId});
+    // Only prune the clients map if this ws is still the registered socket
+    // for the id. Auto-reconnect may have already re-registered the id to
+    // a fresh socket; in that case do not delete the newer entry.
+    const id = ws.clientId || clientId;
+    if (clients.get(id) === ws) clients.delete(id);
+    if (ws.roomId) broadcast(ws.roomId, {type:'PLAYER_LEFT', playerId:id});
   });
 });
+
+// Bug 4 — 30-second heartbeat. Every client that's still OPEN gets a PING;
+// the client answers with PONG. If a socket misses several heartbeats the
+// browser's close event fires and the auto-reconnect on the client side
+// kicks in (REJOIN).
+setInterval(() => {
+  clients.forEach((client, id) => {
+    if (client && client.readyState === WebSocket.OPEN) {
+      try { client.send(JSON.stringify({ type: 'PING' })); } catch (_) {}
+    }
+  });
+}, 30000);
 
 // ═════════════════════════════════════════════════════════════════════════
 // PHASE 1 — Card effect ROUTER (parseAbility) + PARSED_EFFECTS cache.
@@ -4521,6 +4678,8 @@ function agentPayCosts(costs, ctx, resume) {
         const f = ctx.player.field;
         const idx = f.findIndex(c => c.uid === ctx.card.uid);
         if (idx !== -1) {
+          // Bug 9 — attached DON returns to owner's cost area (rested).
+          returnAttachedDon(ctx.game, ctx.card);
           f.splice(idx, 1);
           ctx.player.trash.push(ctx.card);
           log(ctx.game, `${ctx.card.name}: trashed as cost.`);
@@ -4533,9 +4692,10 @@ function agentPayCosts(costs, ctx, resume) {
         const f = ctx.player.field;
         const idx = f.findIndex(c => c.uid === ctx.card.uid);
         if (idx === -1) return { status: 'unaffordable' };
+        // Bug 9 — attached DON returns to owner's cost area (rested).
+        returnAttachedDon(ctx.game, ctx.card);
         const card = f.splice(idx, 1)[0];
         card.rested = false;
-        card.attachedDon = 0;
         card.usedThisTurn = false;
         card.playedThisTurn = false;
         ctx.player.deck.push(card);  // push = bottom
@@ -4631,6 +4791,8 @@ function agentApplyEffect(effect, ctx, resume) {
         }
         // Track-P Phase 6 — offer self-save first.
         if (tryAutoSelfSave(target, ctx.playerId, ctx.game, ctx.card.name)) continue;
+        // Bug 9 — attached DON returns to owner's cost area (rested).
+        returnAttachedDon(ctx.game, target);
         opp.field = opp.field.filter(c => c.uid !== target.uid);
         opp.trash.push(target);
         dropTempEffectsFor(ctx.game, target.uid);
@@ -5063,6 +5225,8 @@ function agentApplyEffect(effect, ctx, resume) {
             break;
           }
           if (tryAutoSelfSave(target, ctx.playerId, ctx.game, ctx.card.name)) break;
+          // Bug 9 — attached DON returns to owner's cost area (rested).
+          returnAttachedDon(ctx.game, target);
           const koed = pl.field.splice(idx, 1)[0];
           pl.trash.push(koed);
           log(ctx.game, `${ctx.card.name}: K.O.'d ${koed.name} (follow-up).`);

@@ -553,11 +553,14 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
   display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
   flex-shrink:0;padding-top:4px;
 }
-/* Cost area — inline between leader and stage, fills available width */
+/* Cost area — inline between leader and stage, fills available width.
+   Bug 10 — capped max-width so a full 10-DON cost area never pushes the
+   deck / trash slots off screen. `flex-shrink:1` lets it compress further
+   on narrow viewports instead of bulldozing neighbouring slots. */
 .gb-cost-bar{
-  flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:2px 8px;
+  flex:1 1 auto;display:flex;align-items:center;justify-content:center;gap:4px;padding:2px 8px;
   overflow:hidden;position:relative;min-width:80px;
-  /* Leave enough headroom for a rotated DON card (card-w tall after rotation) plus breathing room. */
+  max-width:calc(var(--card-w) * 11 + 24px);
   min-height:calc(var(--card-h) + 8px);
   background:
     radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.03) 0%,transparent 70%),
@@ -857,6 +860,58 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.88);display:none;align-items:center;justify-content:center;z-index:500;}
 .modal-bg.show{display:flex;}
 .modal{background:rgba(14,8,1,0.98);border:1px solid var(--gold);border-radius:9px;padding:24px;max-width:300px;width:90vw;text-align:center;box-shadow:0 0 50px rgba(212,160,32,0.18);}
+/* Bug 13 — medieval parchment victory/defeat screen. Parchment background,
+   gold border, Cinzel/Georgia serif, same gold button style as main menu. */
+.modal.parchment{
+  background:
+    radial-gradient(circle at 30% 20%,rgba(120,80,20,.22) 0%,transparent 60%),
+    radial-gradient(circle at 70% 80%,rgba(80,40,10,.25) 0%,transparent 55%),
+    linear-gradient(180deg,#f1e1b7 0%,#ddc78a 55%,#c7ad6a 100%);
+  color:#2a1808;
+  border:3px solid var(--gold);
+  border-radius:6px;
+  padding:34px 28px;
+  max-width:380px;width:92vw;
+  box-shadow:0 0 0 1px rgba(80,50,10,.45), 0 0 48px rgba(212,160,32,0.55), inset 0 0 30px rgba(140,90,30,.25);
+  font-family:'Cinzel', Georgia, serif;
+}
+.modal.parchment h2{
+  font-family:'Cinzel', Georgia, serif;
+  font-weight:800;
+  color:#3a1e05;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  margin:0 0 10px 0;
+  font-size:1.35rem;
+  text-shadow:0 1px 0 rgba(255,230,170,.6), 0 2px 10px rgba(60,30,5,.35);
+}
+.modal.parchment p{
+  font-family:Georgia, 'Cinzel', serif;
+  color:#3a1e05;
+  font-size:.95rem;
+  line-height:1.45;
+  margin:0 0 22px 0;
+}
+.modal.parchment .btn{
+  background:linear-gradient(180deg,#e0b850 0%,#b8872c 100%);
+  color:#1a0e00;
+  border:2px solid #3a2406;
+  font-family:'Cinzel', Georgia, serif;
+  font-weight:700;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  border-radius:4px;
+  padding:10px 20px;
+  box-shadow:0 2px 6px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.3);
+  transition:transform .1s, background .1s;
+  margin:5px auto;
+  display:block;
+  width:80%;
+}
+.modal.parchment .btn:hover{
+  background:linear-gradient(180deg,#f0cc60 0%,#c8983c 100%);
+  transform:translateY(-1px);
+}
 .modal h2{font-family:'Cinzel',serif;font-size:1.4rem;color:var(--gold);margin-bottom:6px;}
 .modal p{color:var(--muted);margin-bottom:16px;line-height:1.5;}
 .counter-banner{background:rgba(155,25,25,0.14);border:1px solid rgba(155,25,25,0.4);border-radius:4px;padding:7px 10px;margin-bottom:6px;font-size:0.72rem;}
@@ -1344,12 +1399,13 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
   <line id="battleArrowLine" x1="0" y1="0" x2="0" y2="0" stroke="#ff2828" stroke-width="5" marker-end="url(#battleArrowhead)" opacity="0.88" stroke-linecap="round"/>
 </svg>
 
-<!-- WIN MODAL -->
+<!-- WIN MODAL — Bug 13 medieval parchment styling -->
 <div class="modal-bg" id="winModal">
-  <div class="modal">
-    <h2 id="winTitle">Victory!</h2>
+  <div class="modal parchment">
+    <h2 id="winTitle">Victory! Your Kingdom Won!</h2>
     <p id="winMsg"></p>
-    <button class="btn btn-primary" onclick="location.reload()">Play Again</button>
+    <button class="btn" onclick="location.reload()">Play Again</button>
+    <button class="btn" onclick="window.location.href='/index.html'">Back to Main</button>
   </div>
 </div>
 
@@ -1456,6 +1512,10 @@ let myDeck = { leaderId: 'OP14-060', cards: [] };
 let selectedDeck = JSON.parse(localStorage.getItem('boohawk_deck') || 'null');
 if (!selectedDeck) pickDeck('Anna of Brittany');
 let sel = null, attackMode = false, counterMode = false, blockerMode = false;
+// Bug 12 — per-card-uid click debounce. A double-tap within 300 ms is
+// swallowed to prevent the same card firing both selectCard and playCard
+// (which would bypass the counter-only validation on the server).
+const _cardClickDebounce = new Map();
 
 // ─── SOLO MODE ───
 const isSolo = new URLSearchParams(window.location.search).get('solo') === 'true';
@@ -1580,12 +1640,61 @@ function showCreate() { document.getElementById('mpPanel').classList.add('open')
 function showJoin()   { document.getElementById('mpPanel').classList.add('open'); openMPForm('join');   }
 
 // ─── WEBSOCKET ───
+// Bug 4/5 — heartbeat + auto-reconnect. A silent socket for >60s or an
+// onclose event triggers the reconnect loop. Reconnect preserves the
+// original playerId + roomCode so the server can restore full state.
+let _lastServerMsg = Date.now();
+let _reconnectTimer = null;
+let _heartbeatWatchdog = null;
+function _armHeartbeatWatchdog() {
+  if (_heartbeatWatchdog) clearInterval(_heartbeatWatchdog);
+  _heartbeatWatchdog = setInterval(() => {
+    if (isSolo) return; // solo loops two local sockets; skip watchdog
+    if (Date.now() - _lastServerMsg > 60000 && ws && ws.readyState === 1) {
+      try { ws.close(); } catch (_) {}
+    }
+  }, 5000);
+}
+function _scheduleReconnect() {
+  if (isSolo) return;
+  if (_reconnectTimer) return;
+  _reconnectTimer = setTimeout(() => {
+    _reconnectTimer = null;
+    if (!roomId || !myId) return; // never connected in the first place
+    hint('Reconnecting…');
+    _rejoinConnect();
+  }, 3000);
+}
+function _rejoinConnect() {
+  try {
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => {
+      _lastServerMsg = Date.now();
+      send2({ type: 'REJOIN', roomCode: roomId, playerId: myId });
+    };
+    ws.onmessage = e => {
+      _lastServerMsg = Date.now();
+      handleMsg(JSON.parse(e.data));
+    };
+    ws.onerror = () => {};
+    ws.onclose = () => { hint('Disconnected — reconnecting…', true); _scheduleReconnect(); };
+  } catch (_) {
+    _scheduleReconnect();
+  }
+}
 function connect(cb) {
   ws = new WebSocket(WS_URL);
-  ws.onopen = cb;
-  ws.onmessage = e => handleMsg(JSON.parse(e.data));
+  ws.onopen = () => { _lastServerMsg = Date.now(); if (cb) cb(); };
+  ws.onmessage = e => {
+    _lastServerMsg = Date.now();
+    handleMsg(JSON.parse(e.data));
+  };
   ws.onerror = () => alert('Cannot connect to server at ' + WS_URL);
-  ws.onclose = () => hint('Disconnected from server', true);
+  ws.onclose = () => {
+    hint('Disconnected from server — reconnecting…', true);
+    _scheduleReconnect();
+  };
+  _armHeartbeatWatchdog();
 }
 function send2(msg) { if (ws?.readyState === 1) ws.send(JSON.stringify(msg)); }
 // Shorthand for dispatching an action from an inline onclick= handler.
@@ -1605,6 +1714,7 @@ function act(action) {
 }
 
 function handleMsg(msg) {
+  _lastServerMsg = Date.now();
   console.log('[MSG]', msg.type, {
     hasScryWindow: !!msg.game?.scryWindow,
     scryWindowPlayer: msg.game?.scryWindow?.playerId,
@@ -1614,6 +1724,20 @@ function handleMsg(msg) {
     case 'CONNECTED':
       myId = msg.clientId;
       cardDb = msg.cardDb || [];
+      break;
+    // Bug 4 — heartbeat. Answer server PINGs immediately so the socket stays warm.
+    case 'PING':
+      send2({ type: 'PONG' });
+      break;
+    case 'PONG':
+      // No-op; arrival already refreshed _lastServerMsg above.
+      break;
+    // Bug 5 — auto-reconnect ack. Server restored our state; render it.
+    case 'REJOINED':
+      myId = msg.playerId;
+      roomId = msg.roomId;
+      if (msg.cardDb) cardDb = msg.cardDb;
+      hint('Reconnected.');
       break;
     case 'ROOM_CREATED':
       roomId = msg.roomId; myId = msg.playerId;
@@ -2374,13 +2498,19 @@ function renderGame() {
   }
 
   if (game.winner) {
+    // Bug 13 — medieval parchment wording for victory and defeat.
     if (isSolo) {
       const winSide = game.winner === soloIds[0] ? 'Player 1 (Bottom)' : 'Player 2 (Top)';
-      document.getElementById('winTitle').textContent = '⚓ Game Over!';
-      document.getElementById('winMsg').textContent = `${winSide} wins!`;
+      document.getElementById('winTitle').textContent = 'The Siege Is Ended';
+      document.getElementById('winMsg').textContent = `${winSide} reigns victorious!`;
     } else {
-      document.getElementById('winTitle').textContent = game.winner === myId ? '⚓ Victory!' : '💀 Defeated!';
-      document.getElementById('winMsg').textContent   = game.winner === myId ? 'You conquered the seas!' : 'Set sail again!';
+      const won = game.winner === myId;
+      document.getElementById('winTitle').textContent = won
+        ? 'Victory! Your Kingdom Won!'
+        : 'Defeat! Your Civilization Is No More';
+      document.getElementById('winMsg').textContent = won
+        ? 'The banners of your house fly high above the keep.'
+        : 'The gates have fallen. Rally your people and ride forth once more.';
     }
     document.getElementById('winModal').classList.add('show');
   }
@@ -2614,7 +2744,11 @@ function applyHandOverlap(containerEl) {
   let marginRight = 0; // default: no extra negative margin; the container's gap handles spacing
   if (naturalTotal > available && count > 1) {
     let overlap = (naturalTotal - available) / (count - 1);
-    const maxOverlap = Math.max(0, cardWidth - 20); // keep at least 20px of each card visible
+    // Bug 11 — hand size is unbounded (no hand limit in OPTCG). Tighten
+    // the cap so large hands compress further instead of being clipped.
+    // Keep at least 10 px of each card visible — enough to click and see
+    // the card art's leading edge, thin enough for 15+ card hands to fit.
+    const maxOverlap = Math.max(0, cardWidth - 10);
     if (overlap > maxOverlap) overlap = maxOverlap;
     marginRight = -overlap;
   }
@@ -2648,7 +2782,7 @@ function renderHand(handId, hand, isSelf) {
     const isPfwCandidate = pfwSet && pfwSet.has(card.uid);
     const isTfhwCandidate = tfhwSet && tfhwSet.has(card.uid);
     const isTfhwSelected = tfhwSelected && tfhwSelected.has(card.uid);
-    const handler = () => {
+    const rawHandler = () => {
       if (attackMode) { cancelSel(); return; }
       if (tfhw) {
         if (isTfhwCandidate) toggleTrashFromHandSelection(card.uid);
@@ -2666,6 +2800,16 @@ function renderHand(handId, hand, isSelf) {
         if (cur?.classList.contains('selected')) playCard(card.uid);
         else selectCard(card.uid, 'hand');
       }
+    };
+    // Bug 12 — 300 ms debounce per-card-uid prevents double-click double-fire
+    // on the hand (particularly for counter-only events that would otherwise
+    // round-trip to PLAY_CARD during the owner's Main Phase).
+    const handler = () => {
+      const last = _cardClickDebounce.get(card.uid) || 0;
+      const now = Date.now();
+      if (now - last < 300) return;
+      _cardClickDebounce.set(card.uid, now);
+      rawHandler();
     };
     const cardEl = makeGameCard(card, handler, false);
     if (counterEligibleNow) {
@@ -3368,7 +3512,8 @@ function selectCard(uid, source) {
         hint(`${card.name} is rested.`);
         return;
       }
-      if (hasActivateMain && !usedUp && canAffordActivate) {
+      if (hasActivateMain && !usedUp && canAffordActivate && isMyTurn() && game.phase === 'MAIN') {
+        // Bug 8 — own-turn + Main-Phase gate on the stage Activate button too.
         document.getElementById('battleBtns').style.display = 'flex';
         document.getElementById('btnActivateMain').style.display = 'block';
         document.getElementById('btnAttack').style.display = 'none';
@@ -3398,7 +3543,11 @@ function selectCard(uid, source) {
       return;
     }
     document.getElementById('battleBtns').style.display = 'flex';
-    document.getElementById('btnActivateMain').style.display = canActivate ? 'block' : 'none';
+    // Bug 8 — [Activate: Main] is a Main-Phase-only, own-turn-only action.
+    // Hide the button for the non-active player even if canActivate is true
+    // (defence in depth alongside the server-side validation).
+    const myActivePhase = isMyTurn() && game.phase === 'MAIN';
+    document.getElementById('btnActivateMain').style.display = (canActivate && myActivePhase) ? 'block' : 'none';
     document.getElementById('btnAttack').style.display       = canAttack   ? 'block' : 'none';
     document.getElementById('btnAttachDon').style.display    = !card.rested ? 'block' : 'none';
     const parts = [];
