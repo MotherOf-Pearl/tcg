@@ -2499,10 +2499,21 @@ function hasRush(card) {
   return false;
 }
 
-// Helper: numeric counter value of a card. Characters use card.counter; events
-// with [Counter] in their ability text get the +N power found in the effect.
+// Helper: numeric counter value of a card. Characters use the printed
+// card.counter stat. For Event cards, the +N power written in the
+// [Counter] ability was historically regex-extracted here and added
+// to battleState.counterBonus in USE_COUNTER. That path now
+// double-counts against the pipeline: runPipeline('counter', …) parses
+// the same "+N power" as a powerBuff effect, applyTempPower lands a
+// tempPowerEffect on the defender uid, and the COUNTER_STEP auto-apply
+// refreshes bs.targetPower = effectivePowerOf(target) — which already
+// includes the tempPowerEffect. Result: +N landed in BOTH counterBonus
+// AND targetPower, so totalDefense = (base + N) + N. Fix: for cards
+// using the new pipeline, return 0 here and let the pipeline own all
+// +power accounting via tempPowerEffects.
 function counterValueOf(card) {
   if (card.counter && card.counter > 0) return card.counter;
+  if (card.useNewPipeline) return 0;
   if (card.ability && card.ability.includes('[Counter]')) {
     const m = card.ability.match(/\+(\d+)\s*power/i);
     if (m) return parseInt(m[1], 10);

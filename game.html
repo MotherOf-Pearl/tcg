@@ -937,7 +937,7 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 <!-- Version stamp — bumps let players confirm they're on the fresh
      build after a cache miss. Bump the string whenever shipping a
      visible-behaviour fix. -->
-<div style="position:fixed;bottom:2px;right:4px;font-size:9px;opacity:0.4;color:#888;font-family:monospace;pointer-events:none;z-index:10000;">v2025-COUNTER-FIX-2</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:9px;opacity:0.4;color:#888;font-family:monospace;pointer-events:none;z-index:10000;">v2025-COUNTER-FIX-3</div>
 
 <!-- ════════════════════════════════════════════════════
      MAIN MENU
@@ -3712,6 +3712,10 @@ function noBlocker() {
 // ─── Phase 3 counter step ───
 function counterValueOf(card) {
   if (card.counter && card.counter > 0) return card.counter;
+  // New-pipeline events deliver their +N power via tempPowerEffects
+  // server-side; regex-extracting it here would double-count against
+  // the hand-card badge hint and the server's counterBonus.
+  if (card.useNewPipeline) return 0;
   if (card.ability && card.ability.includes('[Counter]')) {
     const m = card.ability.match(/\+(\d+)\s*power/i);
     if (m) return parseInt(m[1], 10);
