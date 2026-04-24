@@ -1133,6 +1133,17 @@ function handleAction(roomId, playerId, action) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
       } else runPipeline('whenAttacking', game, playerId, attacker);
 
+      // Guard: the new battle flow (DECLARE_ATTACK → SELECT_TARGET → …
+      // → RESOLVE_ATTACK) drives everything through game.battleState.
+      // game.counterWindow belongs to the legacy resolveCounter() path.
+      // If battleState is already armed, refuse to populate the legacy
+      // window — otherwise the client's legacy #battleInfo panel renders
+      // over the new COUNTER_STEP UI with its own (wrong) numbers.
+      if (game.battleState) {
+        log(game, 'Legacy ATTACK action suppressed — new battle flow already active.');
+        break;
+      }
+
       game.counterWindow = {
         attackerUid: attacker.uid, defenderUid: defender.uid,
         attackPower, defendPower, defenderIsLeader,

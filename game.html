@@ -937,7 +937,7 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 <!-- Version stamp — bumps let players confirm they're on the fresh
      build after a cache miss. Bump the string whenever shipping a
      visible-behaviour fix. -->
-<div style="position:fixed;bottom:2px;right:4px;font-size:9px;opacity:0.4;color:#888;font-family:monospace;pointer-events:none;z-index:10000;">v2025-COUNTER-FIX</div>
+<div style="position:fixed;bottom:2px;right:4px;font-size:9px;opacity:0.4;color:#888;font-family:monospace;pointer-events:none;z-index:10000;">v2025-COUNTER-FIX-2</div>
 
 <!-- ════════════════════════════════════════════════════
      MAIN MENU
@@ -2500,7 +2500,13 @@ function renderGame() {
   }
 
   const hasCW = !!game.counterWindow;
-  if (hasCW) {
+  // Legacy counter-window panel — only render when the NEW battle flow
+  // (game.battleState) is NOT active. The new flow uses
+  // counterStepDefBtns / counterStepPower with the correct
+  // targetPower + counterBonus math. If both were somehow set at once,
+  // #battleInfo would paint stale numbers from cw.attackPower /
+  // cw.defendPower over the correct counterStepPower text.
+  if (hasCW && !game.battleState) {
     const cw = game.counterWindow;
     hideAllBtnGroups();
 
@@ -2515,6 +2521,12 @@ function renderGame() {
     } else {
       hint('Waiting for opponent to counter...');
     }
+  } else {
+    // Clear any stale text — prevents yesterday's #battleInfo from
+    // persisting on screen if counterWindow closed without a
+    // following re-render that hit the hasCW branch.
+    const bi = document.getElementById('battleInfo');
+    if (bi) bi.innerHTML = '';
   }
 
   if (game.winner) {
