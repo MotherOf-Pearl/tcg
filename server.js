@@ -1336,7 +1336,6 @@ function handleAction(roomId, playerId, action) {
       if (idx === -1) return;
       const card = defender.hand[idx];
       const cv = counterValueOf(card);
-      console.log('[USE_COUNTER]', { targetPower: game.battleState.targetPower, cv, counterBonus: game.battleState.counterBonus, total: game.battleState.targetPower + (game.battleState.counterBonus || 0) + cv });
       const hasCounterAbility = !!(card.ability && card.ability.includes('[Counter]'));
       // Eligible if it adds power OR has any [Counter] action effect (e.g. Snow Merchant).
       if (cv <= 0 && !hasCounterAbility) {
