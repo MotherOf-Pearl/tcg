@@ -465,6 +465,77 @@ const CARD_DB = [
   { id:'ST04-017', name:'GTA Server', type:'STAGE', color:'Purple', attribute:'', affiliation:'Holy Roman Empire',
     power:0, cost:3, counter:0, image:IMG('ST04','ST04-017','png'), useNewPipeline:true,
     ability:"[Activate: Main] You may rest this Stage: If your Leader has the {Holy Roman Empire} type, add up to 1 DON!! card from your DON!! deck and rest it." },
+
+  // ══════════════════════════════
+  // PAPAL MATT DECK (Yellow / Apostles High Council)
+  // ══════════════════════════════
+  { id:'ST07-001', name:'Papal Matt', type:'LEADER', color:'Yellow', attribute:'Special', affiliation:'Holy Roman Empire, Apostles High Council',
+    power:5000, life:5, cost:0, counter:0, image:IMG('ST07','ST07-001','png'), useNewPipeline:true,
+    ability:"[DON!! x2] [When Attacking] You may add 1 card from the top or bottom of your Life cards to your hand: If you have 2 or less Life cards, add up to 1 card from your hand to the top of your Life cards." },
+
+  { id:'ST07-002', name:'Evil Patron Jacky', type:'CHARACTER', color:'Yellow', attribute:'Special', affiliation:'Apostles High Council',
+    power:3000, cost:1, counter:1000, image:IMG('ST07','ST07-002','png'), useNewPipeline:true,
+    ability:"" },
+
+  { id:'ST07-003', name:'Colossus, Slinger of Stone', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
+    power:6000, cost:4, counter:0, image:IMG('ST07','ST07-003','png'), useNewPipeline:true,
+    ability:"[On Play] Look at up to 1 card from the top of your or your opponent's Life cards, and place it at the top or bottom of the Life cards. Then, if you have less Life cards than your opponent, this Character gains [Rush] during this turn." },
+
+  { id:'ST07-004', name:'Regenald the Freed', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
+    power:6000, cost:5, counter:0, image:IMG('ST07','ST07-004','png'), useNewPipeline:true,
+    ability:"[DON!! x1] [When Attacking] You may add 1 card from the top or bottom of your Life cards to your hand: This Character gains [Banish] and +1000 power during this battle." },
+
+  { id:'ST07-005', name:'Jacob, Primordial Man', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
+    power:5000, cost:4, counter:1000, image:IMG('ST07','ST07-005','png'), useNewPipeline:true,
+    ability:"[DON!! x1] [When Attacking] You may add 1 card from the top or bottom of your Life cards to your hand: Add up to 1 card from the top of your deck to the top of your Life cards." },
+
+  { id:'ST07-006', name:'Manic Jester', type:'CHARACTER', color:'Yellow', attribute:'Special', affiliation:'Apostles High Council',
+    power:4000, cost:2, counter:1000, image:IMG('ST07','ST07-006','png'), useNewPipeline:true,
+    ability:"" },
+
+  { id:'ST07-007', name:'Micah, Faithful Hobbit', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
+    power:1000, cost:3, counter:1000, image:IMG('ST07','ST07-007','png'), useNewPipeline:true,
+    ability:"[Blocker] [Trigger] Play this card." },
+
+  { id:'ST07-008', name:'Thomas, Ancient Wanderer', type:'CHARACTER', color:'Yellow', attribute:'Wisdom', affiliation:'Apostles High Council',
+    power:3000, cost:2, counter:2000, image:IMG('ST07','ST07-008','png'), useNewPipeline:true,
+    ability:"[On Play] Look at up to 1 card from the top of your or your opponent's Life cards, and place it at the top or bottom of the Life cards." },
+
+  { id:'ST07-009', name:'Faustian Jack', type:'CHARACTER', color:'Yellow', attribute:'Special', affiliation:'Apostles High Council',
+    power:4000, cost:3, counter:1000, image:IMG('ST07','ST07-009','png'), useNewPipeline:true,
+    ability:"[Activate: Main] Add 1 card from the top or bottom of your Life cards to your hand: K.O. up to 1 of your opponent's Characters with a cost of 3 or less. [Trigger] You may trash 1 card from your hand: Play this card." },
+
+  { id:'ST07-010', name:'Matthew, Ascended Bishop', type:'CHARACTER', color:'Yellow', attribute:'Special', affiliation:'Apostles High Council',
+    power:8000, cost:7, counter:0, image:IMG('ST07','ST07-010','png'), useNewPipeline:true,
+    ability:"[On Play] Your opponent chooses one: - Trash 1 card from the top of your opponent's Life cards. - Add 1 card from the top of your deck to the top of your Life cards." },
+
+  { id:'ST07-011', name:'Stella, Infernal Cerebus', type:'CHARACTER', color:'Yellow', attribute:'Special', affiliation:'Apostles High Council',
+    power:3000, cost:3, counter:1000, image:IMG('ST07','ST07-011','png'), useNewPipeline:true,
+    ability:"[Activate: Main] You may rest this Character: Up to 1 of your [Papal Matt] cards gains [Banish] during this turn." },
+
+  { id:'ST07-012', name:'Zacharias, Ferrus Apostate', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
+    power:6000, cost:4, counter:1000, image:IMG('ST07','ST07-012','png'), useNewPipeline:true,
+    ability:"" },
+
+  { id:'ST07-013', name:'Family God', type:'CHARACTER', color:'Yellow', attribute:'Special', affiliation:'Apostles High Council',
+    power:3000, cost:3, counter:1000, image:IMG('ST07','ST07-013','png'), useNewPipeline:true,
+    ability:"[Activate: Main] Up to 1 of your [Papal Matt] cards gains [Double Attack] during this turn. [Trigger] Play this card." },
+
+  { id:'ST07-014', name:'Gypsy the Crusader', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
+    power:5000, cost:3, counter:1000, image:IMG('ST07','ST07-014','png'), useNewPipeline:true,
+    ability:"" },
+
+  { id:'ST07-015', name:'Blasphemous Technology', type:'EVENT', color:'Yellow', attribute:'', affiliation:'Apostles High Council',
+    power:0, cost:5, counter:0, image:IMG('ST07','ST07-015','png'), useNewPipeline:true,
+    ability:"[Main] Your opponent chooses one: - Trash 1 card from the top of your opponent's Life cards. - Add 1 card from the top of your deck to the top of your Life cards. [Trigger] Activate this card's [Main] effect." },
+
+  { id:'ST07-016', name:'Red Sea Purchase', type:'EVENT', color:'Yellow', attribute:'', affiliation:'Apostles High Council',
+    power:0, cost:1, counter:0, image:IMG('ST07','ST07-016','png'), useNewPipeline:true,
+    ability:"[Counter] Look at up to 1 card from the top of your or your opponent's Life cards, and place it at the top or bottom of the Life cards. Then, up to 1 of your Leader or Character cards gains +2000 power during this battle. [Trigger] Draw 1 card, look at up to 1 card from the top of your or your opponent's Life cards, and place it at the top or bottom of the Life cards." },
+
+  { id:'ST07-017', name:'Forgotten Monestary', type:'STAGE', color:'Yellow', attribute:'', affiliation:'Apostles High Council',
+    power:0, cost:2, counter:0, image:IMG('ST07','ST07-017','png'), useNewPipeline:true,
+    ability:"[Activate: Main] You may rest this Stage and add 1 card from the top or bottom of your Life cards to your hand: Add up to 1 of your Characters with a cost of 3 to the top of the owner's Life cards face-up." },
 ];
 
 // ─── PRESET DECKS ───
@@ -488,6 +559,17 @@ const PRESET_DECKS = {
       {id:'ST04-003',count:2},{id:'OP01-094',count:2},{id:'ST04-016',count:4},
       {id:'OP01-117',count:1},{id:'OP01-119',count:3},{id:'ST04-015',count:2},
       {id:'ST04-017',count:4},
+    ]
+  },
+  'Papal Matt': {
+    leaderId: 'ST07-001',
+    cards: [
+      {id:'ST07-002',count:4},{id:'ST07-003',count:4},{id:'ST07-004',count:4},
+      {id:'ST07-005',count:4},{id:'ST07-006',count:4},{id:'ST07-007',count:4},
+      {id:'ST07-008',count:4},{id:'ST07-009',count:3},{id:'ST07-010',count:3},
+      {id:'ST07-011',count:3},{id:'ST07-012',count:3},{id:'ST07-013',count:3},
+      {id:'ST07-014',count:3},{id:'ST07-015',count:2},{id:'ST07-016',count:2},
+      {id:'ST07-017',count:1},
     ]
   }
 };
@@ -1055,6 +1137,17 @@ function handleAction(roomId, playerId, action) {
       if (isEffectsSuppressed(card)) {
         send(playerId, {type:'ERROR', msg:`${card.name}: [Activate: Main] suppressed by opponent effect.`});
         return;
+      }
+      // ST07-017 Forgotten Monestary — the effect requires a cost-3 Character
+      // in hand (the card that will be placed face-up on top of life). Block
+      // activation before resting the card so the player doesn't waste the
+      // stage on an impossible effect.
+      if (card.id === 'ST07-017') {
+        const hasCost3Character = (p.hand || []).some(c => c.type === 'CHARACTER' && (c.cost || 0) === 3);
+        if (!hasCost3Character) {
+          send(playerId, {type:'ERROR', msg:'Forgotten Monestary requires a cost-3 Character in your hand.'});
+          return;
+        }
       }
       // Mark used + rest the card (stages rest too on activate).
       card.usedThisTurn = true;
@@ -2324,6 +2417,223 @@ function handleAction(roomId, playerId, action) {
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
+
+    // ST07 AGENT A resolver — player picked top or bottom of their life
+    // stack (or chose to skip, if optional). Chosen card moves to hand
+    // face-down; NO [Trigger] activation and NO reveal to opponent.
+    case 'ADD_LIFE_CARD_TO_HAND_RESOLVE': {
+      if (!game.addLifeCardToHandWindow || game.addLifeCardToHandWindow.playerId !== playerId) return;
+      const w = game.addLifeCardToHandWindow;
+      const pipelineResume = w.pipelineResume;
+      const life = p.life || [];
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must add a life card.'}); return; }
+        log(game, `${w.sourceCardName}: declined to add life card to hand.`);
+        game.addLifeCardToHandWindow = null;
+        // Optional cost / effect skipped — abort the rest of the block so the
+        // paid-cost chain doesn't run the follow-up effect for free.
+        // Resume path is still called so the sequencer can unwind; the
+        // window-open → resume flow for OPTIONAL costs is intentional.
+        if (pipelineResume) {
+          // When an optional cost is skipped, we must not run the effect.
+          // Drop the resume so runPipeline returns done.
+        }
+        break;
+      }
+      if (life.length === 0) {
+        send(playerId, {type:'ERROR', msg:'No life cards.'});
+        game.addLifeCardToHandWindow = null;
+        return;
+      }
+      const position = action.position === 'bottom' ? 'bottom' : 'top';
+      // Top of life = last index (matches RESOLVE_ATTACK's pop() semantics).
+      // Bottom = index 0.
+      const lifeCard = (position === 'top') ? life.pop() : life.shift();
+      p.hand.push(lifeCard);
+      log(game, `${w.sourceCardName}: added 1 card from ${position} of life to hand. ${p.life.length} life remaining.`);
+      game.addLifeCardToHandWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // ST07 AGENT B resolver — two-step look-at-life flow. Step 1 picks
+    // side (own/opponent) and the server peeks the top life card, shipping
+    // it PRIVATELY to the acting player only. Step 2 places the card back
+    // on top or bottom of the same life area. Conditional Rush for Colossus
+    // fires here on step 2, when the card-picker's effect source is on
+    // the field and less-than-opponent-life holds.
+    case 'LOOK_AT_LIFE_CARD_RESOLVE': {
+      if (!game.lookAtLifeCardWindow || game.lookAtLifeCardWindow.playerId !== playerId) return;
+      const w = game.lookAtLifeCardWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        log(game, `${w.sourceCardName}: look-at-life skipped.`);
+        game.lookAtLifeCardWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (w.step === 'choose-source') {
+        const side = action.side === 'opponent' ? 'opponent' : 'own';
+        const oppId = Object.keys(game.players).find(id => id !== playerId);
+        const targetPid = side === 'opponent' ? oppId : playerId;
+        const target = game.players[targetPid];
+        if (!target || (target.life || []).length === 0) {
+          send(playerId, {type:'ERROR', msg:'That player has no life cards.'});
+          return;
+        }
+        const top = target.life[target.life.length - 1];
+        w.step = 'choose-placement';
+        w.chosenSideId = targetPid;
+        w.peekedCardUid = top.uid;
+        // Private reveal to the acting player only. Opponent sees just
+        // the "looking at a life card" log message.
+        send(playerId, {
+          type: 'LIFE_CARD_REVEAL',
+          card: { id: top.id, name: top.name, image: top.image || '', ability: top.ability || '' },
+          side,
+          source: w.sourceCardName,
+        });
+        log(game, `${w.sourceCardName}: looking at a ${side === 'own' ? 'own' : "opponent's"} life card…`);
+        break;
+      }
+      if (w.step === 'choose-placement') {
+        const target = game.players[w.chosenSideId];
+        if (!target) { game.lookAtLifeCardWindow = null; return; }
+        const idx = (target.life || []).findIndex(c => c.uid === w.peekedCardUid);
+        if (idx === -1) {
+          log(game, `${w.sourceCardName}: peeked card no longer in life.`);
+          game.lookAtLifeCardWindow = null;
+          if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+          break;
+        }
+        const card = target.life.splice(idx, 1)[0];
+        const placement = action.placement === 'bottom' ? 'bottom' : 'top';
+        if (placement === 'top') target.life.push(card);
+        else target.life.unshift(card);
+        log(game, `${w.sourceCardName}: placed life card at ${placement}.`);
+        game.lookAtLifeCardWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      break;
+    }
+
+    // ST07 AGENT D resolver — OPPONENT has chosen a branch. Note: the
+    // resolver's `playerId` is the opponent (chooser); effects still run
+    // with the card's original CONTROLLER as ctx.playerId, since the
+    // ability is theirs.
+    case 'OPPONENT_CHOOSES_SELECTED': {
+      if (!game.opponentChoosesWindow || game.opponentChoosesWindow.playerId !== playerId) return;
+      const w = game.opponentChoosesWindow;
+      const pipelineResume = w.pipelineResume;
+      const branchIndex = action.branchIndex;
+      const branch = (w.branches || [])[branchIndex];
+      if (!branch) { send(playerId, {type:'ERROR', msg:'Invalid branch.'}); return; }
+      const activeId = w.activePlayerId;
+      const owner = game.players[activeId];
+      const src = (owner.leader && owner.leader.uid === w.sourceCardUid) ? owner.leader
+               : (owner.field || []).find(c => c.uid === w.sourceCardUid)
+               || (owner.trash || []).find(c => c.uid === w.sourceCardUid);
+      game.opponentChoosesWindow = null;
+      if (!src) {
+        if (pipelineResume) resumePipeline(game, activeId, pipelineResume);
+        break;
+      }
+      const ctx = { game, playerId: activeId, card: src, player: owner, _blockOptional: true };
+      log(game, `${w.sourceCardName}: opponent chose branch #${branchIndex + 1} (${branch.text || ''}).`);
+      let opened = false;
+      for (const eff of (branch.effects || [])) {
+        const res = agentApplyEffect(eff, ctx, pipelineResume);
+        if (res && res.status === 'window-open') { opened = true; break; }
+      }
+      if (!opened && pipelineResume) resumePipeline(game, activeId, pipelineResume);
+      break;
+    }
+
+    // ST07 AGENT E resolver — player picked which [Name] card receives
+    // the keyword grant. Pushes onto tempKeywords with expiresAtTurn;
+    // doEnd's pruneTempKeywords drops expired entries at end of turn.
+    case 'GRANT_KEYWORD_TO_NAMED_SELECTED': {
+      if (!game.grantKeywordToNamedWindow || game.grantKeywordToNamedWindow.playerId !== playerId) return;
+      const w = game.grantKeywordToNamedWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        log(game, `${w.sourceCardName}: keyword grant skipped.`);
+        game.grantKeywordToNamedWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (!action.targetUid || !w.candidateUids.includes(action.targetUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid target.'});
+        return;
+      }
+      const me = game.players[playerId];
+      let target = (me.leader && me.leader.uid === action.targetUid) ? me.leader
+                : (me.field || []).find(c => c.uid === action.targetUid);
+      if (!target) {
+        send(playerId, {type:'ERROR', msg:'Target no longer available.'});
+        return;
+      }
+      const expiresAtTurn = w.duration === 'opponentNextTurn' ? (game.turn + 1) : game.turn;
+      if (!Array.isArray(target.tempKeywords)) target.tempKeywords = [];
+      target.tempKeywords.push({ keyword: w.keyword, expiresAtTurn });
+      log(game, `${w.sourceCardName}: ${target.name} gains [${w.keyword}] until turn ${expiresAtTurn}.`);
+      game.grantKeywordToNamedWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // ST07 resolver — Papal Matt leader's conditional follow-up: move a
+    // card from hand onto the top of the player's own life stack.
+    case 'ADD_HAND_TO_LIFE_SELECTED': {
+      if (!game.addHandToLifeWindow || game.addHandToLifeWindow.playerId !== playerId) return;
+      const w = game.addHandToLifeWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must pick a card.'}); return; }
+        log(game, `${w.sourceCardName}: add-hand-to-life skipped.`);
+        game.addHandToLifeWindow = null;
+        if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+        break;
+      }
+      if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid hand selection.'});
+        return;
+      }
+      const idx = p.hand.findIndex(c => c.uid === action.cardUid);
+      if (idx === -1) { send(playerId, {type:'ERROR', msg:'Card no longer in hand.'}); return; }
+      const picked = p.hand.splice(idx, 1)[0];
+      p.life.push(picked);  // top of life = last index
+      log(game, `${w.sourceCardName}: moved 1 card from hand to top of life. (${p.life.length} life)`);
+      game.addHandToLifeWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
+
+    // ST07 resolver — Forgotten Monestary: pick a cost-3 Character from
+    // hand and place it face-up on top of own life.
+    case 'ADD_CHARACTER_TO_LIFE_SELECTED': {
+      if (!game.addCharacterToLifeWindow || game.addCharacterToLifeWindow.playerId !== playerId) return;
+      const w = game.addCharacterToLifeWindow;
+      const pipelineResume = w.pipelineResume;
+      if (action.skip) {
+        send(playerId, {type:'ERROR', msg:'Must pick a Character.'});
+        return;
+      }
+      if (!action.cardUid || !w.candidateUids.includes(action.cardUid)) {
+        send(playerId, {type:'ERROR', msg:'Invalid hand selection.'});
+        return;
+      }
+      const idx = p.hand.findIndex(c => c.uid === action.cardUid);
+      if (idx === -1) { send(playerId, {type:'ERROR', msg:'Card no longer in hand.'}); return; }
+      const picked = p.hand.splice(idx, 1)[0];
+      if (w.faceUp) picked.faceUp = true;
+      p.life.push(picked);
+      log(game, `${w.sourceCardName}: placed ${picked.name} face-up on top of life. (${p.life.length} life)`);
+      game.addCharacterToLifeWindow = null;
+      if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
+      break;
+    }
   }
 
   checkWin(game);
@@ -2480,14 +2790,23 @@ function hasBlocker(card, game) {
   return false;
 }
 
-// Helper: check if card has [Double Attack]
+// Helper: check if card has [Double Attack]. ST07 (Family God) grants this
+// temporarily via grantKeywordToNamed — those entries live on card.tempKeywords
+// with expiresAtTurn, pruned in doEnd.
 function hasDoubleAttack(card) {
-  return card.ability && card.ability.includes('[Double Attack]');
+  if (card && card.ability && card.ability.includes('[Double Attack]')) return true;
+  if (card && Array.isArray(card.tempKeywords)
+      && card.tempKeywords.some(k => k.keyword === 'doubleAttack' || k.keyword === 'double attack')) return true;
+  return false;
 }
 
-// Helper: check if card has [Banish]
+// Helper: check if card has [Banish]. ST07 (Stella) and Regenald grant this
+// temporarily — those entries live on card.tempKeywords with expiresAtTurn.
 function hasBanish(card) {
-  return card.ability && card.ability.includes('[Banish]');
+  if (card && card.ability && card.ability.includes('[Banish]')) return true;
+  if (card && Array.isArray(card.tempKeywords)
+      && card.tempKeywords.some(k => k.keyword === 'banish')) return true;
+  return false;
 }
 
 // Helper: check if card has [Rush]. Phase 7 — also considers temporary
@@ -3483,13 +3802,17 @@ wss.on('connection', (ws) => {
 // the client answers with PONG. If a socket misses several heartbeats the
 // browser's close event fires and the auto-reconnect on the client side
 // kicks in (REJOIN).
+// .unref() so require('./server') from the test harness doesn't keep node
+// alive after the test file's subtests finish. In production the HTTP
+// server (bound via require.main === module gate below) keeps the event
+// loop running, so the heartbeat still fires normally.
 setInterval(() => {
   clients.forEach((client, id) => {
     if (client && client.readyState === WebSocket.OPEN) {
       try { client.send(JSON.stringify({ type: 'PING' })); } catch (_) {}
     }
   });
-}, 30000);
+}, 30000).unref();
 
 // ═════════════════════════════════════════════════════════════════════════
 // PHASE 1 — Card effect ROUTER (parseAbility) + PARSED_EFFECTS cache.
@@ -3925,6 +4248,16 @@ function parseAbility(text) {
   // Track F — preserve bracketed card-name filters ("[Name] card") from
   // the body-level [tag] stripper. Keywords/timings go through the
   // negative list so we don't wrap those.
+  // ST07 (Papal Matt) -- "Up to 1 of your [Name] cards gains [Keyword]
+  // during this turn" (Stella, Family God). MUST run BEFORE the Track F
+  // "[Name] card" preserver below, which would otherwise collapse
+  // [Papal Matt] into \u00a7NAME_...\u00a7 and break the inner bracket capture.
+  processed = processed.replace(
+    /[Uu]p to 1 of your \[([^\]]+)\] cards? gains \[([^\]]+)\](?:\s+(during this turn|for this turn|until the end of this turn))?/g,
+    (_m, name, kw) =>
+      `\u00a7GRANT_NAMED_${name.replace(/\s+/g, '|')}_${kw.toLowerCase().replace(/\s+/g, '-')}_thisTurn\u00a7`
+  );
+
   processed = processed.replace(
     /\[([^\]]+)\]\s+card/g,
     (full, name) => {
@@ -3961,11 +4294,38 @@ function parseAbility(text) {
   // the body-level [tag] stripper that runs in _parseBlock, so the
   // grantKeyword effect can carry the keyword through to the agent.
   processed = processed.replace(
-    /[Tt]his [Cc]haracter gains \[([^\]]+)\](?:\s+(until the end of your opponent'?s?\s+next turn|during this turn|for this turn|until the end of this turn))?/g,
+    /[Tt]his [Cc]haracter gains \[([^\]]+)\](?:\s+(until the end of your opponent'?s?\s+next turn|during this turn|this battle|for this turn|until the end of this turn))?/g,
     (_m, kw, durText) => {
-      const dur = durText && /opponent/i.test(durText) ? 'opponentNextTurn' : 'thisTurn';
+      const dur = durText && /opponent/i.test(durText) ? 'opponentNextTurn'
+               : durText && /battle/i.test(durText) ? 'thisBattle' : 'thisTurn';
       return `\u00a7GRANT_${kw.toLowerCase().replace(/\s+/g, '-')}_${dur}\u00a7`;
     }
+  );
+
+  // ST07 (Papal Matt) \u2014 split "This Character gains [K] and +N power
+  // during this battle" (Regenald). Runs AFTER the generic grantKeyword
+  // pre-processor has already turned "gains [K] during this battle" into
+  // \u00a7GRANT_k_thisBattle\u00a7, so we catch the "\u00a7GRANT\u2026\u00a7 and +N power"
+  // residue and split it into grant + powerBuff segments.
+  processed = processed.replace(
+    /\u00a7GRANT_([a-z0-9-]+)_thisTurn\u00a7\s+and\s+\+(\d+)\s*power\s+during this battle/g,
+    (_m, kw, amt) => `\u00a7GRANT_${kw}_thisBattle\u00a7. This Character gains +${amt} power during this battle`
+  );
+
+  // ST07 (Papal Matt) -- "Your opponent chooses one: - A. - B." pre-processor.
+  // Converts dash-separated branches to bullet form so _parseEffectList picks
+  // them up via the opponentChooses matcher.
+  processed = processed.replace(
+    /[Yy]our opponent chooses one\s*:\s*-\s*(.+?)\.\s*-\s*(.+?)(?=\.(?:\s|$)|\s*\[|$)/g,
+    (_m, a, b) => `\u00a7OPPCHOOSE\u00a7 \u2022 ${a.trim()} \u2022 ${b.trim()}`
+  );
+
+  // ST07 (Papal Matt) \u2014 Red Sea Purchase [Trigger] "Draw 1 card, look at \u2026".
+  // The base splitter keeps both clauses joined because there's no period
+  // between them. Insert one so drawCards + lookAtLifeCard parse separately.
+  processed = processed.replace(
+    /([Dd]raw (?:one|\d+) cards?),\s*([Ll]ook at(?:\s+up to)?\s+\d+\s+cards?\s+from the top of your or your opponent)/g,
+    '$1. $2'
   );
 
   // Phase 5 Priority 8 — pre-process "cannot activate [Blocker]" (Limejuice).
@@ -4164,7 +4524,10 @@ function _parseBlock(block, unparsed) {
   // For Activate: Main abilities this is the canonical cost; the game
   // engine auto-rests the source card as part of ACTIVATE_MAIN, so the
   // agent treats an already-rested card as "cost paid trivially".
-  const restSelf = body.match(/^You may rest this (Character|Stage|character|stage)(?:\s+and one of your DON!!)?\s*:\s*/i);
+  // ST07 — also matches the compound "rest this Stage and add 1 card from
+  // the top or bottom of your Life cards to your hand" (Forgotten Monestary),
+  // which appends an addLifeCardToHand cost alongside restSelf.
+  const restSelf = body.match(/^You may rest this (Character|Stage|character|stage)(?:\s+and one of your DON!!|\s+and add 1 card from the top or bottom of your Life cards to your hand)?\s*:\s*/i);
   if (restSelf) {
     costs.push({ type: 'restSelf' });
     // Track G — "rest this character and one of your DON!!" compound
@@ -4172,7 +4535,21 @@ function _parseBlock(block, unparsed) {
     if (/and one of your DON!!/i.test(restSelf[0])) {
       costs.push({ type: 'restDon', count: 1 });
     }
+    // ST07 — Forgotten Monestary compound rest+addLifeCardToHand cost.
+    if (/and add 1 card from the top or bottom of your Life cards to your hand/i.test(restSelf[0])) {
+      costs.push({ type: 'addLifeCardToHand', optional: true });
+    }
     body = body.substring(restSelf[0].length).trim();
+  }
+
+  // ST07 (Papal Matt) — "You may? add 1 card from the top or bottom of your
+  // Life cards to your hand:" — async cost that pops a top/bottom prompt.
+  // Optional when prefixed with "You may" (Papal Matt leader, Regenald,
+  // Jacob); mandatory without it (Faustian Jack [Activate: Main]).
+  const addLifeHand = body.match(/^(You may )?[Aa]dd 1 card from the top or bottom of your Life cards to your hand\s*:\s*/i);
+  if (addLifeHand) {
+    costs.push({ type: 'addLifeCardToHand', optional: !!addLifeHand[1] });
+    body = body.substring(addLifeHand[0].length).trim();
   }
 
   // Track G — "You may place this character on the bottom of its
@@ -4238,6 +4615,19 @@ function _parseEffectList(body, unparsed) {
       return { conditions, effects, text: bt };
     });
     return [{ type: 'chooseOne', branches }];
+  }
+
+  // ST07 (Papal Matt) \u2014 "Your opponent chooses one: A \u2022 B" branch split.
+  // The pre-processor rewrites dash-separated lists as "\u00a7OPPCHOOSE\u00a7 \u2022 A \u2022 B",
+  // so either marker indicates the branching form. Branches run on the card's
+  // owner (active player) but the PROMPT is shown to the non-active player.
+  const oppChooseM = body.match(/(?:\u00a7OPPCHOOSE\u00a7|[Yy]our opponent chooses one\s*:?)\s*(.+)$/);
+  if (oppChooseM && /\u2022/.test(oppChooseM[1])) {
+    const branches = oppChooseM[1].split(/\u2022/).map(s => s.trim()).filter(Boolean).map(bt => {
+      const effects = _parseEffectList(bt, unparsed);
+      return { conditions: [], effects, text: bt };
+    });
+    return [{ type: 'opponentChooses', branches }];
   }
 
   // Protect "K.O." from the period-based splitter — its internal periods
@@ -4356,6 +4746,16 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
         effect: inner };
     }
   }
+  // ST07 (Papal Matt) — "if you have less Life cards than your opponent,
+  // <effect>" (Colossus conditional Rush grant).
+  if ((condM = seg.match(/^[,\s]*if you have less [Ll]ife cards?\s+than your opponent,\s*(.+)$/i))) {
+    const inner = _parseEffectSegment(condM[1], unparsed, bodyPlacement);
+    if (inner) {
+      return { type: 'conditionalEffect',
+        condition: { type: 'lifeLessThanOpponent' },
+        effect: inner };
+    }
+  }
   // Track F — "<effect> if you have N or less cards in your hand"
   // (Leave Me To My Studies ST03-017 — condition follows the effect).
   if ((condM = seg.match(/^(.+?)\s+if you have (\d+) or less cards? in your hand$/i))) {
@@ -4464,6 +4864,24 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return { type: 'placeAtBottom', max: parseInt(m[1]), filter: { maxCost: parseInt(m[2]) } };
   }
 
+  // ST07 (Papal Matt) — "Look at up to 1 card from the top of your or your
+  // opponent's Life cards, and place it at the top or bottom of the Life
+  // cards" (Colossus, Thomas, Red Sea Purchase). Emits a lookAtLifeCard
+  // effect — scry-shaped but operates on life, not deck, with a private
+  // reveal to the owner of the effect.
+  if (/[Ll]ook at (?:up to )?1 cards? from the top of your or your opponent'?s?\s+Life cards?/i.test(seg)) {
+    return { type: 'lookAtLifeCard' };
+  }
+
+  // ST07 (Papal Matt) — grantKeywordToNamed placeholder. Set by parseAbility
+  // pre-processing for "Up to 1 of your [Name] cards gains [Keyword]…".
+  if ((m = seg.match(/§GRANT_NAMED_([^_§]+)_([a-z0-9-]+)_([a-zA-Z]+)§/))) {
+    return { type: 'grantKeywordToNamed',
+      name: m[1].replace(/\|/g, ' '),
+      keyword: m[2].replace(/-/g, ' '),
+      duration: m[3] };
+  }
+
   // Phase 6/7 — scry matcher. Accepts both phrasings:
   //   "Look at N cards from the top of your deck"      (existing)
   //   "Look at the top N cards of your deck"            (Sugar / Uta / Come on!!)
@@ -4488,15 +4906,37 @@ function _parseEffectSegment(seg, unparsed, bodyPlacement) {
     return scry;
   }
 
-  if ((m = seg.match(/[Tt]rash (?:up to )?(\d+) of your opponent'?s? Life cards?/i))) {
+  // ST07 — also accept "Trash 1 card from the top of your opponent's Life
+  // cards" (Matthew branch A, Blasphemous Technology branch A). Same
+  // trashOpponentLife semantics — no [Trigger] activation on the trashed card.
+  if ((m = seg.match(/[Tt]rash (?:up to )?(\d+) (?:cards?\s+from the top\s+)?of\s+(?:your |the )?opponent'?s? Life cards?/i))) {
     return { type: 'trashOpponentLife', count: parseInt(m[1]), triggerActivates: false };
   }
 
   // Phase 5 Priority 6 — "Add [up to] N card(s) from the top of your
   // deck to (the top of )?your Life cards?". Baby 5 (OP14-072) is the
   // canonical case — a self-heal effect after KO.
+  // ST07 reuses this for Jacob, Matthew (branch 2), Blasphemous Technology.
   if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) cards? from the top of your deck to (?:the top of )?your Life cards?/i))) {
     return { type: 'addLife', count: parseInt(m[1]) };
+  }
+
+  // ST07 (Papal Matt) — "Add up to 1 card from your hand to the top of your
+  // Life cards" (Papal Matt leader's conditional follow-up). Opens a hand
+  // picker; chosen card moves to top of life face-down.
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) cards? from your hand to (?:the top of )?your Life cards?/i))) {
+    return { type: 'addHandToLife', count: parseInt(m[1]) };
+  }
+
+  // ST07 (Papal Matt) — "Add up to 1 of your Characters with a cost of N
+  // to the top of the owner's Life cards face-up" (Forgotten Monestary).
+  // Source is the player's hand (per the spec); chosen Character moves
+  // face-up onto the top of the owner's life stack.
+  if ((m = seg.match(/[Aa]dd (?:up to )?(\d+) of your Characters? with a cost of (\d+) to (?:the top of )?(?:the )?owner'?s? Life cards?\s*(face-up|face up)?/i))) {
+    return { type: 'addCharacterToLife',
+      max: parseInt(m[1]),
+      cost: parseInt(m[2]),
+      faceUp: !!m[3] };
   }
 
   // addFromTrash — "Add up to N [type] [card(s)] from your trash to your hand".
@@ -4887,6 +5327,24 @@ function agentPayCosts(costs, ctx, resume) {
         ctx.player.deck.push(card);  // push = bottom
         log(ctx.game, `${ctx.card.name}: placed on bottom of own deck as cost.`);
         break;
+      }
+      case 'addLifeCardToHand': {
+        // ST07 AGENT A — async cost. Opens a top/bottom prompt; the chosen
+        // life card moves into the player's hand face-down (no reveal, no
+        // [Trigger] activation). Optional when "You may …" prefix was present.
+        // If optional and player skips, the block aborts (cost unpaid).
+        if ((ctx.player.life || []).length === 0) {
+          if (c.optional) return { status: 'unaffordable' };
+          log(ctx.game, `${ctx.card.name}: no life cards to add to hand.`);
+          return { status: 'unaffordable' };
+        }
+        const opened = openAddLifeCardToHand(ctx.game, ctx.playerId, {
+          optional: !!c.optional,
+          sourceCardName: ctx.card.name,
+          pipelineResume: resume || null,
+        });
+        if (!opened) return { status: 'unaffordable' };
+        return { status: 'window-open' };
       }
       default:
         console.log('[AGENT-COST] Not yet supported in new pipeline:', c.type, `(card ${ctx.card.name})`);
@@ -5425,6 +5883,12 @@ function agentApplyEffect(effect, ctx, resume) {
         met = (ctx.player.life || []).length <= cond.value;
       } else if (cond.type === 'handCountMax') {
         met = (ctx.player.hand || []).length <= cond.value;
+      } else if (cond.type === 'lifeLessThanOpponent') {
+        // ST07 — Colossus' conditional Rush grant fires only if the
+        // controller has strictly fewer life cards than the opponent.
+        const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+        const opp = ctx.game.players[oppId];
+        met = (ctx.player.life || []).length < (opp.life || []).length;
       } else if (cond.type === 'lastTargetMaxCost') {
         const uid = ctx.game._lastPickedTargetUid;
         if (uid) {
@@ -5537,6 +6001,150 @@ function agentApplyEffect(effect, ctx, resume) {
       ctx.card.tempKeywords.push({ keyword: effect.keyword, expiresAtTurn });
       log(ctx.game, `${ctx.card.name}: gains [${effect.keyword}] until turn ${expiresAtTurn}.`);
       return { status: 'applied' };
+    }
+
+    // ST07 AGENT A — addLifeCardToHand as a standalone EFFECT (parser also
+    // emits it as a cost; both paths route through openAddLifeCardToHand).
+    case 'addLifeCardToHand': {
+      if ((ctx.player.life || []).length === 0) {
+        log(ctx.game, `${ctx.card.name}: no life cards to add to hand.`);
+        return { status: 'no-targets' };
+      }
+      const opened = openAddLifeCardToHand(ctx.game, ctx.playerId, {
+        optional: effect.optional !== false,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      });
+      return opened ? { status: 'window-open' } : { status: 'no-targets' };
+    }
+
+    // ST07 AGENT B — lookAtLifeCard. Two-step UI: pick own vs opponent life,
+    // then pick top-vs-bottom placement. Card is revealed privately to the
+    // acting player; opponent sees only "Opponent is looking at a life card".
+    case 'lookAtLifeCard': {
+      const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+      const me = ctx.player;
+      const opp = ctx.game.players[oppId];
+      const haveMine = (me.life || []).length > 0;
+      const haveOpp  = (opp.life || []).length > 0;
+      if (!haveMine && !haveOpp) {
+        log(ctx.game, `${ctx.card.name}: no life cards to look at.`);
+        return { status: 'no-targets' };
+      }
+      ctx.game.lookAtLifeCardWindow = {
+        playerId: ctx.playerId,
+        step: 'choose-source',
+        haveMine, haveOpp,
+        chosenSideId: null,
+        peekedCardUid: null,
+        sourceCardUid: ctx.card.uid,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose whose life card to look at.`);
+      return { status: 'window-open' };
+    }
+
+    // ST07 AGENT D — opponentChooses. Opens a window addressed to the
+    // non-active player (opponent of the card's controller). That player
+    // picks a branch; the branch effects run in the active player's ctx.
+    case 'opponentChooses': {
+      const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+      const branches = (effect.branches || []).map((b, i) => ({
+        index: i,
+        available: true,
+        effects: b.effects || [],
+        text: b.text || '',
+      }));
+      if (branches.length === 0) return { status: 'applied' };
+      ctx.game.opponentChoosesWindow = {
+        // "playerId" here is the chooser (opponent of the card's controller).
+        playerId: oppId,
+        activePlayerId: ctx.playerId,
+        sourceCardName: ctx.card.name,
+        sourceCardUid: ctx.card.uid,
+        sourceCardId: ctx.card.id,
+        branches,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: opponent must choose one (${branches.length} options).`);
+      return { status: 'window-open' };
+    }
+
+    // ST07 AGENT E — grantKeywordToNamed. Opens a friendly-target picker
+    // filtered by card name (leader + field). Chosen card receives the
+    // keyword in tempKeywords until end of turn; doEnd clears it.
+    case 'grantKeywordToNamed': {
+      const namedLower = (effect.name || '').toLowerCase();
+      const kwNormalised =
+        (effect.keyword || '').toLowerCase() === 'double attack' ? 'doubleAttack'
+          : (effect.keyword || '').toLowerCase() === 'banish' ? 'banish'
+          : (effect.keyword || '').toLowerCase() === 'rush' ? 'rush'
+          : (effect.keyword || '').toLowerCase();
+      const candidates = [];
+      if (ctx.player.leader && (ctx.player.leader.name || '').toLowerCase() === namedLower) {
+        candidates.push(ctx.player.leader);
+      }
+      for (const c of (ctx.player.field || [])) {
+        if ((c.name || '').toLowerCase() === namedLower) candidates.push(c);
+      }
+      if (candidates.length === 0) {
+        log(ctx.game, `${ctx.card.name}: no [${effect.name}] cards on your side to grant [${effect.keyword}].`);
+        return { status: 'no-targets' };
+      }
+      ctx.game.grantKeywordToNamedWindow = {
+        playerId: ctx.playerId,
+        candidateUids: candidates.map(c => c.uid),
+        keyword: kwNormalised,
+        duration: effect.duration || 'thisTurn',
+        name: effect.name,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose a [${effect.name}] card to grant [${effect.keyword}] (${candidates.length}).`);
+      return { status: 'window-open' };
+    }
+
+    // ST07 — addHandToLife. Papal Matt leader's conditional follow-up. Opens
+    // a hand picker; chosen card moves face-down to the top of the player's
+    // life stack.
+    case 'addHandToLife': {
+      if ((ctx.player.hand || []).length === 0) {
+        log(ctx.game, `${ctx.card.name}: hand empty — cannot add to life.`);
+        return { status: 'no-targets' };
+      }
+      ctx.game.addHandToLifeWindow = {
+        playerId: ctx.playerId,
+        candidateUids: (ctx.player.hand || []).map(c => c.uid),
+        max: effect.count || 1,
+        optional: effect.optional !== false,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose a card from hand to put on top of life.`);
+      return { status: 'window-open' };
+    }
+
+    // ST07 — addCharacterToLife. Forgotten Monestary: move a cost-matched
+    // Character from hand to the top of own life face-up.
+    case 'addCharacterToLife': {
+      const cost = effect.cost;
+      const candidates = (ctx.player.hand || []).filter(c =>
+        c.type === 'CHARACTER' && (c.cost || 0) === cost);
+      if (candidates.length === 0) {
+        log(ctx.game, `${ctx.card.name}: no Character with cost ${cost} in hand.`);
+        return { status: 'no-targets' };
+      }
+      ctx.game.addCharacterToLifeWindow = {
+        playerId: ctx.playerId,
+        candidateUids: candidates.map(c => c.uid),
+        cost,
+        faceUp: !!effect.faceUp,
+        sourceCardName: ctx.card.name,
+        pipelineResume: resume || null,
+      };
+      log(ctx.game, `${ctx.card.name}: choose a cost-${cost} Character from hand to add face-up to top of life (${candidates.length}).`);
+      return { status: 'window-open' };
     }
 
     case 'scry': {
@@ -5658,9 +6266,15 @@ function runPipeline(timing, game, playerId, card, opts = {}) {
 function resumePipeline(game, playerId, resume) {
   const owner = game.players[playerId];
   if (!owner) return;
+  // ST07 — also search hand. Faustian Jack's [Trigger] pays an async
+  // trashFromHand cost while the source card is still in hand (the
+  // life-reveal path moved the trigger card from life to hand, not to
+  // trash). Without the hand lookup, the playSelf effect couldn't find
+  // the source to move onto the field after the cost resolved.
   const src = (owner.leader && owner.leader.uid === resume.cardUid) ? owner.leader
            : (owner.field || []).find(c => c.uid === resume.cardUid)
-           || (owner.trash || []).find(c => c.uid === resume.cardUid);
+           || (owner.trash || []).find(c => c.uid === resume.cardUid)
+           || (owner.hand  || []).find(c => c.uid === resume.cardUid);
   if (!src) {
     console.log('[AGENT-TRACE] resumePipeline — source card not found by uid', resume.cardUid);
     return;
@@ -5783,6 +6397,25 @@ function openPlaceAtBottomWindow(game, playerId, opts) {
     pipelineResume,
   };
   log(game, `${sourceCardName}: choose a Character to place at the bottom of its owner's deck (${candidates.length} option(s)).`);
+  return true;
+}
+
+// ST07 (Papal Matt) — opens game.addLifeCardToHandWindow so the player
+// picks which end of their life stack (top vs bottom) to pull a card
+// from. No reveal to the opponent; no [Trigger] activation. Optional
+// flag maps to the "You may" parse: when true the player can skip and
+// the caller treats that as an unaffordable cost / no-target effect.
+function openAddLifeCardToHand(game, playerId, opts) {
+  const p = game.players[playerId];
+  if (!p || (p.life || []).length === 0) return false;
+  const { optional = true, sourceCardName = '', pipelineResume = null } = opts || {};
+  game.addLifeCardToHandWindow = {
+    playerId,
+    optional,
+    sourceCardName,
+    pipelineResume,
+  };
+  log(game, `${sourceCardName}: choose a Life card (top or bottom) to add to your hand.`);
   return true;
 }
 
