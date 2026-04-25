@@ -857,10 +857,6 @@
           };
           stack.appendChild(img);
         }
-        const label = document.createElement('div');
-        label.className = 'deck-card-label';
-        label.textContent = (card ? card.name : entry.id) + ' x' + entry.count;
-        stack.appendChild(label);
 
         // [-] / count / [+] controls. Leader stack is excluded from the
         // 4-cap and the 50-cap (its own slot, count===1 enforced in
