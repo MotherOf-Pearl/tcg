@@ -975,6 +975,22 @@ function handleAction(roomId, playerId, action) {
   const opp = game.players[oppId];
   const isActive = game.activePlayer === playerId;
 
+  // BUG 5 — opponentChoosesWindow lockout. While the chooser (the
+  // non-active player) is deciding which branch to fire, the active
+  // player must not be able to issue any action — End Turn, Attack,
+  // Deploy, Activate Main, etc. The only sender who can drive the
+  // game forward at this point is the chooser, who must be answering
+  // OPPONENT_CHOOSES_SELECTED. CHAT is still allowed so the active
+  // player can converse. Scales to any future opponent-driven prompt
+  // by adding the window field to the same gate.
+  if (game.opponentChoosesWindow
+      && playerId !== game.opponentChoosesWindow.playerId
+      && action && action.type !== 'CHAT'
+      && action.type !== 'PING' && action.type !== 'PONG') {
+    send(playerId, { type: 'ERROR', msg: 'Waiting for opponent to choose…' });
+    return;
+  }
+
   switch (action.type) {
 
     case 'MULLIGAN': {
@@ -1555,6 +1571,16 @@ function handleAction(roomId, playerId, action) {
 
       if (attackerWins) {
         if (bs.targetIsLeader) {
+          // BUG 3 — [Double Attack] flips TWO life cards on a leader hit.
+          // hasDoubleAttack reads static ability + tempDoubleAttack flag +
+          // tempKeywords array (Family God grant lands here after the
+          // grantKeywordToNamed window resolves).
+          const isDoubleAttack = !!(attackerCard && hasDoubleAttack(attackerCard));
+          const totalHits = isDoubleAttack ? 2 : 1;
+          if (isDoubleAttack) log(game, `[Double Attack] flipping up to ${totalHits} life cards.`);
+          let _landedAny = false;
+          let _gameEnded = false;
+          for (let _h = 0; _h < totalHits && !_gameEnded; _h++) {
           // Hit the leader. If defender has 0 life left, they lose.
           if (defender.life.length === 0) {
             game.winner = bs.attackerId;
@@ -1570,6 +1596,12 @@ function handleAction(roomId, playerId, action) {
             log(game, `\uD83D\uDCA5 ${bs.attackerName} hits the leader! Life card ${lifeCard.name} \u2192 hand. ${defender.life.length} life remaining.`);
             applyTriggerEffect(game, defenderId, lifeCard);
             }
+            outcome.outcome = 'leader_hit';
+            outcome.lifeRemaining = defender.life.length;
+            _landedAny = true;
+          }
+          } // end for(_h) — BUG 3 double-attack hits loop
+          if (_landedAny && outcome.outcome === 'blocked') {
             outcome.outcome = 'leader_hit';
             outcome.lifeRemaining = defender.life.length;
           }
@@ -2676,6 +2708,43 @@ function handleAction(roomId, playerId, action) {
   }
 
   checkWin(game);
+
+  // BUG 1 — refresh battleState power totals after every handleAction so
+  // late-arriving [When Attacking] buffs (Regenald's grantKeyword + +1000
+  // power lands AFTER the addLifeCardToHand cost window resolves, not
+  // synchronously inside DECLARE_ATTACK) are reflected in the arrow /
+  // overlay. Scales to every card whose pipeline opens an interactive
+  // window before applying a self powerBuff.
+  if (game.battleState && game.battleState.attackerUid) {
+    let attackerCard = null;
+    for (const pid of Object.keys(game.players)) {
+      const pl = game.players[pid];
+      if (pl.leader && pl.leader.uid === game.battleState.attackerUid) { attackerCard = pl.leader; break; }
+      const f = (pl.field || []).find(c => c.uid === game.battleState.attackerUid);
+      if (f) { attackerCard = f; break; }
+    }
+    if (attackerCard) {
+      game.battleState.attackerPower = effectivePowerOf(attackerCard, game);
+    }
+    // Same refresh for the target — counter-step temp buffs already do
+    // this inline, but a [When Attacking] effect that debuffs the target
+    // (Yasopp -1000) also needs to re-read.
+    if (game.battleState.targetUid) {
+      let targetCard = null;
+      for (const pid of Object.keys(game.players)) {
+        const pl = game.players[pid];
+        if (pl.leader && pl.leader.uid === game.battleState.targetUid) { targetCard = pl.leader; break; }
+        const f = (pl.field || []).find(c => c.uid === game.battleState.targetUid);
+        if (f) { targetCard = f; break; }
+      }
+      if (targetCard) {
+        // Defender power excludes attached DON (defender doesn't get the
+        // +1000/DON bonus when being attacked), matching DECLARE_ATTACK.
+        game.battleState.targetPower = Math.max(0, effectivePowerOf(targetCard, game) - (targetCard.attachedDon || 0) * 1000);
+      }
+    }
+  }
+
   // Bug 7/15 — ALWAYS broadcast to every connected player in the room, never
   // just to the acting socket. Pipeline resume paths rely on this guarantee
   // so defender Block Step / Counter Step prompts arrive even when an
@@ -6093,11 +6162,37 @@ function agentApplyEffect(effect, ctx, resume) {
     // picks a branch; the branch effects run in the active player's ctx.
     case 'opponentChooses': {
       const oppId = Object.keys(ctx.game.players).find(id => id !== ctx.playerId);
+      // BUG 4 — branch.text is captured from the controller's perspective
+      // (the original ability text). The CHOOSER who reads the buttons is
+      // the controller's OPPONENT, so swap "your" ↔ "your opponent's" so
+      // the wording reads correctly to the chooser. Also collapse the
+      // double-possessive "your opponent's Life cards" → "their Life
+      // cards" once swapped, matching natural English. Scales to every
+      // future opponentChooses card with similar phrasing.
+      const flipPerspective = (txt) => {
+        if (!txt) return txt;
+        // Use a sentinel to swap atomically — straight chained replaces
+        // would un-swap on the second pass.
+        const SENT = 'YOPP';
+        let s = txt
+          .replace(/\byour opponent'?s?\b/gi, SENT)
+          .replace(/\byour\b/gi, "your opponent's")
+          .replace(new RegExp(SENT, 'g'), 'your');
+        // Collapse "to (the top of )?your opponent's Life" left over from
+        // branch B ("Add 1 card from the top of your deck to the top of
+        // your Life cards") so the chooser sees the natural phrasing.
+        s = s.replace(/to (?:the top of )?your opponent'?s? Life cards?/gi,
+                      m => m.replace(/your opponent'?s?/i, 'their'));
+        return s;
+      };
       const branches = (effect.branches || []).map((b, i) => ({
         index: i,
         available: true,
         effects: b.effects || [],
-        text: b.text || '',
+        // Original-perspective text retained on `controllerText` for the
+        // server-side log; the chooser-facing text lands on `text`.
+        text: flipPerspective(b.text || ''),
+        controllerText: b.text || '',
       }));
       if (branches.length === 0) return { status: 'applied' };
       ctx.game.opponentChoosesWindow = {

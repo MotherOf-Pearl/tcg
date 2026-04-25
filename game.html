@@ -639,18 +639,31 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
   0%,100%{box-shadow:0 0 0 3px rgba(60,200,80,.95), 0 0 18px 6px rgba(80,220,100,.45);}
   50%    {box-shadow:0 0 0 3px rgba(80,230,100,1),  0 0 26px 10px rgba(120,255,140,.75);}
 }
-/* ST07 Family God — temporary [Double Attack] badge. Gold circle pinned
-   to the card's top-right; rendered for any card whose tempDoubleAttack
-   flag is true. Cleared at end of turn by pruneTempKeywords on the
-   server, which removes the flag and the next render drops the badge. */
-.dbl-atk-badge{
-  position:absolute; top:-6px; right:-6px;
-  width:24px; height:24px; border-radius:50%;
-  background:radial-gradient(circle at 30% 30%, #ffe98a 0%, #d4a72c 60%, #8a6a14 100%);
-  box-shadow:0 0 0 1px rgba(0,0,0,.6), 0 0 6px 2px rgba(255,200,80,.6);
-  color:#1a0e02; font-weight:800; font-size:.62rem; font-family:'Cinzel',serif;
-  display:flex; align-items:center; justify-content:center;
+/* ST07 — temporary keyword badges. Centered overlays on the card so
+   they're clearly visible regardless of card scaling and never clip
+   off-screen. Server's pruneTempKeywords drops the flag at end of
+   turn; the next render naturally removes the badge.
+     - .dbl-atk-badge: gold "2x" — Family God's [Double Attack] grant
+     - .banish-badge:  red "💀 BANISH" — Stella / Regenald's [Banish] grant */
+.dbl-atk-badge, .banish-badge{
+  position:absolute; left:50%; top:50%;
+  transform:translate(-50%, -50%);
   z-index:5; pointer-events:none;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'Cinzel',serif; font-weight:800; letter-spacing:1px;
+  text-shadow:0 1px 2px rgba(0,0,0,.7);
+}
+.dbl-atk-badge{
+  width:46px; height:46px; border-radius:50%;
+  background:radial-gradient(circle at 30% 30%, #ffe98a 0%, #d4a72c 55%, #8a6a14 100%);
+  box-shadow:0 0 0 2px rgba(0,0,0,.6), 0 0 12px 4px rgba(255,200,80,.7);
+  color:#1a0e02; font-size:1rem;
+}
+.banish-badge{
+  padding:6px 12px; border-radius:6px;
+  background:radial-gradient(circle at 30% 30%, #ff6e6e 0%, #c11a1a 55%, #5a0606 100%);
+  box-shadow:0 0 0 2px rgba(0,0,0,.6), 0 0 12px 4px rgba(255,80,80,.6);
+  color:#fff7e0; font-size:.7rem;
 }
 /* Power overlays live in a fixed-position container at document root
    (#battleOverlays) so they're never clipped by .gcard's overflow:hidden
@@ -2153,8 +2166,22 @@ function renderGame() {
   const opp = game.players[oppId];
   const isActive = game.activePlayer === myId;
 
-  // Show buttons based on phase — End Turn only in MAIN phase
-  if (game.phase === 'DRAW' && isActive) {
+  // BUG 5 — opponent-driven window lockout. While the chooser (the
+  // non-active player) is deciding which branch to fire, freeze every
+  // active-player UI surface: phase buttons (End Turn, Draw, Add DON),
+  // hand selection, attack, deploy. The chooser still sees their own
+  // opponentChoosesBtns panel rendered downstream.
+  const _oppChooseLocked = !!(game.opponentChoosesWindow
+                              && game.opponentChoosesWindow.playerId !== myId);
+
+  // Show buttons based on phase — End Turn only in MAIN phase.
+  // Active player's panel is suppressed entirely while locked so the
+  // "Waiting for opponent to choose…" hint owns the right rail.
+  if (_oppChooseLocked) {
+    document.getElementById('drawBtns').style.display = 'none';
+    document.getElementById('playBtns').style.display = 'none';
+    if (isActive) hint('Waiting for opponent to choose…');
+  } else if (game.phase === 'DRAW' && isActive) {
     document.getElementById('drawBtns').style.display = 'flex';
     document.getElementById('btnDrawCard').style.display = 'block';
     document.getElementById('btnDrawDon').style.display = 'none';
@@ -2967,20 +2994,30 @@ function _tryConsumeWindowClick(uid) {
   return false;
 }
 
-// ST07 Family God — paint a "2x" gold badge in the top-right of any card
-// that currently carries a temp [Double Attack] grant. Server clears the
-// flag at end of turn (pruneTempKeywords), so the next render naturally
-// drops the badge.
+// ST07 — paint centered keyword badges for any temp grant the server
+// has stamped onto the card. Server's pruneTempKeywords drops the flag
+// at end of turn so the next render naturally removes the badge.
+// Scales to any future granted keyword by extending the table below.
+const _GRANT_BADGES = [
+  { flag: 'tempDoubleAttack', cls: 'dbl-atk-badge', text: '2x',          title: '[Double Attack] this turn' },
+  { flag: 'tempBanish',       cls: 'banish-badge',  text: '💀 BANISH',   title: '[Banish] this turn' },
+];
 function _maybeApplyDoubleAttackBadge(cardEl, card) {
   if (!cardEl || !card) return;
-  if (card.tempDoubleAttack === true) {
-    if (!cardEl.querySelector('.dbl-atk-badge')) {
+  // Card root must be position:relative so the centered badge anchors
+  // correctly. The .gcard CSS already sets this, but be defensive.
+  cardEl.style.position = cardEl.style.position || 'relative';
+  for (const spec of _GRANT_BADGES) {
+    const wantBadge = card[spec.flag] === true;
+    const existing = cardEl.querySelector('.' + spec.cls);
+    if (wantBadge && !existing) {
       const badge = document.createElement('div');
-      badge.className = 'dbl-atk-badge';
-      badge.textContent = '2x';
-      badge.title = '[Double Attack] this turn';
-      cardEl.style.position = cardEl.style.position || 'relative';
+      badge.className = spec.cls;
+      badge.textContent = spec.text;
+      badge.title = spec.title;
       cardEl.appendChild(badge);
+    } else if (!wantBadge && existing) {
+      existing.remove();
     }
   }
 }
@@ -4317,7 +4354,24 @@ function cancelSel() {
     }
   }
 }
-function isMyTurn()  { return game?.activePlayer === myId; }
+// BUG 5 — while an opponent-driven window is open and I'm the active
+// player waiting on the chooser, I must not be able to take any action
+// (attack, deploy, end turn, activate main). isMyTurn() gates almost
+// every play-side guard already, so AND-ing the lockout in here makes
+// the entire MAIN-phase action surface go inert until the chooser
+// resolves their pick. Scales to any future opponent-side prompt by
+// adding the window field to _isLockedByOpponentWindow.
+function _isLockedByOpponentWindow() {
+  if (!game) return false;
+  // opponentChoosesWindow.playerId is the chooser; if I'm NOT the chooser
+  // and the window is open, every active-player action is frozen.
+  if (game.opponentChoosesWindow && game.opponentChoosesWindow.playerId !== myId) return true;
+  return false;
+}
+function isMyTurn()  {
+  if (_isLockedByOpponentWindow()) return false;
+  return game?.activePlayer === myId;
+}
 function myPlayer()  { return game?.players[myId]; }
 function oppPlayer() { const id = Object.keys(game.players).find(i => i !== myId); return game.players[id]; }
 function findCard(uid, player) {
