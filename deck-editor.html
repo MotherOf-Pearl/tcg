@@ -306,6 +306,29 @@
         }
         .alt-btn:disabled { opacity: .5; cursor: not-allowed; }
 
+        /* +/- controls under each deck card stack. Layout-only — sits
+           under the existing label, no impact on stack spacing. */
+        .qty-row {
+            display:flex; align-items:center; justify-content:center;
+            gap:6px; margin-top:3px;
+        }
+        .qty-btn {
+            width:22px; height:22px; line-height:1; padding:0;
+            border-radius:50%;
+            background:linear-gradient(180deg,#f2e8cc 0%,#d8c290 100%);
+            border:1px solid #a08050; color:#3c2e1e;
+            font-weight:800; font-size:14px; cursor:pointer;
+            display:flex; align-items:center; justify-content:center;
+        }
+        .qty-btn:hover:not(:disabled){ filter:brightness(1.06); }
+        .qty-btn:active:not(:disabled){ filter:brightness(0.95); }
+        .qty-btn:disabled{ opacity:0.35; cursor:not-allowed; }
+        .qty-count{
+            min-width:24px; text-align:center;
+            font-size:12px; font-weight:800; color:#d4a020;
+            text-shadow:0 1px 2px rgba(0,0,0,0.55);
+        }
+
 
 
         /* Scrollbar styling */
@@ -709,17 +732,42 @@
     let currentDeck = [];
 
     function deckTotal() { return currentDeck.reduce((s, e) => s + e.count, 0); }
+    // Non-leader count for the 50-card cap. Leader is its own bucket
+    // (count===1) and shouldn't be subject to the deck-fill rule.
+    function nonLeaderTotal() {
+      return currentDeck.reduce((s, e) => {
+        const c = cardMap[e.id];
+        return s + (c && c.type === 'LEADER' ? 0 : e.count);
+      }, 0);
+    }
+
+    // Autosave: when the loaded deck has a name (e.g. user picked one
+    // from the dropdown), persist count changes back to that key in
+    // localStorage.optcg_decks immediately. Built-in PRELOADED names
+    // are NOT shadowed automatically — they save through Save Deck only.
+    function _autosaveDeck() {
+      if (!currentDeckName) return;
+      if (Object.prototype.hasOwnProperty.call(PRELOADED_DECKS, currentDeckName)) return;
+      try {
+        const stored = JSON.parse(localStorage.getItem('optcg_decks') || '{}');
+        stored[currentDeckName] = currentDeck.map(e => `${e.count}x${e.id}`).join('\n');
+        localStorage.setItem('optcg_decks', JSON.stringify(stored));
+      } catch (_) {}
+    }
 
     function addCardToDeck(id) {
       const existing = currentDeck.find(e => e.id === id);
       const count = existing ? existing.count : 0;
       const card = cardMap[id];
-      const max = card && card.type === 'LEADER' ? 1 : 4;
+      const isLeader = card && card.type === 'LEADER';
+      const max = isLeader ? 1 : 4;
       if (count >= max) return;
+      // 50-non-leader cap. Leader add is exempt.
+      if (!isLeader && nonLeaderTotal() >= 50) return;
       if (existing) existing.count++;
       else currentDeck.push({ id, count: 1 });
       renderDeck();
-
+      _autosaveDeck();
     }
 
     function removeCardFromDeck(id) {
@@ -728,13 +776,13 @@
       currentDeck[idx].count--;
       if (currentDeck[idx].count <= 0) currentDeck.splice(idx, 1);
       renderDeck();
-
+      _autosaveDeck();
     }
 
     function clearDeck() {
       currentDeck = [];
       renderDeck();
-
+      _autosaveDeck();
     }
 
     // ── Parse deck string ──
@@ -813,6 +861,40 @@
         label.className = 'deck-card-label';
         label.textContent = (card ? card.name : entry.id) + ' x' + entry.count;
         stack.appendChild(label);
+
+        // [-] / count / [+] controls. Leader stack is excluded from the
+        // 4-cap and the 50-cap (its own slot, count===1 enforced in
+        // addCardToDeck). Non-leader cards get [+] disabled at 4 copies
+        // OR when the 50-non-leader deck cap is hit.
+        const isLeaderEntry = card && card.type === 'LEADER';
+        const qtyRow = document.createElement('div');
+        qtyRow.className = 'qty-row';
+        const minus = document.createElement('button');
+        minus.className = 'qty-btn';
+        minus.textContent = '−';
+        minus.title = entry.count <= 1 ? 'Remove from deck' : 'Remove one copy';
+        minus.addEventListener('click', (e) => {
+          e.stopPropagation();
+          removeCardFromDeck(entry.id);
+        });
+        const cnt = document.createElement('span');
+        cnt.className = 'qty-count';
+        cnt.textContent = 'x' + entry.count;
+        const plus = document.createElement('button');
+        plus.className = 'qty-btn';
+        plus.textContent = '+';
+        plus.title = 'Add one copy';
+        const perCardMax = isLeaderEntry ? 1 : 4;
+        const deckFull = !isLeaderEntry && nonLeaderTotal() >= 50;
+        plus.disabled = entry.count >= perCardMax || deckFull;
+        plus.addEventListener('click', (e) => {
+          e.stopPropagation();
+          addCardToDeck(entry.id);
+        });
+        qtyRow.appendChild(minus);
+        qtyRow.appendChild(cnt);
+        qtyRow.appendChild(plus);
+        stack.appendChild(qtyRow);
 
         // ALT/Normal toggle for cards that have an alternate art
         if (card && card.hasAlt) {
