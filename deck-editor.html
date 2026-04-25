@@ -76,8 +76,7 @@
             height: 100%;
             z-index: 2;
             display: grid;
-            /* 3 cols: card library | preview | deck builder */
-            grid-template-columns: 300px 240px 1fr;
+            grid-template-columns: 320px 1fr;
             grid-template-rows: 1fr;
             gap: 10px;
             padding: 12px;
@@ -239,148 +238,51 @@
             z-index: 5;
         }
 
-        /* ── Deck-builder header (stats, save controls) ── */
-        .deck-header {
-          display:flex; flex-direction:column; gap:6px;
-          padding:10px 12px 6px;
-          border-bottom:1px solid rgba(100,55,15,0.35);
-          background:rgba(20,12,4,0.30);
-        }
-        .deck-stats-row {
-          display:flex; justify-content:space-between; align-items:center;
-          gap:10px; flex-wrap:wrap;
-        }
-        .deck-stats-row .stat-leader {
-          font-size:13px; color:#f0d080; font-weight:700;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
-        }
-        .deck-stats-row .stat-count {
-          font-size:18px; color:#f2e8cc; font-weight:800;
-          text-shadow:1px 1px 3px rgba(0,0,0,0.6);
-        }
-        .deck-stats-row .stat-count.full { color:#a8e890; }
-        .deck-stats-row .stat-count.over { color:#ff8a6a; }
-        .deck-warning {
-          font-size:11px; color:#ffd07a; font-style:italic;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
-        }
-        .deck-warning.ok { color:#a8e890; font-style:normal; font-weight:700; }
-        .deck-save-row {
-          display:flex; gap:6px; align-items:center;
-        }
-        .deck-save-row input { flex:1; }
-
-        /* Deck row list (right panel body) */
-        .deck-rows {
-          flex:1; overflow-y:auto; overflow-x:hidden;
-          padding:6px 8px 8px;
-          display:flex; flex-direction:column; gap:4px;
-        }
-        .deck-leader-slot {
-          padding:8px 10px; margin:8px;
-          border:2px solid #d4a020; border-radius:5px;
-          background:linear-gradient(180deg,rgba(60,40,8,0.55) 0%,rgba(40,25,4,0.55) 100%);
-          display:flex; align-items:center; gap:10px;
-        }
-        .deck-leader-slot .ll-img {
-          width:50px; height:auto; border-radius:3px; border:1px solid #b8a47a;
-        }
-        .deck-leader-slot .ll-name {
-          flex:1; color:#f0d080; font-weight:700; font-size:13px;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
-        }
-        .deck-leader-slot .ll-tag {
-          font-size:10px; color:#f0d080; opacity:0.75; letter-spacing:1px;
-        }
-        .deck-leader-slot .ll-clear {
-          font-size:10px; padding:3px 6px;
+        .deck-grid {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            padding: 12px 14px;
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 10px 12px;
         }
 
-        .deck-row {
-          display:flex; align-items:center; gap:8px;
-          padding:5px 8px; border-radius:4px;
-          background:rgba(20,12,4,0.55);
-          border:1px solid rgba(180,120,50,0.35);
-        }
-        .deck-row:hover { background:rgba(40,24,8,0.65); }
-        .deck-row .dr-img {
-          width:36px; height:auto; border-radius:3px; border:1px solid #b8a47a;
-          flex-shrink:0;
-        }
-        .deck-row .dr-info {
-          flex:1; min-width:0; display:flex; flex-direction:column; gap:1px;
-        }
-        .deck-row .dr-name {
-          font-size:12px; color:#f2e8cc; font-weight:700;
-          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
-        }
-        .deck-row .dr-meta {
-          font-size:10px; color:#d4b890; opacity:0.85;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
-        }
-        .deck-row .dr-controls {
-          display:flex; align-items:center; gap:4px;
-        }
-        .btn-circle {
-          width:24px; height:24px; border-radius:50%;
-          background:linear-gradient(180deg,#f2e8cc 0%,#d8c290 100%);
-          border:1px solid #a08050; color:#3c2e1e;
-          font-weight:800; font-size:14px; line-height:1;
-          cursor:pointer; user-select:none;
-          display:flex; align-items:center; justify-content:center;
-          padding:0;
-        }
-        .btn-circle:hover:not(:disabled) { filter:brightness(1.06); }
-        .btn-circle:active:not(:disabled) { filter:brightness(0.95); }
-        .btn-circle:disabled { opacity:0.35; cursor:not-allowed; }
-        .deck-row .dr-count {
-          min-width:30px; text-align:center;
-          font-size:14px; font-weight:800; color:#f0d080;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
+        /* Card stack in deck */
+        .deck-card-stack {
+            position: relative;
+            cursor: pointer;
+            margin-bottom: 6px;
         }
 
-        /* ── Card library (left column) ── */
-        .library-panel {
-          display:flex; flex-direction:column;
+        .deck-card-img {
+            width: 110px;
+            display: block;
+            border-radius: 5px;
+            border: 2px solid #b8a47a;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+            transition: filter 0.1s;
         }
-        .library-search {
-          margin:8px 8px 4px;
+
+        .deck-card-img.stacked {
+            margin-top: -85%;
         }
-        .library-search input { width:100%; }
-        .library-grid {
-          flex:1; overflow-y:auto; overflow-x:hidden;
-          padding:6px 8px 8px;
-          display:grid; grid-template-columns:repeat(2, 1fr); gap:6px;
-          align-content:flex-start;
+
+        .deck-card-stack:hover .deck-card-img {
+            filter: brightness(1.08);
         }
-        .library-card {
-          position:relative; cursor:pointer;
-          border:1px solid rgba(180,120,50,0.45);
-          border-radius:4px; padding:3px;
-          background:rgba(20,12,4,0.45);
-          display:flex; flex-direction:column; gap:2px;
-          transition:filter 0.1s, transform 0.1s;
-        }
-        .library-card:hover { filter:brightness(1.08); transform:translateY(-1px); }
-        .library-card.in-deck { border-color:#d4a020; }
-        .library-card.maxed   { opacity:0.55; cursor:not-allowed; }
-        .library-card .lc-img {
-          width:100%; height:auto; border-radius:3px; display:block;
-        }
-        .library-card .lc-name {
-          font-size:9px; color:#f2e8cc; font-weight:700;
-          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-          text-shadow:0 1px 2px rgba(0,0,0,0.55);
-        }
-        .library-card .lc-count {
-          position:absolute; top:-6px; right:-6px;
-          background:#d4a020; color:#1a0e02;
-          border-radius:50%; width:22px; height:22px;
-          font-size:11px; font-weight:800;
-          display:flex; align-items:center; justify-content:center;
-          border:2px solid #1a0e02;
-          z-index:2;
+
+        .deck-card-label {
+            text-align: center;
+            font-size: 9px;
+            font-weight: 600;
+            color: #3c2e1e;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            width: 110px;
         }
 
         .alt-btn {
@@ -416,15 +318,7 @@
 </head>
 <body>
     <div class="layout">
-        <!-- LEFT: CARD LIBRARY -->
-        <div class="panel library-panel">
-            <div class="library-search">
-                <input type="text" class="parch-input" id="librarySearch" placeholder="Search by name, type, color…" />
-            </div>
-            <div class="library-grid" id="libraryGrid"></div>
-        </div>
-
-        <!-- MIDDLE: card preview + load/save controls -->
+        <!-- LEFT SIDEBAR -->
         <div class="sidebar">
             <select class="parch-input" id="deckSelect" style="width:100%;"></select>
 
@@ -438,29 +332,12 @@
             </div>
         </div>
 
-        <!-- RIGHT: DECK BUILDER -->
+        <!-- DECK PANEL (top right) -->
         <div class="panel deck-panel">
-            <div class="deck-header">
-              <div class="deck-stats-row">
-                <div class="stat-leader" id="statLeader">Leader: (none)</div>
-                <div class="stat-count" id="statCount">0 / 50</div>
-              </div>
-              <div class="deck-warning" id="deckWarning">Pick a leader to begin.</div>
-              <div class="deck-save-row">
-                <input type="text" class="parch-input" id="saveDeckName" placeholder="Deck name" />
-                <button class="parch-btn" id="saveDeckBtn">Save Deck</button>
-              </div>
-            </div>
-            <div class="deck-leader-slot" id="leaderSlot" style="display:none;">
-              <img class="ll-img" id="leaderImg" src="" alt="" />
-              <div style="flex:1;min-width:0;">
-                <div class="ll-name" id="leaderName"></div>
-                <div class="ll-tag">LEADER · click a leader card in the library to swap</div>
-              </div>
-              <button class="parch-btn ll-clear" id="leaderClear">Remove</button>
-            </div>
-            <div class="deck-rows" id="deckRows"></div>
+            <div class="deck-counter"><span id="deckCount">0</span> / 51</div>
+            <div class="deck-grid" id="deckGrid"></div>
         </div>
+
     </div>
 
 
@@ -828,60 +705,21 @@
     }
 
     // ── Current deck state ──
-    // currentDeck holds NON-leader entries only (cap 50, max 4 each).
-    // currentLeader is the chosen leader id (or null).
+    // deck = [ { id, count } ]
     let currentDeck = [];
-    let currentLeader = null;
-    const NON_LEADER_LIMIT = 50;
-    const PER_CARD_LIMIT = 4;
 
-    function nonLeaderTotal() { return currentDeck.reduce((s, e) => s + e.count, 0); }
-    // Existing callers expect deckTotal() to include the leader.
-    function deckTotal() { return nonLeaderTotal() + (currentLeader ? 1 : 0); }
-    function countOf(id) {
-      const e = currentDeck.find(x => x.id === id);
-      return e ? e.count : 0;
-    }
-
-    function _flashWarning(text) {
-      const el = document.getElementById('deckWarning');
-      if (!el) return;
-      const prev = el.textContent;
-      const prevCls = el.className;
-      el.textContent = text;
-      el.className = 'deck-warning';
-      clearTimeout(_flashWarning._t);
-      _flashWarning._t = setTimeout(() => { renderDeck(); }, 1800);
-    }
-
-    // Toggle between [+] (in deck), [add] (not yet), [maxed] (4/4) etc.
-    // Returns 'ok' | 'maxed' | 'deckFull' | 'isLeader'.
-    function _addAffordance(id) {
-      const card = cardMap[id];
-      if (!card) return 'unknown';
-      if (card.type === 'LEADER') return 'isLeader';
-      const cnt = countOf(id);
-      if (cnt >= PER_CARD_LIMIT) return 'maxed';
-      if (nonLeaderTotal() >= NON_LEADER_LIMIT) return 'deckFull';
-      return 'ok';
-    }
+    function deckTotal() { return currentDeck.reduce((s, e) => s + e.count, 0); }
 
     function addCardToDeck(id) {
-      const card = cardMap[id];
-      if (!card) return;
-      // LEADER: change the leader slot (always exactly 1).
-      if (card.type === 'LEADER') {
-        currentLeader = id;
-        renderAll();
-        return;
-      }
-      const aff = _addAffordance(id);
-      if (aff === 'maxed')    { _flashWarning(`Maximum ${PER_CARD_LIMIT} copies of ${card.name}.`); return; }
-      if (aff === 'deckFull') { _flashWarning(`Deck is full (${NON_LEADER_LIMIT}/${NON_LEADER_LIMIT}).`); return; }
       const existing = currentDeck.find(e => e.id === id);
+      const count = existing ? existing.count : 0;
+      const card = cardMap[id];
+      const max = card && card.type === 'LEADER' ? 1 : 4;
+      if (count >= max) return;
       if (existing) existing.count++;
       else currentDeck.push({ id, count: 1 });
-      renderAll();
+      renderDeck();
+
     }
 
     function removeCardFromDeck(id) {
@@ -889,44 +727,30 @@
       if (idx === -1) return;
       currentDeck[idx].count--;
       if (currentDeck[idx].count <= 0) currentDeck.splice(idx, 1);
-      renderAll();
+      renderDeck();
+
     }
 
     function clearDeck() {
       currentDeck = [];
-      currentLeader = null;
-      renderAll();
+      renderDeck();
+
     }
 
     // ── Parse deck string ──
-    // Pulls out the leader (count===1 LEADER row) into currentLeader and
-    // returns the remaining non-leader entries for currentDeck.
     function parseDeckString(str) {
       const lines = str.trim().split('\n');
-      const nonLeader = [];
-      let leader = null;
+      const result = [];
       for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith('//')) continue;
+        // Format: 4xST01-002 or 4 ST01-002 Name
         let m = trimmed.match(/^(\d+)x([A-Z0-9]+-\d+)/i);
-        if (!m) m = trimmed.match(/^(\d+)\s+([A-Z0-9]+-\d+)/i);
-        if (!m) continue;
-        const id = m[2], count = parseInt(m[1]);
-        const card = cardMap[id];
-        if (card && card.type === 'LEADER') leader = id;
-        else nonLeader.push({ id, count });
+        if (m) { result.push({ id: m[2], count: parseInt(m[1]) }); continue; }
+        m = trimmed.match(/^(\d+)\s+([A-Z0-9]+-\d+)/i);
+        if (m) { result.push({ id: m[2], count: parseInt(m[1]) }); continue; }
       }
-      currentLeader = leader;
-      return nonLeader;
-    }
-
-    // Serialize currentDeck + currentLeader back to "1xLEADER\n4xCARD…" form
-    // so localStorage round-trips look identical to the PRELOADED format.
-    function serializeDeck() {
-      const lines = [];
-      if (currentLeader) lines.push(`1x${currentLeader}`);
-      for (const e of currentDeck) lines.push(`${e.count}x${e.id}`);
-      return lines.join('\n');
+      return result;
     }
 
 
@@ -949,60 +773,16 @@
       }
     }
 
-    // ── Render: stats header ──
-    function renderStats() {
-      const total = nonLeaderTotal();
-      const cnt = document.getElementById('statCount');
-      cnt.textContent = `${total} / ${NON_LEADER_LIMIT}`;
-      cnt.classList.toggle('full', total === NON_LEADER_LIMIT);
-      cnt.classList.toggle('over', total > NON_LEADER_LIMIT);
-
-      const leaderEl = document.getElementById('statLeader');
-      if (currentLeader && cardMap[currentLeader]) {
-        leaderEl.textContent = `Leader: ${cardMap[currentLeader].name}`;
-      } else {
-        leaderEl.textContent = 'Leader: (none)';
-      }
-
-      const warn = document.getElementById('deckWarning');
-      if (!currentLeader) {
-        warn.textContent = 'Pick a leader to begin.';
-        warn.className = 'deck-warning';
-      } else if (total < NON_LEADER_LIMIT) {
-        warn.textContent = `Need ${NON_LEADER_LIMIT - total} more card${NON_LEADER_LIMIT - total === 1 ? '' : 's'} to complete the deck.`;
-        warn.className = 'deck-warning';
-      } else if (total === NON_LEADER_LIMIT) {
-        warn.textContent = '✓ Deck complete (50/50).';
-        warn.className = 'deck-warning ok';
-      } else {
-        warn.textContent = `Over limit — remove ${total - NON_LEADER_LIMIT}.`;
-        warn.className = 'deck-warning';
-      }
-
-      // Leader slot panel — visible only when a leader is set.
-      const slot = document.getElementById('leaderSlot');
-      if (currentLeader && cardMap[currentLeader]) {
-        const card = cardMap[currentLeader];
-        slot.style.display = 'flex';
-        document.getElementById('leaderImg').src =
-          getAlt(card.id) ? cardImgAlt(card.id, card.imgExt) : cardImg(card.id, card.imgExt);
-        document.getElementById('leaderName').textContent = `${card.name}  ·  ${card.color}  ·  ${card.power} POW · ${card.life} life`;
-      } else {
-        slot.style.display = 'none';
-      }
-    }
-
-    // ── Render: deck row list (right panel body) ──
+    // ── Render deck panel ──
     function renderDeck() {
-      renderStats();
-      const host = document.getElementById('deckRows');
-      host.innerHTML = '';
+      const grid = document.getElementById('deckGrid');
+      grid.innerHTML = '';
+      document.getElementById('deckCount').textContent = deckTotal();
 
-      // Sort: by cost ascending, then id, then name. Leader is rendered
-      // separately via #leaderSlot so it isn't included here.
+      // Sort deck: leaders first, then by cost, then by id
       const sorted = [...currentDeck].sort((a, b) => {
         const ca = cardMap[a.id], cb = cardMap[b.id];
-        const typeOrder = t => t === 'CHARACTER' ? 0 : t === 'EVENT' ? 1 : 2;
+        const typeOrder = t => t === 'LEADER' ? 0 : t === 'CHARACTER' ? 1 : t === 'EVENT' ? 2 : 3;
         const ta = ca ? typeOrder(ca.type) : 9, tb = cb ? typeOrder(cb.type) : 9;
         if (ta !== tb) return ta - tb;
         const costA = ca ? ca.cost : 0, costB = cb ? cb.cost : 0;
@@ -1010,171 +790,62 @@
         return a.id.localeCompare(b.id);
       });
 
-      const total = nonLeaderTotal();
       for (const entry of sorted) {
         const card = cardMap[entry.id];
-        const row = document.createElement('div');
-        row.className = 'deck-row';
+        const stack = document.createElement('div');
+        stack.className = 'deck-card-stack';
 
-        const img = document.createElement('img');
-        img.className = 'dr-img';
-        img.alt = card ? card.name : entry.id;
-        img.loading = 'lazy';
-        img.draggable = false;
-        img.src = card
-          ? (getAlt(entry.id) ? cardImgAlt(entry.id, card.imgExt) : cardImg(entry.id, card.imgExt))
-          : cardImg(entry.id, 'png');
-        img.onerror = function() {
-          this.style.background = 'linear-gradient(180deg,#f2e8cc 0%,#e0d4a8 100%)';
-          this.style.minWidth = '36px';
-          this.style.minHeight = '50px';
-        };
-        row.appendChild(img);
-
-        const info = document.createElement('div');
-        info.className = 'dr-info';
-        const nameEl = document.createElement('div');
-        nameEl.className = 'dr-name';
-        nameEl.textContent = card ? card.name : entry.id;
-        const metaEl = document.createElement('div');
-        metaEl.className = 'dr-meta';
-        if (card) {
-          const bits = [card.type];
-          if (card.cost > 0 || card.type !== 'STAGE') bits.push(`Cost ${card.cost || 0}`);
-          if (card.power > 0) bits.push(`${card.power} POW`);
-          if (card.counter > 0) bits.push(`+${card.counter}`);
-          metaEl.textContent = bits.join(' · ');
-        } else {
-          metaEl.textContent = entry.id;
+        for (let i = 0; i < entry.count; i++) {
+          const img = document.createElement('img');
+          img.className = 'deck-card-img' + (i > 0 ? ' stacked' : '');
+          const imgExt = card ? card.imgExt : 'png';
+          img.src = getAlt(entry.id) ? cardImgAlt(entry.id, imgExt) : cardImg(entry.id, imgExt);
+          img.alt = card ? card.name : entry.id;
+          img.loading = 'lazy';
+          img.draggable = false;
+          img.onerror = function() {
+              this.style.background = 'linear-gradient(180deg, #f2e8cc 0%, #e0d4a8 100%)';
+              this.style.minHeight = '150px';
+          };
+          stack.appendChild(img);
         }
-        info.appendChild(nameEl);
-        info.appendChild(metaEl);
-        row.appendChild(info);
+        const label = document.createElement('div');
+        label.className = 'deck-card-label';
+        label.textContent = (card ? card.name : entry.id) + ' x' + entry.count;
+        stack.appendChild(label);
 
-        const controls = document.createElement('div');
-        controls.className = 'dr-controls';
-        // [-] decrement (also acts as remove-at-1, per spec — disabled when count===1
-        // would silently delete; we instead allow click-to-remove with a guard).
-        const minus = document.createElement('button');
-        minus.className = 'btn-circle';
-        minus.textContent = '−';
-        minus.title = 'Remove one copy';
-        minus.disabled = entry.count <= 0;
-        minus.addEventListener('click', (e) => {
-          e.stopPropagation();
-          removeCardFromDeck(entry.id);
-        });
-        const cnt = document.createElement('span');
-        cnt.className = 'dr-count';
-        cnt.textContent = `x${entry.count}`;
-        const plus = document.createElement('button');
-        plus.className = 'btn-circle';
-        plus.textContent = '+';
-        plus.title = 'Add one copy';
-        plus.disabled = entry.count >= PER_CARD_LIMIT || total >= NON_LEADER_LIMIT;
-        plus.addEventListener('click', (e) => {
-          e.stopPropagation();
-          addCardToDeck(entry.id);
-        });
-        controls.appendChild(minus);
-        controls.appendChild(cnt);
-        controls.appendChild(plus);
-        row.appendChild(controls);
-
-        // ALT toggle preserved as a small badge for cards that have alt art.
+        // ALT/Normal toggle for cards that have an alternate art
         if (card && card.hasAlt) {
           const altBtn = document.createElement('button');
           altBtn.className = 'alt-btn';
-          altBtn.style.margin = '0 0 0 6px';
           const cur = getAlt(entry.id);
-          altBtn.textContent = cur ? 'ALT' : 'NORM';
+          altBtn.textContent = cur ? 'ALT' : 'NORMAL';
           if (cur) altBtn.classList.add('alt-btn-active');
+          altBtn.title = currentDeckName
+            ? `Toggle alt art for ${card.name} in ${currentDeckName}`
+            : 'Pick a deck first';
           altBtn.disabled = !currentDeckName;
-          altBtn.title = currentDeckName ? `Toggle alt art for ${card.name}` : 'Pick a deck first';
           altBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             if (!currentDeckName) return;
             setAlt(entry.id, !getAlt(entry.id));
-            renderAll();
+            renderDeck();
           });
-          row.appendChild(altBtn);
+          stack.appendChild(altBtn);
         }
 
-        row.addEventListener('mouseenter', () => showPreview(entry.id));
-        row.addEventListener('mouseleave', hidePreview);
+        // Right-click to remove
+        stack.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          removeCardFromDeck(entry.id);
+        });
 
-        host.appendChild(row);
+        // Hover preview
+        stack.addEventListener('mouseenter', () => showPreview(entry.id));
+        stack.addEventListener('mouseleave', hidePreview);
+
+        grid.appendChild(stack);
       }
-    }
-
-    // ── Render: card library (left panel) ──
-    let _librarySearchQ = '';
-    function renderLibrary() {
-      const grid = document.getElementById('libraryGrid');
-      grid.innerHTML = '';
-      const q = (_librarySearchQ || '').trim().toLowerCase();
-      // Stable order: leaders first, then characters, then events, then stages,
-      // by cost then id. Mirrors the deck-row sort so the library is easy to scan.
-      const typeOrder = t => t === 'LEADER' ? 0 : t === 'CHARACTER' ? 1 : t === 'EVENT' ? 2 : 3;
-      const items = CARD_DB.slice().sort((a, b) => {
-        if (typeOrder(a.type) !== typeOrder(b.type)) return typeOrder(a.type) - typeOrder(b.type);
-        if ((a.cost || 0) !== (b.cost || 0)) return (a.cost || 0) - (b.cost || 0);
-        return a.id.localeCompare(b.id);
-      });
-      for (const card of items) {
-        if (q) {
-          const hay = `${card.id} ${card.name} ${card.type} ${card.color} ${card.affiliation || ''} ${card.ability || ''}`.toLowerCase();
-          if (!hay.includes(q)) continue;
-        }
-        const wrap = document.createElement('div');
-        wrap.className = 'library-card';
-        const cnt = countOf(card.id);
-        const aff = _addAffordance(card.id);
-        const isLeaderHere = card.type === 'LEADER';
-        const inDeck = isLeaderHere ? (currentLeader === card.id) : cnt > 0;
-        if (inDeck) wrap.classList.add('in-deck');
-        if (!isLeaderHere && (aff === 'maxed' || aff === 'deckFull')) wrap.classList.add('maxed');
-
-        const img = document.createElement('img');
-        img.className = 'lc-img';
-        img.alt = card.name;
-        img.loading = 'lazy';
-        img.draggable = false;
-        img.src = cardImg(card.id, card.imgExt);
-        img.onerror = function() { this.style.display = 'none'; };
-        wrap.appendChild(img);
-
-        const nm = document.createElement('div');
-        nm.className = 'lc-name';
-        nm.textContent = card.name;
-        wrap.appendChild(nm);
-
-        if (cnt > 0 && !isLeaderHere) {
-          const badge = document.createElement('div');
-          badge.className = 'lc-count';
-          badge.textContent = cnt;
-          wrap.appendChild(badge);
-        }
-        if (isLeaderHere && currentLeader === card.id) {
-          const badge = document.createElement('div');
-          badge.className = 'lc-count';
-          badge.textContent = '★';
-          badge.title = 'Current leader';
-          wrap.appendChild(badge);
-        }
-
-        wrap.addEventListener('click', () => addCardToDeck(card.id));
-        wrap.addEventListener('mouseenter', () => showPreview(card.id));
-        wrap.addEventListener('mouseleave', hidePreview);
-        grid.appendChild(wrap);
-      }
-    }
-
-    // Single entry point — renders deck rows + library so the in-deck/maxed
-    // styling on library cards stays in sync with the deck state.
-    function renderAll() {
-      renderDeck();
-      renderLibrary();
     }
 
     // ── Card Preview (sidebar) ──
@@ -1211,14 +882,12 @@
       const data = decks[name];
       if (!data) return;
       currentDeckName = name;
-      currentDeck = parseDeckString(data);  // also sets currentLeader
-      const nameInput = document.getElementById('saveDeckName');
-      if (nameInput) nameInput.value = name;
-      renderAll();
+      currentDeck = parseDeckString(data);
+      renderDeck();
     });
 
     document.getElementById('clearBtn').addEventListener('click', () => {
-      if ((currentDeck.length > 0 || currentLeader) && !confirm('Clear the current deck?')) return;
+      if (currentDeck.length > 0 && !confirm('Clear the current deck?')) return;
       clearDeck();
     });
 
@@ -1226,49 +895,9 @@
       window.location.href = 'index.html';
     });
 
-    // Save Deck — overwrites by name into localStorage.optcg_decks.
-    document.getElementById('saveDeckBtn').addEventListener('click', () => {
-      const input = document.getElementById('saveDeckName');
-      let name = (input.value || '').trim();
-      if (!name) {
-        name = prompt('Name this deck:') || '';
-        name = name.trim();
-        if (!name) return;
-        input.value = name;
-      }
-      // Block overwriting a PRELOADED entry without confirmation.
-      if (PRELOADED_DECKS[name]
-          && !confirm(`"${name}" is a built-in deck. Save a personal copy that overrides it?`)) return;
-      const stored = JSON.parse(localStorage.getItem('optcg_decks') || '{}');
-      stored[name] = serializeDeck();
-      localStorage.setItem('optcg_decks', JSON.stringify(stored));
-      currentDeckName = name;
-      populateDeckSelect();
-      // Re-select the saved deck in the dropdown.
-      const sel = document.getElementById('deckSelect');
-      sel.value = name;
-      const warn = document.getElementById('deckWarning');
-      const wasCls = warn.className;
-      warn.textContent = `✓ Saved "${name}".`;
-      warn.className = 'deck-warning ok';
-      setTimeout(() => renderStats(), 1800);
-    });
-
-    // Leader slot: Remove button drops the leader (deck rows preserved).
-    document.getElementById('leaderClear').addEventListener('click', () => {
-      currentLeader = null;
-      renderAll();
-    });
-
-    // Library search filter — re-renders on every keystroke.
-    document.getElementById('librarySearch').addEventListener('input', (e) => {
-      _librarySearchQ = e.target.value;
-      renderLibrary();
-    });
-
     // Init
     populateDeckSelect();
-    renderAll();
+    renderDeck();
     </script>
     <script src="background.js?v=15"></script>
 </body>
