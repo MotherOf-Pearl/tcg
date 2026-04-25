@@ -1282,6 +1282,54 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="chooseOneTitle">Choose one</div>
         <div id="chooseOneBranches" style="display:flex;flex-direction:column;gap:4px;"></div>
       </div>
+      <!-- ST07 Papal Matt — addLifeCardToHand: pick top vs bottom of own life. -->
+      <div id="addLifeCardToHandBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="addLifeCardToHandTitle">Add a Life card to your hand</div>
+        <div style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;">Pick which end of your Life pile to take from.</div>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="send({ type:'ADD_LIFE_CARD_TO_HAND_RESOLVE', position:'top' })">Take from top of Life</button>
+        <button class="gb-pbtn gb-pbtn-sm" onclick="send({ type:'ADD_LIFE_CARD_TO_HAND_RESOLVE', position:'bottom' })">Take from bottom of Life</button>
+        <button class="gb-pbtn gb-pbtn-sm" id="addLifeCardToHandSkip" onclick="send({ type:'ADD_LIFE_CARD_TO_HAND_RESOLVE', skip:true })" style="display:none;">Skip</button>
+      </div>
+      <!-- ST07 Papal Matt — lookAtLifeCard: two-step picker (own/opp, then top/bottom). -->
+      <div id="lookAtLifeCardBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="lookAtLifeCardTitle">Look at a Life card</div>
+        <div id="lookAtLifeCardHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <div id="lookAtLifeCardSourceBtns" style="display:flex;flex-direction:column;gap:4px;">
+          <button class="gb-pbtn gb-pbtn-sm" id="lookAtLifeCardOwnBtn" onclick="send({ type:'LOOK_AT_LIFE_CARD_RESOLVE', side:'own' })">Look at my life card</button>
+          <button class="gb-pbtn gb-pbtn-sm" id="lookAtLifeCardOppBtn" onclick="send({ type:'LOOK_AT_LIFE_CARD_RESOLVE', side:'opponent' })">Look at opponent's life card</button>
+        </div>
+        <div id="lookAtLifeCardPlacementBtns" style="display:none;flex-direction:column;gap:4px;">
+          <div id="lookAtLifeCardPeek" style="display:flex;flex-direction:column;align-items:center;gap:2px;margin:4px 0;">
+            <img id="lookAtLifeCardImg" src="" alt="" style="max-width:120px;border:2px solid var(--gold);border-radius:4px;display:none;"/>
+            <div id="lookAtLifeCardName" style="font-size:.66rem;color:var(--text);font-family:'Cinzel',serif;text-align:center;"></div>
+          </div>
+          <button class="gb-pbtn gb-pbtn-sm" onclick="send({ type:'LOOK_AT_LIFE_CARD_RESOLVE', placement:'top' })">Place at top</button>
+          <button class="gb-pbtn gb-pbtn-sm" onclick="send({ type:'LOOK_AT_LIFE_CARD_RESOLVE', placement:'bottom' })">Place at bottom</button>
+        </div>
+      </div>
+      <!-- ST07 Papal Matt — opponentChooses: opponent picks one of two branches. -->
+      <div id="opponentChoosesBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="opponentChoosesTitle">Your opponent chooses</div>
+        <div id="opponentChoosesBranches" style="display:flex;flex-direction:column;gap:4px;"></div>
+      </div>
+      <!-- ST07 Papal Matt — grantKeywordToNamed: pick a friendly named card to grant a keyword. -->
+      <div id="grantKeywordToNamedBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="grantKeywordToNamedTitle">Grant keyword</div>
+        <div id="grantKeywordToNamedHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+      </div>
+      <!-- ST07 Papal Matt — addCharacterToLife: pick a hand Character of matching cost. -->
+      <div id="addCharacterToLifeBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="addCharacterToLifeTitle">Add Character to Life</div>
+        <div id="addCharacterToLifeHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <div id="addCharacterToLifeChoices" style="display:flex;flex-direction:column;gap:4px;max-height:240px;overflow-y:auto;"></div>
+      </div>
+      <!-- ST07 Papal Matt — addHandToLife: Papal Matt leader's conditional follow-up. -->
+      <div id="addHandToLifeBtns" style="display:none;flex-direction:column;gap:6px;">
+        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;line-height:1.3;" id="addHandToLifeTitle">Add a card from hand to top of Life</div>
+        <div id="addHandToLifeHint" style="font-size:.62rem;color:var(--muted);text-align:center;line-height:1.4;"></div>
+        <div id="addHandToLifeChoices" style="display:flex;flex-direction:column;gap:4px;max-height:240px;overflow-y:auto;"></div>
+        <button class="gb-pbtn gb-pbtn-sm" id="addHandToLifeSkip" onclick="send({ type:'ADD_HAND_TO_LIFE_SELECTED', skip:true })" style="display:none;">Skip</button>
+      </div>
       <!-- Track K — giveDon target picker (Newgate ST15-002). Click one of
            your own highlighted Leader/Character cards to attach DON. -->
       <div id="giveDonTargetBtns" style="display:none;flex-direction:column;gap:6px;">
@@ -1565,6 +1613,12 @@ function startSolo() {
         const msg2 = JSON.parse(e2.data);
         if (msg2.type === 'CONNECTED') soloIds[1] = msg2.clientId;
         else if (msg2.type === 'ROOM_JOINED') soloIds[1] = msg2.playerId;
+        // ST07 Papal Matt — lookAtLifeCard's private peek is sent only to
+        // the actor's socket. In solo we still need to surface it because
+        // the actor may currently be P2. Forward private-reveal messages
+        // through the same handleMsg as soloWs[0]; everything else stays
+        // on soloWs[0]'s GAME_STATE pipe.
+        else if (msg2.type === 'LIFE_CARD_REVEAL') handleMsg(msg2);
         // Ignore other messages — handled via soloWs[0]
       };
       soloWs[1].onopen = () => {
@@ -1815,6 +1869,21 @@ function handleMsg(msg) {
     case 'REVEAL_CARD':
       showRevealCard(msg);
       break;
+    case 'LIFE_CARD_REVEAL':
+      // ST07 Papal Matt — server's lookAtLifeCard step 1 ships the peeked
+      // card privately to the actor. Cache it on the panel so the upcoming
+      // GAME_STATE re-render (now with step='choose-placement') displays
+      // the face under the [Place at top]/[Place at bottom] buttons.
+      try {
+        const img = document.getElementById('lookAtLifeCardImg');
+        const nm  = document.getElementById('lookAtLifeCardName');
+        if (img && msg.card) {
+          if (msg.card.image) { img.src = msg.card.image; img.style.display = 'block'; }
+          else { img.style.display = 'none'; }
+        }
+        if (nm) nm.textContent = msg.card?.name || '';
+      } catch (_) {}
+      break;
     case 'ATTACK_OUTCOME':
       showAttackOutcome(msg);
       break;
@@ -2014,6 +2083,20 @@ function renderGame() {
       myId = game.scryWindow.playerId;
     } else if (game.playFromHandWindow) {
       myId = game.playFromHandWindow.playerId;
+    // ST07 — Papal Matt windows. opponentChoosesWindow.playerId is the
+    // OPPONENT (the chooser), so it slots in here exactly like the others.
+    } else if (game.lookAtLifeCardWindow) {
+      myId = game.lookAtLifeCardWindow.playerId;
+    } else if (game.addLifeCardToHandWindow) {
+      myId = game.addLifeCardToHandWindow.playerId;
+    } else if (game.opponentChoosesWindow) {
+      myId = game.opponentChoosesWindow.playerId;
+    } else if (game.grantKeywordToNamedWindow) {
+      myId = game.grantKeywordToNamedWindow.playerId;
+    } else if (game.addCharacterToLifeWindow) {
+      myId = game.addCharacterToLifeWindow.playerId;
+    } else if (game.addHandToLifeWindow) {
+      myId = game.addHandToLifeWindow.playerId;
     } else if (game.triggerWindow) {
       // Whoever revealed the life card decides the trigger.
       myId = game.triggerWindow.playerId;
@@ -2317,6 +2400,162 @@ function renderGame() {
   } else {
     cowPanel.style.display = 'none';
     if (cow) hint('Opponent is choosing a branch…');
+  }
+
+  // ST07 Papal Matt — addLifeCardToHand: top/bottom prompt for the cost
+  // window opened by Papal Matt leader / Regenald / Jacob / Faustian Jack /
+  // Forgotten Monestary. Optional skip is offered when window.optional is true.
+  const alchw = game.addLifeCardToHandWindow;
+  const alchwPanel = document.getElementById('addLifeCardToHandBtns');
+  if (alchw && alchw.playerId === myId) {
+    hideAllBtnGroups();
+    alchwPanel.style.display = 'flex';
+    document.getElementById('addLifeCardToHandTitle').textContent =
+      `${alchw.sourceCardName || 'Effect'} — add a Life card to hand`;
+    document.getElementById('addLifeCardToHandSkip').style.display = alchw.optional ? 'block' : 'none';
+  } else {
+    alchwPanel.style.display = 'none';
+    if (alchw) hint('Opponent is taking a Life card…');
+  }
+
+  // ST07 Papal Matt — lookAtLifeCard. Two-step UI driven by window.step
+  // (server flips from 'choose-source' → 'choose-placement'). When the
+  // server emits LIFE_CARD_REVEAL we cache the peeked card on the window
+  // for re-render — but the server only sends it once, so we also stash
+  // it on the panel itself between renders.
+  const lalw = game.lookAtLifeCardWindow;
+  const lalwPanel = document.getElementById('lookAtLifeCardBtns');
+  if (lalw && lalw.playerId === myId) {
+    hideAllBtnGroups();
+    lalwPanel.style.display = 'flex';
+    document.getElementById('lookAtLifeCardTitle').textContent =
+      `${lalw.sourceCardName || 'Effect'} — look at a Life card`;
+    const sourceBtns = document.getElementById('lookAtLifeCardSourceBtns');
+    const placementBtns = document.getElementById('lookAtLifeCardPlacementBtns');
+    if (lalw.step === 'choose-source') {
+      sourceBtns.style.display = 'flex';
+      placementBtns.style.display = 'none';
+      document.getElementById('lookAtLifeCardHint').textContent =
+        'Whose Life card do you want to peek at?';
+      document.getElementById('lookAtLifeCardOwnBtn').disabled = !lalw.haveMine;
+      document.getElementById('lookAtLifeCardOppBtn').disabled = !lalw.haveOpp;
+    } else if (lalw.step === 'choose-placement') {
+      sourceBtns.style.display = 'none';
+      placementBtns.style.display = 'flex';
+      document.getElementById('lookAtLifeCardHint').textContent =
+        'Place this Life card back at the top or bottom of the same Life pile.';
+    }
+  } else {
+    lalwPanel.style.display = 'none';
+    if (lalw) hint('Opponent is looking at a Life card…');
+  }
+
+  // ST07 Papal Matt — opponentChooses. The window's `playerId` is the
+  // CHOOSER (the non-active player). Show two branch buttons to that
+  // player; the active player sees a "waiting" hint.
+  const ocw = game.opponentChoosesWindow;
+  const ocwPanel = document.getElementById('opponentChoosesBtns');
+  if (ocw && ocw.playerId === myId) {
+    hideAllBtnGroups();
+    ocwPanel.style.display = 'flex';
+    document.getElementById('opponentChoosesTitle').textContent =
+      `${ocw.sourceCardName || 'Opponent effect'} — choose one`;
+    const host = document.getElementById('opponentChoosesBranches');
+    host.innerHTML = '';
+    (ocw.branches || []).forEach((b, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'gb-pbtn gb-pbtn-sm';
+      btn.style.cssText = 'text-align:left;white-space:normal;line-height:1.25;font-size:.6rem;padding:6px;';
+      btn.textContent = (b.text || `Option ${i+1}`);
+      btn.disabled = b.available === false;
+      btn.onclick = () => send({ type:'OPPONENT_CHOOSES_SELECTED', branchIndex: i });
+      host.appendChild(btn);
+    });
+  } else {
+    ocwPanel.style.display = 'none';
+    if (ocw) hint('Waiting for opponent to choose…');
+  }
+
+  // ST07 Papal Matt — grantKeywordToNamed. Highlights friendly leader/field
+  // candidates that match the name filter; a click on a highlighted card
+  // fires GRANT_KEYWORD_TO_NAMED_SELECTED via _tryConsumeWindowClick.
+  const gktnw = game.grantKeywordToNamedWindow;
+  const gktnwPanel = document.getElementById('grantKeywordToNamedBtns');
+  if (gktnw && gktnw.playerId === myId) {
+    hideAllBtnGroups();
+    gktnwPanel.style.display = 'flex';
+    const kwLabel = (gktnw.keyword || '').replace(/([A-Z])/g, ' $1').trim() || 'keyword';
+    document.getElementById('grantKeywordToNamedTitle').textContent =
+      `${gktnw.sourceCardName || 'Effect'} — grant [${kwLabel}]`;
+    document.getElementById('grantKeywordToNamedHint').textContent =
+      `Click a highlighted [${gktnw.name}] card to grant the keyword.`;
+    requestAnimationFrame(() => {
+      gktnw.candidateUids.forEach(uid => findCardEl(uid)?.classList.add('targetable-attack'));
+    });
+  } else {
+    gktnwPanel.style.display = 'none';
+    if (gktnw) hint('Opponent is granting a keyword…');
+  }
+
+  // ST07 Papal Matt — addCharacterToLife (Forgotten Monestary). Lists hand
+  // candidates filtered to cost-N CHARACTER cards as buttons; clicking one
+  // sends ADD_CHARACTER_TO_LIFE_SELECTED { cardUid }.
+  const aclw = game.addCharacterToLifeWindow;
+  const aclwPanel = document.getElementById('addCharacterToLifeBtns');
+  if (aclw && aclw.playerId === myId) {
+    hideAllBtnGroups();
+    aclwPanel.style.display = 'flex';
+    document.getElementById('addCharacterToLifeTitle').textContent =
+      `${aclw.sourceCardName || 'Effect'} — add to top of Life face-up`;
+    document.getElementById('addCharacterToLifeHint').textContent =
+      `Pick a cost-${aclw.cost} Character from your hand.`;
+    const choices = document.getElementById('addCharacterToLifeChoices');
+    choices.innerHTML = '';
+    const me = game.players[myId];
+    (aclw.candidateUids || []).forEach(uid => {
+      const card = (me.hand || []).find(c => c.uid === uid);
+      if (!card) return;
+      const btn = document.createElement('button');
+      btn.className = 'gb-pbtn gb-pbtn-sm';
+      btn.style.cssText = 'text-align:left;white-space:normal;line-height:1.25;font-size:.62rem;padding:6px;';
+      btn.textContent = `${card.name} (cost ${card.cost || 0}, ${card.power || 0} power)`;
+      btn.onclick = () => send({ type:'ADD_CHARACTER_TO_LIFE_SELECTED', cardUid: uid });
+      choices.appendChild(btn);
+    });
+  } else {
+    aclwPanel.style.display = 'none';
+    if (aclw) hint('Opponent is adding a Character to Life…');
+  }
+
+  // ST07 Papal Matt — addHandToLife (Papal Matt leader's conditional
+  // follow-up). Lists hand cards as buttons; clicking sends
+  // ADD_HAND_TO_LIFE_SELECTED { cardUid }.
+  const ahlw = game.addHandToLifeWindow;
+  const ahlwPanel = document.getElementById('addHandToLifeBtns');
+  if (ahlw && ahlw.playerId === myId) {
+    hideAllBtnGroups();
+    ahlwPanel.style.display = 'flex';
+    document.getElementById('addHandToLifeTitle').textContent =
+      `${ahlw.sourceCardName || 'Effect'} — add a hand card to top of Life`;
+    document.getElementById('addHandToLifeHint').textContent =
+      'Pick a card from your hand to put face-down on top of your Life pile.';
+    document.getElementById('addHandToLifeSkip').style.display = ahlw.optional ? 'block' : 'none';
+    const choices = document.getElementById('addHandToLifeChoices');
+    choices.innerHTML = '';
+    const me = game.players[myId];
+    (ahlw.candidateUids || []).forEach(uid => {
+      const card = (me.hand || []).find(c => c.uid === uid);
+      if (!card) return;
+      const btn = document.createElement('button');
+      btn.className = 'gb-pbtn gb-pbtn-sm';
+      btn.style.cssText = 'text-align:left;white-space:normal;line-height:1.25;font-size:.62rem;padding:6px;';
+      btn.textContent = `${card.name} (cost ${card.cost || 0})`;
+      btn.onclick = () => send({ type:'ADD_HAND_TO_LIFE_SELECTED', cardUid: uid });
+      choices.appendChild(btn);
+    });
+  } else {
+    ahlwPanel.style.display = 'none';
+    if (ahlw) hint('Opponent is adding a hand card to Life…');
   }
 
   // Track K — giveDon target picker (Newgate). Highlights own leader +
@@ -2680,6 +2919,13 @@ function _tryConsumeWindowClick(uid) {
   if (game?.attackRedirectWindow?.playerId === myId
       && game.attackRedirectWindow.candidateUids.includes(uid)) {
     act({ type: 'ATTACK_REDIRECT_SELECTED', targetUid: uid });
+    return true;
+  }
+  // ST07 Papal Matt — grantKeywordToNamed friendly-target picker (Stella,
+  // Family God). Click a highlighted [Name] card to grant the keyword.
+  if (game?.grantKeywordToNamedWindow?.playerId === myId
+      && game.grantKeywordToNamedWindow.candidateUids.includes(uid)) {
+    act({ type: 'GRANT_KEYWORD_TO_NAMED_SELECTED', targetUid: uid });
     return true;
   }
   return false;
@@ -3464,7 +3710,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','suppressionTargetBtns','chooseOneBtns','giveDonTargetBtns','selfSaveBtns','oppTurnActivateBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','suppressionTargetBtns','chooseOneBtns','giveDonTargetBtns','selfSaveBtns','oppTurnActivateBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns','addLifeCardToHandBtns','lookAtLifeCardBtns','opponentChoosesBtns','grantKeywordToNamedBtns','addCharacterToLifeBtns','addHandToLifeBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
