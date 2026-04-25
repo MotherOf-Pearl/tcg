@@ -238,33 +238,6 @@
             z-index: 5;
         }
 
-        /* Toggle button — sits just below the deck counter, top-right of
-           the deck panel. Reuses the existing .parch-btn palette so it
-           matches the lobby/clear button styling. */
-        .ability-toggle-btn {
-            position: absolute;
-            top: 30px;
-            right: 12px;
-            font-size: 11px;
-            padding: 3px 8px;
-            z-index: 5;
-        }
-
-        /* Art Mode (body.hide-ability-text): the card images are
-           pre-rendered PNGs with the ability text baked into the
-           bottom of each card, so CSS can't hide just the text region
-           cleanly without halving the card. We instead leave each
-           image at its natural full size and only hide any SEPARATE
-           DOM ability-text overlay that may live inside the card stack
-           (none today; preserved as a hook for future card components
-           that render ability text as a sibling element). The visible
-           effect today is just the button label change — cards always
-           render at full height, never cropped. */
-        body.hide-ability-text .deck-card-stack .ability-text-overlay,
-        body.hide-ability-text .deck-card-stack .deck-card-ability {
-            display: none !important;
-        }
-
         .deck-grid {
             flex: 1;
             overflow-y: auto;
@@ -385,7 +358,6 @@
         <!-- DECK PANEL (top right) -->
         <div class="panel deck-panel">
             <div class="deck-counter"><span id="deckCount">0</span> / 51</div>
-            <button type="button" class="parch-btn ability-toggle-btn" id="abilityTextToggle">Art Mode</button>
             <div class="deck-grid" id="deckGrid"></div>
         </div>
 
@@ -999,33 +971,6 @@
 
     document.getElementById('lobbyBtn').addEventListener('click', () => {
       window.location.href = 'index.html';
-    });
-
-    // ── Art Mode toggle ──
-    // Reads localStorage.showAbilityText: 'true' (default) or 'false'.
-    // When 'false', body.hide-ability-text is added so any SEPARATE
-    // ability-text overlay element gets display:none. Card images are
-    // never cropped — pre-rendered PNGs always render at full natural
-    // size. Button label flips between "Art Mode" (currently showing
-    // text — click to enter art mode) and "Exit Art Mode" (currently
-    // hidden — click to return to default).
-    function _readShowAbility() {
-      try {
-        const v = localStorage.getItem('showAbilityText');
-        return v === null ? true : v !== 'false';
-      } catch (_) { return true; }
-    }
-    function _applyAbilityToggle(show) {
-      document.body.classList.toggle('hide-ability-text', !show);
-      const btn = document.getElementById('abilityTextToggle');
-      if (btn) btn.textContent = show ? 'Art Mode' : 'Exit Art Mode';
-    }
-    // Apply persisted state immediately so first paint matches.
-    _applyAbilityToggle(_readShowAbility());
-    document.getElementById('abilityTextToggle').addEventListener('click', () => {
-      const next = !_readShowAbility();
-      try { localStorage.setItem('showAbilityText', next ? 'true' : 'false'); } catch (_) {}
-      _applyAbilityToggle(next);
     });
 
     // Init
