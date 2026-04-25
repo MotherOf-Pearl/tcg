@@ -564,12 +564,12 @@ const PRESET_DECKS = {
   'Papal Matt': {
     leaderId: 'ST07-001',
     cards: [
-      {id:'ST07-002',count:4},{id:'ST07-003',count:4},{id:'ST07-004',count:4},
-      {id:'ST07-005',count:4},{id:'ST07-006',count:4},{id:'ST07-007',count:4},
+      {id:'ST07-002',count:3},{id:'ST07-003',count:4},{id:'ST07-004',count:4},
+      {id:'ST07-005',count:4},{id:'ST07-006',count:3},{id:'ST07-007',count:4},
       {id:'ST07-008',count:4},{id:'ST07-009',count:3},{id:'ST07-010',count:3},
       {id:'ST07-011',count:3},{id:'ST07-012',count:3},{id:'ST07-013',count:3},
       {id:'ST07-014',count:3},{id:'ST07-015',count:2},{id:'ST07-016',count:2},
-      {id:'ST07-017',count:1},
+      {id:'ST07-017',count:2},
     ]
   }
 };
