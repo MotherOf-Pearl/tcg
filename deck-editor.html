@@ -250,15 +250,19 @@
             z-index: 5;
         }
 
-        /* Hide-ability-text mode: crop the bottom of each library card's
-           image so only the upper art portion shows. Layout tightens
-           because object-fit + reduced height drops the ability scroll
-           region. The toggle is body-scoped so flipping the class
-           refreshes every rendered card without touching the deck data. */
-        body.hide-ability-text .deck-card-img {
-            height: 90px;
-            object-fit: cover;
-            object-position: top center;
+        /* Art Mode (body.hide-ability-text): the card images are
+           pre-rendered PNGs with the ability text baked into the
+           bottom of each card, so CSS can't hide just the text region
+           cleanly without halving the card. We instead leave each
+           image at its natural full size and only hide any SEPARATE
+           DOM ability-text overlay that may live inside the card stack
+           (none today; preserved as a hook for future card components
+           that render ability text as a sibling element). The visible
+           effect today is just the button label change — cards always
+           render at full height, never cropped. */
+        body.hide-ability-text .deck-card-stack .ability-text-overlay,
+        body.hide-ability-text .deck-card-stack .deck-card-ability {
+            display: none !important;
         }
 
         .deck-grid {
@@ -381,7 +385,7 @@
         <!-- DECK PANEL (top right) -->
         <div class="panel deck-panel">
             <div class="deck-counter"><span id="deckCount">0</span> / 51</div>
-            <button type="button" class="parch-btn ability-toggle-btn" id="abilityTextToggle">Hide Ability Text</button>
+            <button type="button" class="parch-btn ability-toggle-btn" id="abilityTextToggle">Art Mode</button>
             <div class="deck-grid" id="deckGrid"></div>
         </div>
 
@@ -997,10 +1001,14 @@
       window.location.href = 'index.html';
     });
 
-    // ── Hide / show ability text toggle ──
+    // ── Art Mode toggle ──
     // Reads localStorage.showAbilityText: 'true' (default) or 'false'.
-    // When 'false', body.hide-ability-text is added so the CSS rule
-    // crops each card image to art-only via object-fit + reduced height.
+    // When 'false', body.hide-ability-text is added so any SEPARATE
+    // ability-text overlay element gets display:none. Card images are
+    // never cropped — pre-rendered PNGs always render at full natural
+    // size. Button label flips between "Art Mode" (currently showing
+    // text — click to enter art mode) and "Exit Art Mode" (currently
+    // hidden — click to return to default).
     function _readShowAbility() {
       try {
         const v = localStorage.getItem('showAbilityText');
@@ -1010,7 +1018,7 @@
     function _applyAbilityToggle(show) {
       document.body.classList.toggle('hide-ability-text', !show);
       const btn = document.getElementById('abilityTextToggle');
-      if (btn) btn.textContent = show ? 'Hide Ability Text' : 'Show Ability Text';
+      if (btn) btn.textContent = show ? 'Art Mode' : 'Exit Art Mode';
     }
     // Apply persisted state immediately so first paint matches.
     _applyAbilityToggle(_readShowAbility());
