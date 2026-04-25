@@ -6185,16 +6185,65 @@ function agentApplyEffect(effect, ctx, resume) {
                       m => m.replace(/your opponent'?s?/i, 'their'));
         return s;
       };
+      // Per-branch availability check — runs from the CHOOSER's perspective
+      // (the non-active player who'll actually click the button). A branch
+      // whose primary effect targets a zero-stack source (e.g. trashOpponentLife
+      // when the chooser has 0 life) is excluded so the chooser doesn't see
+      // an unselectable button. Scales to any future effect by adding a row
+      // to _isBranchAvailableForChooser. activePlayer here = card controller
+      // (P1); chooser = oppId (P2).
+      const choosingPlayer = ctx.game.players[oppId];
+      const cardOwner = ctx.player;
+      const _isBranchAvailableForChooser = (br) => {
+        for (const e of (br.effects || [])) {
+          // trashOpponentLife runs in the controller's ctx — the "opponent's
+          // life" being trashed is the CHOOSER's life. If the chooser has
+          // none, the branch can't fire.
+          if (e.type === 'trashOpponentLife' && (choosingPlayer.life || []).length === 0) {
+            return false;
+          }
+          // addLife (controller's deck → controller's life) requires the
+          // controller to have at least 1 card left in their deck. Without
+          // this, branch B silently no-ops when the controller is decked.
+          if (e.type === 'addLife' && (cardOwner.deck || []).length === 0) {
+            return false;
+          }
+        }
+        return true;
+      };
       const branches = (effect.branches || []).map((b, i) => ({
         index: i,
-        available: true,
+        available: _isBranchAvailableForChooser(b),
         effects: b.effects || [],
         // Original-perspective text retained on `controllerText` for the
         // server-side log; the chooser-facing text lands on `text`.
         text: flipPerspective(b.text || ''),
         controllerText: b.text || '',
       }));
+      const availableOptions = branches
+        .filter(br => br.available)
+        .map(br => br.index);
       if (branches.length === 0) return { status: 'applied' };
+      // No available branch (e.g. chooser has 0 life AND controller is
+      // decked) — the whole effect no-ops and the pipeline continues.
+      if (availableOptions.length === 0) {
+        log(ctx.game, `${ctx.card.name}: no available opponent-choice options — skipped.`);
+        return { status: 'applied' };
+      }
+      // Single available branch — no real choice; fire it inline so the
+      // chooser doesn't have to click a sole button. Mirrors how
+      // chooseOne would auto-resolve a single available branch.
+      if (availableOptions.length === 1) {
+        const only = branches[availableOptions[0]];
+        log(ctx.game, `${ctx.card.name}: only one available option (${only.controllerText || only.text}) — auto-resolving.`);
+        let opened = false;
+        for (const eff of (only.effects || [])) {
+          const res = agentApplyEffect(eff, ctx, resume);
+          if (res && res.status === 'window-open') { opened = true; break; }
+          if (res && res.status === 'unsupported') return res;
+        }
+        return opened ? { status: 'window-open' } : { status: 'applied' };
+      }
       ctx.game.opponentChoosesWindow = {
         // "playerId" here is the chooser (opponent of the card's controller).
         playerId: oppId,
@@ -6203,9 +6252,13 @@ function agentApplyEffect(effect, ctx, resume) {
         sourceCardUid: ctx.card.uid,
         sourceCardId: ctx.card.id,
         branches,
+        // Indices of the branches the client should render as buttons.
+        // game.html opponentChoosesWindow renderer reads this and skips
+        // any branch whose index isn't listed.
+        availableOptions,
         pipelineResume: resume || null,
       };
-      log(ctx.game, `${ctx.card.name}: opponent must choose one (${branches.length} options).`);
+      log(ctx.game, `${ctx.card.name}: opponent must choose one (${availableOptions.length} of ${branches.length} options available).`);
       return { status: 'window-open' };
     }
 

@@ -2525,12 +2525,18 @@ function renderGame() {
       `${ocw.sourceCardName || 'Opponent effect'} — choose one`;
     const host = document.getElementById('opponentChoosesBranches');
     host.innerHTML = '';
+    // Server-side gate computes which branches are actually playable from
+    // the chooser's perspective (e.g. trashOpponentLife is hidden when the
+    // chooser has 0 life). Render ONLY the indices it ships back; fall
+    // back to the legacy `available` flag when an older state arrives.
+    const _allow = Array.isArray(ocw.availableOptions) ? ocw.availableOptions : null;
     (ocw.branches || []).forEach((b, i) => {
+      if (_allow && !_allow.includes(i)) return;
+      if (!_allow && b.available === false) return;
       const btn = document.createElement('button');
       btn.className = 'gb-pbtn gb-pbtn-sm';
       btn.style.cssText = 'text-align:left;white-space:normal;line-height:1.25;font-size:.6rem;padding:6px;';
       btn.textContent = (b.text || `Option ${i+1}`);
-      btn.disabled = b.available === false;
       btn.onclick = () => send({ type:'OPPONENT_CHOOSES_SELECTED', branchIndex: i });
       host.appendChild(btn);
     });
