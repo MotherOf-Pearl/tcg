@@ -837,9 +837,27 @@ function doEnd(game) {
     card.suppressions = card.suppressions.filter(s => (s.expiresAtTurn == null) || s.expiresAtTurn >= game.turn);
   };
   // Phase 7 — temp keyword grants expire identically.
+  // ST07 (Family God / Stella) — also clear the discrete tempDoubleAttack
+  // and tempBanish boolean flags + their expiry timestamps when they lapse.
+  // The flat flags mirror tempKeywords so RESOLVE_ATTACK doesn't have to
+  // walk the array on every attack; both paths must clear together.
   const pruneTempKeywords = (card) => {
-    if (!card || !Array.isArray(card.tempKeywords) || card.tempKeywords.length === 0) return;
-    card.tempKeywords = card.tempKeywords.filter(k => (k.expiresAtTurn == null) || k.expiresAtTurn >= game.turn);
+    if (!card) return;
+    if (Array.isArray(card.tempKeywords) && card.tempKeywords.length > 0) {
+      card.tempKeywords = card.tempKeywords.filter(k => (k.expiresAtTurn == null) || k.expiresAtTurn >= game.turn);
+    }
+    if (card.tempDoubleAttack === true
+        && card.tempDoubleAttackExpiresAtTurn != null
+        && card.tempDoubleAttackExpiresAtTurn < game.turn) {
+      card.tempDoubleAttack = false;
+      card.tempDoubleAttackExpiresAtTurn = null;
+    }
+    if (card.tempBanish === true
+        && card.tempBanishExpiresAtTurn != null
+        && card.tempBanishExpiresAtTurn < game.turn) {
+      card.tempBanish = false;
+      card.tempBanishExpiresAtTurn = null;
+    }
   };
   for (const pid of Object.keys(game.players)) {
     const pl = game.players[pid];
@@ -2577,7 +2595,28 @@ function handleAction(roomId, playerId, action) {
       const expiresAtTurn = w.duration === 'opponentNextTurn' ? (game.turn + 1) : game.turn;
       if (!Array.isArray(target.tempKeywords)) target.tempKeywords = [];
       target.tempKeywords.push({ keyword: w.keyword, expiresAtTurn });
+      // ST07 Family God / Stella — also write the discrete flat flags the
+      // user spec calls for. These mirror tempKeywords for fast-path checks
+      // (RESOLVE_ATTACK reads hasDoubleAttack/hasBanish on every attack);
+      // doEnd's pruneTempKeywords clears them when expiresAtTurn lapses.
+      if (w.keyword === 'doubleAttack' || w.keyword === 'double attack') {
+        target.tempDoubleAttack = true;
+        target.tempDoubleAttackExpiresAtTurn = expiresAtTurn;
+      } else if (w.keyword === 'banish') {
+        target.tempBanish = true;
+        target.tempBanishExpiresAtTurn = expiresAtTurn;
+      }
       log(game, `${w.sourceCardName}: ${target.name} gains [${w.keyword}] until turn ${expiresAtTurn}.`);
+      // Surface a confirmation toast to the granting player so the UI can
+      // display "Double Attack granted to <name>!" without inferring it
+      // from the log feed.
+      send(playerId, {
+        type: 'GRANT_KEYWORD_CONFIRM',
+        keyword: w.keyword,
+        targetUid: target.uid,
+        targetName: target.name,
+        sourceCardName: w.sourceCardName,
+      });
       game.grantKeywordToNamedWindow = null;
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
@@ -2792,19 +2831,23 @@ function hasBlocker(card, game) {
 
 // Helper: check if card has [Double Attack]. ST07 (Family God) grants this
 // temporarily via grantKeywordToNamed — those entries live on card.tempKeywords
-// with expiresAtTurn, pruned in doEnd.
+// with expiresAtTurn AND on the flat tempDoubleAttack flag, pruned in doEnd.
 function hasDoubleAttack(card) {
-  if (card && card.ability && card.ability.includes('[Double Attack]')) return true;
-  if (card && Array.isArray(card.tempKeywords)
+  if (!card) return false;
+  if (card.ability && card.ability.includes('[Double Attack]')) return true;
+  if (card.tempDoubleAttack === true) return true;
+  if (Array.isArray(card.tempKeywords)
       && card.tempKeywords.some(k => k.keyword === 'doubleAttack' || k.keyword === 'double attack')) return true;
   return false;
 }
 
 // Helper: check if card has [Banish]. ST07 (Stella) and Regenald grant this
-// temporarily — those entries live on card.tempKeywords with expiresAtTurn.
+// temporarily — entries on card.tempKeywords AND the flat tempBanish flag.
 function hasBanish(card) {
-  if (card && card.ability && card.ability.includes('[Banish]')) return true;
-  if (card && Array.isArray(card.tempKeywords)
+  if (!card) return false;
+  if (card.ability && card.ability.includes('[Banish]')) return true;
+  if (card.tempBanish === true) return true;
+  if (Array.isArray(card.tempKeywords)
       && card.tempKeywords.some(k => k.keyword === 'banish')) return true;
   return false;
 }
