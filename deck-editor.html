@@ -238,6 +238,29 @@
             z-index: 5;
         }
 
+        /* Toggle button — sits just below the deck counter, top-right of
+           the deck panel. Reuses the existing .parch-btn palette so it
+           matches the lobby/clear button styling. */
+        .ability-toggle-btn {
+            position: absolute;
+            top: 30px;
+            right: 12px;
+            font-size: 11px;
+            padding: 3px 8px;
+            z-index: 5;
+        }
+
+        /* Hide-ability-text mode: crop the bottom of each library card's
+           image so only the upper art portion shows. Layout tightens
+           because object-fit + reduced height drops the ability scroll
+           region. The toggle is body-scoped so flipping the class
+           refreshes every rendered card without touching the deck data. */
+        body.hide-ability-text .deck-card-img {
+            height: 90px;
+            object-fit: cover;
+            object-position: top center;
+        }
+
         .deck-grid {
             flex: 1;
             overflow-y: auto;
@@ -358,6 +381,7 @@
         <!-- DECK PANEL (top right) -->
         <div class="panel deck-panel">
             <div class="deck-counter"><span id="deckCount">0</span> / 51</div>
+            <button type="button" class="parch-btn ability-toggle-btn" id="abilityTextToggle">Hide Ability Text</button>
             <div class="deck-grid" id="deckGrid"></div>
         </div>
 
@@ -971,6 +995,29 @@
 
     document.getElementById('lobbyBtn').addEventListener('click', () => {
       window.location.href = 'index.html';
+    });
+
+    // ── Hide / show ability text toggle ──
+    // Reads localStorage.showAbilityText: 'true' (default) or 'false'.
+    // When 'false', body.hide-ability-text is added so the CSS rule
+    // crops each card image to art-only via object-fit + reduced height.
+    function _readShowAbility() {
+      try {
+        const v = localStorage.getItem('showAbilityText');
+        return v === null ? true : v !== 'false';
+      } catch (_) { return true; }
+    }
+    function _applyAbilityToggle(show) {
+      document.body.classList.toggle('hide-ability-text', !show);
+      const btn = document.getElementById('abilityTextToggle');
+      if (btn) btn.textContent = show ? 'Hide Ability Text' : 'Show Ability Text';
+    }
+    // Apply persisted state immediately so first paint matches.
+    _applyAbilityToggle(_readShowAbility());
+    document.getElementById('abilityTextToggle').addEventListener('click', () => {
+      const next = !_readShowAbility();
+      try { localStorage.setItem('showAbilityText', next ? 'true' : 'false'); } catch (_) {}
+      _applyAbilityToggle(next);
     });
 
     // Init
