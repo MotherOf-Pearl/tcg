@@ -402,7 +402,7 @@ const CARD_DB = [
     power:5000, life:5, cost:0, counter:0, image:IMG('ST04','ST04-001','png'), useNewPipeline:true,
     ability:"[Activate: Main] [Once Per Turn] DON!! -7: Trash up to 1 of your opponent's Life cards." },
 
-  { id:'OP01-100', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
+  { id:'OP01-100', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Wisdom', affiliation:'Holy Roman Empire',
     power:3000, cost:2, counter:1000, image:IMG('OP01','OP01-100','png'), useNewPipeline:true,
     ability:"[Blocker] [On K.O.] Add 1 DON!! card from your DON!! deck and rest it." },
 
@@ -414,7 +414,7 @@ const CARD_DB = [
     power:4000, cost:3, counter:2000, image:IMG('OP01','OP01-101','png'), useNewPipeline:true,
     ability:"[DON!! x1] [When Attacking] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and rest it." },
 
-  { id:'ST04-008', name:'Noble Gee', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
+  { id:'ST04-008', name:'Merchant Dam', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:4000, cost:3, counter:1000, image:IMG('ST04','ST04-008','png'), useNewPipeline:true,
     ability:"[On Play] You may trash 1 card from your hand: Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
