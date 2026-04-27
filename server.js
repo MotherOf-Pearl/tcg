@@ -454,7 +454,7 @@ const CARD_DB = [
     power:0, cost:2, counter:0, image:IMG('OP01','OP01-117','png'), hasAlt:true, useNewPipeline:true,
     ability:"[Main] DON!! -1: Rest up to 1 of your opponent's Characters with a cost of 6 or less." },
 
-  { id:'OP01-119', name:'Redpilled', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
+  { id:'OP01-119', name:'Plight of the Crusader', type:'EVENT', color:'Purple', affiliation:'Holy Roman Empire',
     power:0, cost:2, counter:0, image:IMG('OP01','OP01-119','png'), useNewPipeline:true,
     ability:"[Counter] Up to 1 of your Leader or Character cards gains +4000 power during this battle. Then, if you have 2 or less Life cards, add up to 1 DON!! card from your DON!! deck and rest it. [Trigger] Add up to 1 DON!! card from your DON!! deck and set it as active." },
 
