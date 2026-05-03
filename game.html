@@ -679,6 +679,17 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
    disappear under the adjacent .don-area (z-index:1). */
 .battle-active{z-index:50 !important;}
 .gcard.battle-active, .gcard-wrap.battle-active{z-index:50 !important;position:relative;}
+/* Phase 1 ATTACKING — gold pulse on the attacker so the player knows
+   which card is mid-attack while picking a target. */
+.battle-attacker, .gcard.battle-attacker, .gcard-wrap.battle-attacker{
+  box-shadow:0 0 0 3px rgba(255,200,80,1), 0 0 22px 8px rgba(255,215,100,.7) !important;
+  animation:attackerPulse 1.2s ease-in-out infinite;
+  z-index:50 !important;
+}
+@keyframes attackerPulse{
+  0%,100%{box-shadow:0 0 0 3px rgba(255,200,80,.95), 0 0 18px 6px rgba(255,215,100,.55);}
+  50%    {box-shadow:0 0 0 3px rgba(255,220,100,1),  0 0 28px 10px rgba(255,235,130,.85);}
+}
 /* Leader slots always render above the cost area, even when rested (rotated 90°). */
 #selfLeader, #oppLeader{position:relative;z-index:10;overflow:visible;}
 /* Phase 3: defender's counter-eligible hand cards pulse gold + show +N badge. */
@@ -1897,6 +1908,17 @@ function handleMsg(msg) {
       break;
     case 'ERROR':
       hint(msg.msg, true);
+      // Auto-clear after 2s so the player can keep going. During an
+      // ATTACKING phase invalid-target error, this lets them see the
+      // message briefly without locking the action hint forever — the
+      // attacker stays gold-highlighted, valid targets stay red, and
+      // the [Cancel] button stays visible throughout.
+      if (window._errorHintTimer) clearTimeout(window._errorHintTimer);
+      window._errorHintTimer = setTimeout(() => {
+        window._errorHintTimer = null;
+        const el = document.getElementById('actionHint');
+        if (el && el.textContent === msg.msg) { el.textContent = ''; }
+      }, 2000);
       break;
     case 'PLAYER_LEFT':
       hint('Opponent disconnected!', true);
@@ -2252,6 +2274,7 @@ function renderGame() {
   clearBattleActive();
   document.querySelectorAll('.targetable-attack').forEach(el => el.classList.remove('targetable-attack'));
   document.querySelectorAll('.targetable-grant').forEach(el => el.classList.remove('targetable-grant'));
+  document.querySelectorAll('.battle-attacker').forEach(el => el.classList.remove('battle-attacker'));
 
   const bs = game.battleState;
   // If we are NOT in a battle phase, hide every battle-step panel — otherwise leftover
@@ -2270,6 +2293,10 @@ function renderGame() {
     hideAllBtnGroups();
     document.getElementById('attackingBtns').style.display = 'flex';
     highlightTargets();
+    // Gold pulse on the attacker so the player can see which card is
+    // mid-attack while picking a target. Cleared at the top of every
+    // re-render along with other battle overlays.
+    findCardEl(bs.attackerUid)?.classList.add('battle-attacker');
   } else if (bs && game.phase === 'BLOCK_STEP') {
     if (bs.attackerId === myId) {
       // Attacker view — info only, waiting for defender.

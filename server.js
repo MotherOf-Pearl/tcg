@@ -1284,6 +1284,10 @@ function handleAction(roomId, playerId, action) {
     // ─── Phase 1 attack flow (split from ATTACK) ───
     case 'DECLARE_ATTACK': {
       if (!isActive || game.phase !== 'MAIN') return;
+      // Invalid-attacker ERROR paths below MUST NOT mutate game.phase
+      // or clear game.battleState — if a prior battleState somehow
+      // existed, leave it alone; if not, we simply haven't created one
+      // yet. State is only mutated AFTER all guards pass.
       let attacker = null;
       if (action.attackerUid === p.leader.uid) attacker = p.leader;
       else attacker = p.field.find(c => c.uid === action.attackerUid);
@@ -1335,6 +1339,9 @@ function handleAction(roomId, playerId, action) {
     case 'SELECT_TARGET': {
       if (game.phase !== 'ATTACKING' || !game.battleState) return;
       if (game.battleState.attackerId !== playerId) return;
+      // Invalid-target ERROR paths below MUST NOT mutate game.phase or
+      // clear game.battleState — the attack declaration stays active so
+      // the player can pick a different target (or click Cancel).
       let target = null;
       let targetIsLeader = false;
       if (action.targetUid === opp.leader.uid) {
@@ -1343,7 +1350,7 @@ function handleAction(roomId, playerId, action) {
       } else {
         target = opp.field.find(c => c.uid === action.targetUid);
         if (target && target.type !== 'STAGE' && !target.rested) {
-          send(playerId, {type:'ERROR', msg:'Cannot attack an active character — target must be rested or be the leader.'});
+          send(playerId, {type:'ERROR', msg:"You can't attack an active card."});
           return;
         }
       }
