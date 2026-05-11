@@ -794,7 +794,10 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 
 /* ═══ RIGHT 1/3 — LOG + BUTTONS ═══ */
 .gb-right-col{display:flex;flex-direction:column;padding:10px;gap:8px;position:relative;overflow:hidden;}
-/* Hover-revealed card detail panel — sticks to bottom of right column. */
+/* Hover-revealed card detail panel — sits at the bottom of the right
+   column. When #globalWindowControls is visible above it, gwc's
+   margin-top:auto claims the slack; when gwc is hidden, cardInfoPanel's
+   own margin-top:auto puts it at the bottom. */
 #cardInfoPanel{
   margin-top:auto;flex-shrink:0;
   background:rgba(0,0,0,.32);border:1px solid rgba(180,140,50,.28);
@@ -1448,6 +1451,18 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <button class="gb-pbtn gb-pbtn-lg" id="btnResolve" onclick="passCounter()">Resolve Attack</button>
       </div>
       <span id="actionHint" class="gb-hint">Waiting…</span>
+    </div>
+    <!-- window-lifecycle v2 — globalWindowControls: confirm/cancel surface
+         for any active window owned by the local viewer. Sits just above
+         #cardInfoPanel so it never overlaps the ability description on
+         hover. Hidden when no window is open. -->
+    <div id="globalWindowControls" style="display:none;margin-top:auto;background:rgba(12,8,4,.93);border:2px solid #8b6914;border-radius:8px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.45);">
+      <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.78rem;color:#f0d896;text-align:center;letter-spacing:.04em;margin-bottom:6px;line-height:1.3;"></div>
+      <div id="gwcHint" style="font-family:'Barlow Condensed',sans-serif;font-size:.64rem;color:#8a7860;text-align:center;line-height:1.4;margin-bottom:8px;display:none;"></div>
+      <div style="display:flex;flex-direction:column;gap:5px;">
+        <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
+        <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
+      </div>
     </div>
     <!-- Hover-revealed card details (any card the cursor enters) -->
     <div id="cardInfoPanel" style="display:none;">
@@ -4838,7 +4853,20 @@ if (isSolo) {
 
 // ─── CLICK OUTSIDE ───
 document.addEventListener('click', e => {
-  if (!e.target.closest('.gcard') && !e.target.closest('.gb-right-col')) cancelSel();
+  // Bug fix 2026-05-11: don't cancel local selection state while there's
+  // a server-side commitment in flight. Specifically: if the player has
+  // declared an attack (attackMode) or any interactive window owned by
+  // this viewer is open server-side, an off-board click is "I missed,"
+  // not "I want to abort." The Cancel CTA in #globalWindowControls is
+  // the only way to exit those modes.
+  const committedToServerWindow = attackMode
+    || (game?.activeWindow && game.activeWindow.playerId === myId)
+    || (game?.activateMainConfirmWindow && game.activateMainConfirmWindow.playerId === myId);
+  if (!committedToServerWindow
+      && !e.target.closest('.gcard')
+      && !e.target.closest('.gb-right-col')) {
+    cancelSel();
+  }
   if (!e.target.closest('#mpPanel') && !e.target.closest('.mbtn-primary')) {
     /* keep panel open when interacting inside it */
   }
@@ -4846,21 +4874,12 @@ document.addEventListener('click', e => {
 });
 </script>
 
-<!-- window-lifecycle v2 — globalWindowControls: bottom-right confirm/cancel
-     surface for any active window owned by the local viewer. Populated by
-     renderGlobalWindowControls(); hidden when no window is open. -->
-<div id="globalWindowControls" style="display:none;position:fixed;right:18px;bottom:18px;z-index:9995;background:rgba(12,8,4,.93);border:2px solid #8b6914;border-radius:10px;padding:12px 14px;min-width:200px;max-width:280px;box-shadow:0 6px 24px rgba(0,0,0,.55);">
-  <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.8rem;color:#f0d896;text-align:center;letter-spacing:.04em;margin-bottom:8px;line-height:1.3;"></div>
-  <div id="gwcHint" style="font-family:'Barlow Condensed',sans-serif;font-size:.66rem;color:#8a7860;text-align:center;line-height:1.4;margin-bottom:10px;display:none;"></div>
-  <div style="display:flex;flex-direction:column;gap:6px;">
-    <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
-    <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
-  </div>
-</div>
 <script>
 // window-lifecycle v2 client surface — renders confirm/cancel CTAs in
-// the bottom-right slot for any open window owned by the local viewer.
-// Driven by GAME_STATE: reads game.activeWindow + game.activateMainConfirmWindow.
+// the right column (above #cardInfoPanel) for any open window owned
+// by the local viewer. The DOM lives at #globalWindowControls inside
+// the right column (see ~line 1453). Driven by GAME_STATE: reads
+// game.activeWindow + game.activateMainConfirmWindow.
 function gwcCancel() {
   if (!game) return;
   send({ type: 'CANCEL_WINDOW' });
