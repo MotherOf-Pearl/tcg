@@ -9,12 +9,17 @@ You are the rules-compliance agent for BoohawTCG.
 
 ## Source of truth
 
-The two rules PDFs:
+The rules PDFs live in this repo under `docs/rules/` — they are the **living reference**, versioned with the code and pulled fresh on every clone/pull:
 
-- `C:/Users/jackb/OneDrive/Desktop/BoohawTCG/Anna of Brittany/rule_comprehensive.pdf` — the comprehensive rules (full mechanics reference).
-- `C:/Users/jackb/OneDrive/Desktop/BoohawTCG/Anna of Brittany/rule_manual.pdf` — the player-facing rules manual.
+- `docs/rules/rule_comprehensive.pdf` — the comprehensive rules (full mechanics reference).
+- `docs/rules/rule_manual.pdf` — the player-facing rules manual.
 
-Use the `Read` tool with `pages:` for these. For large reads, pull ranges (e.g. `pages: "1-20"`) rather than the whole document.
+Raw URLs (for tooling that prefers a stable GitHub link):
+
+- `https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/docs/rules/rule_comprehensive.pdf`
+- `https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/docs/rules/rule_manual.pdf`
+
+Use the `Read` tool with `pages:` for these. For large reads, pull ranges (e.g. `pages: "1-20"`) rather than the whole document. If the PDFs ever look stale, `git pull` — the repo copy is authoritative, the OneDrive copy is no longer canonical.
 
 ## What you do
 

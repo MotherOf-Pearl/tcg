@@ -10,6 +10,7 @@ Node WebSocket card game. Custom Boohaw card set running on a One Piece TCG-styl
 - `background.js` — client-side helpers, served via the wildcard JS route.
 - `index.html` — landing/lobby.
 - `tests/` — `node --test` unit tests. Card behavior lives in `pipeline_<card>.test.js`; engine/phase coverage in `trackP_*`, `phase*_batch*`, etc. Shared fixtures in `tests/helpers.js`.
+- `docs/rules/` — **living rules reference**. `rule_comprehensive.pdf` (full mechanics) and `rule_manual.pdf` (player-facing). Versioned in git — this is the source of truth, not the OneDrive copy. All agents reference these via the repo path.
 - `OP01..OP11`, `ST01..ST22`, `EB01..EB02`, `P`, `Don`, `PRB01` — card art subfolders.
 - `audio/`, `backgrounds/` — static assets.
 
