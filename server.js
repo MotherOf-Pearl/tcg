@@ -670,7 +670,232 @@ function createGame(p1id, p2id, p1deck, p2deck) {
     tempPowerEffects: [],
     tempCostEffects: [],   // Track-P: {targetUid, amount, expiresAtTurn} — lowers effective cost for filter checks.
     effectQueue: [],     // Pending interactive steps for chained effects (one window at a time today; full queue is reserved for future multi-window cards).
+    // Window-lifecycle v2 — see docs/designs/window-lifecycle.md.
+    // activeWindow is derived state: rebuilt by openWindow/closeWindow.
+    // Shape: { field, playerId, sourceCardUid, openedAtTurn, descriptor }.
+    activeWindow: null,
+    // Two-phase ACTIVATE_MAIN: open confirm before any state mutation.
+    activateMainConfirmWindow: null,
+    // attackDeclarationWindow — synthetic descriptor for the attack
+    // declaration so cancel/end-turn use the unified table. battleState
+    // remains the source of truth for the attack itself.
+    attackDeclarationWindow: null,
   };
+}
+
+// Window-lifecycle v2 — single source of truth.
+// See docs/designs/window-lifecycle.md.
+// Adding a new window kind requires adding one row here; openWindow
+// refuses to open an unregistered kind.
+const WINDOW_DESCRIPTORS = {
+  // ── Cancellable group — pipeline can be aborted on END_TURN, but for
+  // windows opened post-cost (after ACTIVATE_MAIN_CONFIRM / [On Play])
+  // autoCancel does NOT refund cost / usedThisTurn / rested. See Note E.
+  restTargetWindow:         { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  koTargetWindow:           { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  bounceTargetWindow:       { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  powerBuffTargetWindow:    { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  suppressionTargetWindow:  { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  giveDonTargetWindow:      { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  attackRedirectWindow:     { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false }, // Note A
+  chooseOneWindow:          { kind: 'modePicker',   commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  opponentChoosesWindow:    { kind: 'modePicker',   commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false }, // Note B
+  grantKeywordToNamedWindow:{ kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  placeAtBottomWindow:      { kind: 'orderPicker',  commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  addFromTrashWindow:       { kind: 'multiSelect',  commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  scryWindow:               { kind: 'orderPicker',  commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  lookAtLifeCardWindow:     { kind: 'reveal',       commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  // ST07 follow-ups that move a hand card to life — committed once opened
+  // (no rules-visible state has mutated yet, but they're effect follow-ups
+  // post-cost). Treat as cancellable+autoCancel; optional flag in payload
+  // determines whether autoCancel skips silently.
+  addHandToLifeWindow:      { kind: 'targetPicker', commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  addCharacterToLifeWindow: { kind: 'targetPicker', commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  // Attack declaration — see Note A in the design.
+  attackDeclarationWindow:  { kind: 'targetPicker', commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+
+  // ── Already half-committed: card moved or cost paid ──
+  playFromHandWindow:       { kind: 'targetPicker', commitPoint: 'onOpen',    cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  playFromTrashWindow:      { kind: 'targetPicker', commitPoint: 'onOpen',    cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  trashFromHandWindow:      { kind: 'multiSelect',  commitPoint: 'onConfirm', cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false }, // Note C
+  donReturnWindow:          { kind: 'multiSelect',  commitPoint: 'onConfirm', cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  addLifeCardToHandWindow:  { kind: 'orderPicker',  commitPoint: 'onConfirm', cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  selfSaveWindow:           { kind: 'binary',       commitPoint: 'onSelect',  cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false }, // Note D
+
+  // ── Rules-required: blocking ──
+  counterWindow:            { kind: 'reactive',     commitPoint: 'na',        cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false },
+  triggerWindow:            { kind: 'reactive',     commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false },
+
+  // ── Confirmation gate ──
+  activateMainConfirmWindow:{ kind: 'confirm',      commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: true },
+};
+
+// Default pickRequirement when an opener forgets to pass one. Per Note F
+// the default is 'mandatory' (strictest rules-alignment, fails loudly).
+const DEFAULT_PICK_REQUIREMENT = 'mandatory';
+
+// openWindow / closeWindow — single bottleneck for every interactive
+// window. Writes to the slot AND maintains game.activeWindow.
+function openWindow(game, field, payload) {
+  const desc = WINDOW_DESCRIPTORS[field];
+  if (!desc) throw new Error(`Unknown window kind: ${field}`);
+  if (game[field]) {
+    console.warn(`[WINDOW] Overwriting existing ${field}`);
+  }
+  // Note F — picker windows must carry pickRequirement in payload.
+  if (['targetPicker','modePicker','multiSelect'].includes(desc.kind)) {
+    if (payload && payload.pickRequirement == null) {
+      payload.pickRequirement = DEFAULT_PICK_REQUIREMENT;
+    }
+  }
+  game[field] = payload;
+  game.activeWindow = {
+    field,
+    playerId: (payload && payload.playerId) || null,
+    sourceCardUid: (payload && (payload.sourceCardUid || payload._sourceCardUid)) || null,
+    openedAtTurn: game.turn,
+    descriptor: desc,
+  };
+}
+
+function closeWindow(game, field) {
+  game[field] = null;
+  if (game.activeWindow && game.activeWindow.field === field) {
+    game.activeWindow = null;
+  }
+}
+
+// cancelWindow — discards in-flight pipelineResume and closes the slot.
+// Does NOT refund cost / usedThisTurn / rested attackers (Note E). The
+// only state mutation is dropping the resume chain.
+function cancelWindow(game, aw, reason) {
+  if (!aw || !aw.field) return;
+  const field = aw.field;
+  const payload = game[field];
+  if (payload) {
+    // Drop resume chain. No card-state mutation.
+    payload.pipelineResume = null;
+  }
+  // Field-specific cleanup hooks.
+  if (field === 'attackDeclarationWindow' && reason === 'user') {
+    // User-initiated attack cancel: unrest attacker, clear battleState,
+    // restore MAIN phase.
+    if (game.battleState) {
+      const attackerId = game.battleState.attackerId;
+      const attackerUid = game.battleState.attackerUid;
+      const pl = attackerId ? game.players[attackerId] : null;
+      let attacker = null;
+      if (pl) {
+        if (pl.leader && pl.leader.uid === attackerUid) attacker = pl.leader;
+        else attacker = (pl.field || []).find(c => c.uid === attackerUid);
+      }
+      if (attacker) attacker.rested = false;
+      game.battleState = null;
+      game.phase = 'MAIN';
+    }
+  }
+  closeWindow(game, field);
+}
+
+// autoSkipWindow — END_TURN sweep for `endTurnPolicy: 'autoSkip'` rows
+// (committed windows). Each committed kind owns a tiny dispatch that
+// chooses a no-op resolution and routes through the normal resolver.
+function autoSkipWindow(game, field) {
+  const payload = game[field];
+  if (!payload) return;
+  const resume = payload.pipelineResume || null;
+  const pid = payload.playerId;
+  switch (field) {
+    case 'playFromHandWindow':
+    case 'playFromTrashWindow':
+      // Skip = decline play. Optional flag may be false (mandatory), but
+      // END_TURN's autoSkip overrides — drop the resume to end cleanly.
+      closeWindow(game, field);
+      if (resume) resumePipeline(game, pid, resume);
+      break;
+    case 'trashFromHandWindow':
+      // Cost-leg: cost already considered paid procedurally. Drop window
+      // without applying the effect; pipeline resume is discarded.
+      closeWindow(game, field);
+      break;
+    case 'donReturnWindow':
+      // Cost-leg: same as above.
+      closeWindow(game, field);
+      break;
+    case 'addLifeCardToHandWindow':
+      // Optional cost — skipping does not run the follow-up.
+      closeWindow(game, field);
+      break;
+    case 'selfSaveWindow':
+      // Defender mid-KO. Default decision: do NOT save (accept the K.O.).
+      // Manually advance the koWindow continuation as if SELF_SAVE_RESOLVE
+      // had been called with accept:false.
+      try {
+        const cont = payload._koContinuation || {};
+        const oppOfActor = cont.oppOfActorId ? game.players[cont.oppOfActorId] : null;
+        const target = oppOfActor ? (oppOfActor.field || []).find(c => c.uid === cont.targetUid) : null;
+        if (target && oppOfActor) {
+          returnAttachedDon(game, target);
+          oppOfActor.field = oppOfActor.field.filter(c => c.uid !== cont.targetUid);
+          oppOfActor.trash.push(target);
+          dropTempEffectsFor(game, target.uid);
+          log(game, `💀 ${target.name} K.O.'d (auto-resolved at end of turn).`);
+          triggerOnKO(game, cont.oppOfActorId, target, cont.attackerId);
+        }
+        const koWindow = cont.koWindow;
+        if (koWindow) {
+          koWindow.remaining -= 1;
+          const koResume = koWindow.pipelineResume;
+          closeWindow(game, 'koTargetWindow');
+          if (koResume) resumePipeline(game, cont.attackerId, koResume);
+        }
+      } catch (e) { console.warn('[autoSkipWindow selfSave]', e); }
+      closeWindow(game, field);
+      break;
+    default:
+      closeWindow(game, field);
+      break;
+  }
+}
+
+// forcedPickHelper — END_TURN sweep for mandatory picker windows. Picks
+// the first legal candidate deterministically (or closes the window if
+// no candidate exists per §1-3-2). Routes through the normal resolver
+// so pipelineResume etc. fire as if the user had clicked.
+function forcedPickHelper(game, field, payload) {
+  const pid = payload.playerId;
+  const candidates = Array.isArray(payload.candidateUids) ? payload.candidateUids : [];
+  if (candidates.length === 0) {
+    // Impossible action — §1-3-2 — close cleanly, no resume.
+    closeWindow(game, field);
+    return null;
+  }
+  const pick = candidates[0];
+  // Map field → resolver action.type. Mirrors the existing case names.
+  const RESOLVER_BY_FIELD = {
+    restTargetWindow:          { type: 'REST_TARGET_SELECTED', targetUid: pick },
+    koTargetWindow:            { type: 'KO_TARGET_SELECTED',   targetUid: pick },
+    bounceTargetWindow:        { type: 'BOUNCE_TARGET_SELECTED', targetUid: pick },
+    powerBuffTargetWindow:     { type: 'POWER_BUFF_TARGET_SELECTED', targetUid: pick },
+    suppressionTargetWindow:   { type: 'SUPPRESSION_TARGET_SELECTED', targetUid: pick },
+    giveDonTargetWindow:       { type: 'GIVE_DON_TARGET_SELECTED', targetUid: pick },
+    attackRedirectWindow:      { type: 'ATTACK_REDIRECT_SELECTED', targetUid: pick },
+    grantKeywordToNamedWindow: { type: 'GRANT_KEYWORD_TO_NAMED_SELECTED', targetUid: pick },
+    addFromTrashWindow:        { type: 'ADD_FROM_TRASH_SELECTED', cardUid: pick },
+    addHandToLifeWindow:       { type: 'ADD_HAND_TO_LIFE_SELECTED', cardUid: pick },
+    addCharacterToLifeWindow:  { type: 'ADD_CHARACTER_TO_LIFE_SELECTED', cardUid: pick },
+    chooseOneWindow:           { type: 'CHOOSE_ONE_SELECTED', branchIndex: 0 },
+    placeAtBottomWindow:       { type: 'PLACE_AT_BOTTOM_SELECTED', targetUid: pick },
+  };
+  const action = RESOLVER_BY_FIELD[field];
+  if (!action) { closeWindow(game, field); return null; }
+  // Re-enter handleAction synchronously so the resume fires through the
+  // normal pipeline path. Find a room we belong to.
+  let roomId = null;
+  for (const [rid, r] of rooms) { if (r && r.game === game) { roomId = rid; break; } }
+  if (roomId) handleAction(roomId, pid, action);
+  else closeWindow(game, field);
+  return pick;
 }
 
 function send(playerId, msg) {
@@ -1780,7 +2005,7 @@ function handleAction(roomId, playerId, action) {
         log(game, `${sw.cardName}: returned ${ordered.length} card(s) to ${placement} of deck.`);
       }
 
-      game.scryWindow = null;
+      closeWindow(game, 'scryWindow');
       // Phase-4 Batch 3: new-pipeline scry (FiFi Cat and future cards)
       // chains to the next effect. Legacy scry from parseAndApply has
       // no resume path and simply ends here.
@@ -1813,7 +2038,7 @@ function handleAction(roomId, playerId, action) {
         const resumeTiming  = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
         const pipelineResume = w.pipelineResume;
-        game.koTargetWindow = null;
+        closeWindow(game, 'koTargetWindow');
         // Phase-4: new-pipeline cards take precedence — the pipeline's
         // own chain state is authoritative.
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
@@ -1837,7 +2062,7 @@ function handleAction(roomId, playerId, action) {
       const saveCand = getSelfSaveCandidate(target, playerId, game);
       if (saveCand) {
         const oppOfActorId = Object.keys(game.players).find(id => id !== playerId);
-        game.selfSaveWindow = {
+        openWindow(game, 'selfSaveWindow', {
           playerId: saveCand.owner.playerId,
           cardUid: target.uid,
           cardName: target.name,
@@ -1849,7 +2074,7 @@ function handleAction(roomId, playerId, action) {
             targetUid: target.uid,
             oppOfActorId,
           },
-        };
+        });
         log(game, `${target.name}: self-save available — owner may decide.`);
         break;
       }
@@ -1921,7 +2146,7 @@ function handleAction(roomId, playerId, action) {
       const pipelineResume = w.pipelineResume;
       const timing = w.timing;
       const sourceCardUid = w.sourceCardUid;
-      game.donReturnWindow = null;
+      closeWindow(game, 'donReturnWindow');
       // Phase-4: new-pipeline cards get their own resume path.
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
@@ -1956,7 +2181,7 @@ function handleAction(roomId, playerId, action) {
       } else {
         log(game, `[Trigger] ${tw.card.name} skipped.`);
       }
-      game.triggerWindow = null;
+      closeWindow(game, 'triggerWindow');
       break;
     }
 
@@ -1968,7 +2193,7 @@ function handleAction(roomId, playerId, action) {
       const pipelineResume = w.pipelineResume;  // capture before clear
       if (action.skip) {
         log(game, `${w.sourceCardName || 'Effect'}: choice skipped.`);
-        game.playFromHandWindow = null;
+        closeWindow(game, 'playFromHandWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -1977,7 +2202,7 @@ function handleAction(roomId, playerId, action) {
         return;
       }
       const hidx = owner.hand.findIndex(c => c.uid === action.cardUid);
-      if (hidx === -1) { game.playFromHandWindow = null; break; }
+      if (hidx === -1) { closeWindow(game, 'playFromHandWindow'); break; }
       const picked = owner.hand.splice(hidx, 1)[0];
       // Match PLAY_CARD's deploy semantics so the free-played card behaves identically
       // to a hand-deployed one (including [On Play] firing).
@@ -1988,7 +2213,7 @@ function handleAction(roomId, playerId, action) {
       owner.field.push(picked);
       log(game, `${w.sourceCardName || 'Effect'}: played ${picked.name} from hand for free.`);
       // Clear window before firing onPlay (which may itself open another window).
-      game.playFromHandWindow = null;
+      closeWindow(game, 'playFromHandWindow');
       // Always fire [On Play] for the deployed card — same as the normal PLAY_CARD path.
       const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
       if (isOnPlaySuppressed(game, playerId)) {
@@ -2012,7 +2237,7 @@ function handleAction(roomId, playerId, action) {
       const w = game.attackRedirectWindow;
       const pipelineResume = w.pipelineResume;
       if (action.skip) {
-        game.attackRedirectWindow = null;
+        closeWindow(game, 'attackRedirectWindow');
         log(game, `${w.sourceCardName}: redirect skipped.`);
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
@@ -2026,7 +2251,7 @@ function handleAction(roomId, playerId, action) {
       const newTarget = (me.leader && me.leader.uid === action.targetUid) ? me.leader
                      : (me.field || []).find(c => c.uid === action.targetUid);
       if (!newTarget || !game.battleState) {
-        game.attackRedirectWindow = null;
+        closeWindow(game, 'attackRedirectWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2037,7 +2262,7 @@ function handleAction(roomId, playerId, action) {
       game.battleState.targetPower = Math.max(0, effectivePowerOf(newTarget, game) - (newTarget.attachedDon || 0) * 1000);
       game.battleState.targetIsLeader = (me.leader && me.leader.uid === newTarget.uid);
       log(game, `${w.sourceCardName}: attack redirected to ${newTarget.name}.`);
-      game.attackRedirectWindow = null;
+      closeWindow(game, 'attackRedirectWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2052,7 +2277,7 @@ function handleAction(roomId, playerId, action) {
       const oppOfActor = game.players[cont.oppOfActorId];
       const target = (oppOfActor.field || []).find(c => c.uid === cont.targetUid);
       const koWindow = cont.koWindow;
-      game.selfSaveWindow = null;
+      closeWindow(game, 'selfSaveWindow');
       if (action.accept) {
         // Apply the save alternative — skip removal.
         if (target) {
@@ -2076,7 +2301,7 @@ function handleAction(roomId, playerId, action) {
         koWindow.remaining -= 1;
         // Short-circuit: close the KO window and resume the pipeline.
         const pipelineResume = koWindow.pipelineResume;
-        game.koTargetWindow = null;
+        closeWindow(game, 'koTargetWindow');
         if (pipelineResume) resumePipeline(game, attackerId, pipelineResume);
       }
       break;
@@ -2100,7 +2325,7 @@ function handleAction(roomId, playerId, action) {
         target.attachedDon = (target.attachedDon || 0) + w.count;
         log(game, `${w.sourceCardName}: attached ${w.count} DON!! to ${target.name}.`);
       }
-      game.giveDonTargetWindow = null;
+      closeWindow(game, 'giveDonTargetWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2116,7 +2341,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must pick a target.'}); return; }
         log(game, `${w.sourceCardName}: skipped.`);
-        game.playFromTrashWindow = null;
+        closeWindow(game, 'playFromTrashWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2125,7 +2350,7 @@ function handleAction(roomId, playerId, action) {
         return;
       }
       const tidx = owner.trash.findIndex(c => c.uid === action.cardUid);
-      if (tidx === -1) { game.playFromTrashWindow = null; break; }
+      if (tidx === -1) { closeWindow(game, 'playFromTrashWindow'); break; }
       const picked = owner.trash.splice(tidx, 1)[0];
       picked.rested = w.rested === true;
       picked.attachedDon = 0;
@@ -2133,7 +2358,7 @@ function handleAction(roomId, playerId, action) {
       picked.playedThisTurn = true;
       owner.field.push(picked);
       log(game, `${w.sourceCardName}: played ${picked.name} from trash${picked.rested ? ' (rested)' : ''}.`);
-      game.playFromTrashWindow = null;
+      closeWindow(game, 'playFromTrashWindow');
       const opp2 = game.players[Object.keys(game.players).find(id => id !== playerId)];
       if (isOnPlaySuppressed(game, playerId)) {
         log(game, `${picked.name}: [On Play] suppressed.`);
@@ -2157,7 +2382,7 @@ function handleAction(roomId, playerId, action) {
         const pipelineResume = w.pipelineResume;
         const sourceName = w.sourceCardName;
         const selfRevive = w._selfRevive;
-        game.trashFromHandWindow = null;
+        closeWindow(game, 'trashFromHandWindow');
         if (!paid) return;
         // Track-P partial — Marco-style self-revive finalisation. Move
         // the source card from trash → field in the requested state.
@@ -2216,7 +2441,7 @@ function handleAction(roomId, playerId, action) {
         const resumeTiming = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
         const pipelineResume = w.pipelineResume;
-        game.bounceTargetWindow = null;
+        closeWindow(game, 'bounceTargetWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       };
       if (action.skip) {
@@ -2261,7 +2486,7 @@ function handleAction(roomId, playerId, action) {
         const resumeTiming  = w.resumeTiming;
         const resumeCardUid = w.resumeCardUid;
         const pipelineResume = w.pipelineResume;
-        game.restTargetWindow = null;
+        closeWindow(game, 'restTargetWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       };
       if (action.skip) {
@@ -2292,7 +2517,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a suppression target.'}); return; }
         log(game, `${w.sourceCardName}: suppression skipped.`);
-        game.suppressionTargetWindow = null;
+        closeWindow(game, 'suppressionTargetWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2326,7 +2551,7 @@ function handleAction(roomId, playerId, action) {
       // Phase 8 — track the picked target for ifLastTarget / koLastTarget
       // follow-ups (Black Hole). Cleared after the dependent effect runs.
       game._lastPickedTargetUid = target.uid;
-      game.suppressionTargetWindow = null;
+      closeWindow(game, 'suppressionTargetWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2350,7 +2575,7 @@ function handleAction(roomId, playerId, action) {
       const src = (owner.leader && owner.leader.uid === w.sourceCardUid) ? owner.leader
                : (owner.field || []).find(c => c.uid === w.sourceCardUid)
                || (owner.trash || []).find(c => c.uid === w.sourceCardUid);
-      game.chooseOneWindow = null;
+      closeWindow(game, 'chooseOneWindow');
       if (!src) {
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
@@ -2377,7 +2602,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target.'}); return; }
         log(game, `${w.sourceCardName}: power buff skipped.`);
-        game.powerBuffTargetWindow = null;
+        closeWindow(game, 'powerBuffTargetWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2398,7 +2623,7 @@ function handleAction(roomId, playerId, action) {
       } else {
         applyTempPower(game, action.targetUid, w.amount, w.duration, w.sourceCardName);
       }
-      game.powerBuffTargetWindow = null;
+      closeWindow(game, 'powerBuffTargetWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2415,7 +2640,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a target.'}); return; }
         log(game, `${w.sourceCardName}: place-at-bottom skipped.`);
-        game.placeAtBottomWindow = null;
+        closeWindow(game, 'placeAtBottomWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2442,7 +2667,7 @@ function handleAction(roomId, playerId, action) {
       dropTempEffectsFor(game, target.uid);
       ownerOfTarget.deck.push(target);
       log(game, `${w.sourceCardName}: placed ${target.name} at the bottom of its owner's deck.`);
-      game.placeAtBottomWindow = null;
+      closeWindow(game, 'placeAtBottomWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2457,7 +2682,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must select a card from trash.'}); return; }
         log(game, `${w.sourceCardName}: add-from-trash skipped.`);
-        game.addFromTrashWindow = null;
+        closeWindow(game, 'addFromTrashWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2470,7 +2695,7 @@ function handleAction(roomId, playerId, action) {
       const picked = owner.trash.splice(idx, 1)[0];
       owner.hand.push(picked);
       log(game, `${w.sourceCardName}: added ${picked.name} from trash to hand.`);
-      game.addFromTrashWindow = null;
+      closeWindow(game, 'addFromTrashWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2486,7 +2711,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must add a life card.'}); return; }
         log(game, `${w.sourceCardName}: declined to add life card to hand.`);
-        game.addLifeCardToHandWindow = null;
+        closeWindow(game, 'addLifeCardToHandWindow');
         // Optional cost / effect skipped — abort the rest of the block so the
         // paid-cost chain doesn't run the follow-up effect for free.
         // Resume path is still called so the sequencer can unwind; the
@@ -2499,7 +2724,7 @@ function handleAction(roomId, playerId, action) {
       }
       if (life.length === 0) {
         send(playerId, {type:'ERROR', msg:'No life cards.'});
-        game.addLifeCardToHandWindow = null;
+        closeWindow(game, 'addLifeCardToHandWindow');
         return;
       }
       const position = action.position === 'bottom' ? 'bottom' : 'top';
@@ -2508,7 +2733,7 @@ function handleAction(roomId, playerId, action) {
       const lifeCard = (position === 'top') ? life.pop() : life.shift();
       p.hand.push(lifeCard);
       log(game, `${w.sourceCardName}: added 1 card from ${position} of life to hand. ${p.life.length} life remaining.`);
-      game.addLifeCardToHandWindow = null;
+      closeWindow(game, 'addLifeCardToHandWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2525,7 +2750,7 @@ function handleAction(roomId, playerId, action) {
       const pipelineResume = w.pipelineResume;
       if (action.skip) {
         log(game, `${w.sourceCardName}: look-at-life skipped.`);
-        game.lookAtLifeCardWindow = null;
+        closeWindow(game, 'lookAtLifeCardWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2555,11 +2780,11 @@ function handleAction(roomId, playerId, action) {
       }
       if (w.step === 'choose-placement') {
         const target = game.players[w.chosenSideId];
-        if (!target) { game.lookAtLifeCardWindow = null; return; }
+        if (!target) { closeWindow(game, 'lookAtLifeCardWindow'); return; }
         const idx = (target.life || []).findIndex(c => c.uid === w.peekedCardUid);
         if (idx === -1) {
           log(game, `${w.sourceCardName}: peeked card no longer in life.`);
-          game.lookAtLifeCardWindow = null;
+          closeWindow(game, 'lookAtLifeCardWindow');
           if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
           break;
         }
@@ -2568,7 +2793,7 @@ function handleAction(roomId, playerId, action) {
         if (placement === 'top') target.life.push(card);
         else target.life.unshift(card);
         log(game, `${w.sourceCardName}: placed life card at ${placement}.`);
-        game.lookAtLifeCardWindow = null;
+        closeWindow(game, 'lookAtLifeCardWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2591,7 +2816,7 @@ function handleAction(roomId, playerId, action) {
       const src = (owner.leader && owner.leader.uid === w.sourceCardUid) ? owner.leader
                : (owner.field || []).find(c => c.uid === w.sourceCardUid)
                || (owner.trash || []).find(c => c.uid === w.sourceCardUid);
-      game.opponentChoosesWindow = null;
+      closeWindow(game, 'opponentChoosesWindow');
       if (!src) {
         if (pipelineResume) resumePipeline(game, activeId, pipelineResume);
         break;
@@ -2616,7 +2841,7 @@ function handleAction(roomId, playerId, action) {
       const pipelineResume = w.pipelineResume;
       if (action.skip) {
         log(game, `${w.sourceCardName}: keyword grant skipped.`);
-        game.grantKeywordToNamedWindow = null;
+        closeWindow(game, 'grantKeywordToNamedWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2656,7 +2881,7 @@ function handleAction(roomId, playerId, action) {
         targetName: target.name,
         sourceCardName: w.sourceCardName,
       });
-      game.grantKeywordToNamedWindow = null;
+      closeWindow(game, 'grantKeywordToNamedWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2670,7 +2895,7 @@ function handleAction(roomId, playerId, action) {
       if (action.skip) {
         if (!w.optional) { send(playerId, {type:'ERROR', msg:'Must pick a card.'}); return; }
         log(game, `${w.sourceCardName}: add-hand-to-life skipped.`);
-        game.addHandToLifeWindow = null;
+        closeWindow(game, 'addHandToLifeWindow');
         if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
         break;
       }
@@ -2683,7 +2908,7 @@ function handleAction(roomId, playerId, action) {
       const picked = p.hand.splice(idx, 1)[0];
       p.life.push(picked);  // top of life = last index
       log(game, `${w.sourceCardName}: moved 1 card from hand to top of life. (${p.life.length} life)`);
-      game.addHandToLifeWindow = null;
+      closeWindow(game, 'addHandToLifeWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2708,7 +2933,7 @@ function handleAction(roomId, playerId, action) {
       if (w.faceUp) picked.faceUp = true;
       p.life.push(picked);
       log(game, `${w.sourceCardName}: placed ${picked.name} face-up on top of life. (${p.life.length} life)`);
-      game.addCharacterToLifeWindow = null;
+      closeWindow(game, 'addCharacterToLifeWindow');
       if (pipelineResume) resumePipeline(game, playerId, pipelineResume);
       break;
     }
@@ -2998,12 +3223,13 @@ function openPlayFromTrash(game, playerId, opts) {
     log(game, `${sourceCardName || 'Effect'}: no eligible Character in trash.`);
     return false;
   }
-  game.playFromTrashWindow = {
+  openWindow(game, 'playFromTrashWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     filter, rested, sourceCardName, optional, max,
     pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   log(game, `${sourceCardName}: choose a Character from trash (${candidates.length} option(s)).`);
   return true;
 }
@@ -3033,7 +3259,7 @@ function openPlayFromHand(game, playerId, opts) {
     log(game, `${sourceCardName || 'Effect'}: no valid Characters in hand${why} (cost ${costThreshold} or less).`);
     return false;
   }
-  game.playFromHandWindow = {
+  openWindow(game, 'playFromHandWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     costThreshold,
@@ -3043,7 +3269,8 @@ function openPlayFromHand(game, playerId, opts) {
     // Phase-5 chain resume — PLAY_FROM_HAND_RESOLVE routes through
     // resumePipeline when set.
     pipelineResume,
-  };
+    pickRequirement: 'optional',
+  });
   log(game, `${sourceCardName || 'Effect'}: choose a Character to play for free` +
             (typeName ? ` ({${typeName}})` : '') + ` (${candidates.length} option(s)).`);
   return true;
@@ -3088,7 +3315,7 @@ function openDonReturn(game, playerId, card, required, timing, opts = {}) {
     log(game, `${card.name}: not enough DON!! to pay (need ${required}, have ${totalAvailable}).`);
     return false;
   }
-  game.donReturnWindow = {
+  openWindow(game, 'donReturnWindow', {
     playerId,
     sourceCardUid: card.uid,
     sourceCardName: card.name,
@@ -3102,7 +3329,8 @@ function openDonReturn(game, playerId, card, required, timing, opts = {}) {
     // Phase-4 chain resume (Batch 2) — RETURN_DON hands off to the
     // pipeline resumer when this is set, instead of calling parseAndApply.
     pipelineResume: opts.pipelineResume || null,
-  };
+    pickRequirement: 'mandatory',
+  });
   log(game, `${card.name}: choose ${required} DON!! to return to deck.`);
   return true;
 }
@@ -3127,14 +3355,15 @@ function openRestTargetWindow(game, playerId, opts) {
     log(game, `${sourceCardName}: no active opponent characters to rest.`);
     return false;
   }
-  game.restTargetWindow = {
+  openWindow(game, 'restTargetWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     optional,
     sourceCardName,
     resumeTiming, resumeCardUid,
     pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   log(game, `${sourceCardName}: choose an opponent Character to rest (${candidates.length} option(s)).`);
   return true;
 }
@@ -3149,7 +3378,7 @@ function openKoTargetWindow(game, playerId, opts) {
     log(game, `${opts.sourceCardName}: no valid K.O. targets.`);
     return false;
   }
-  game.koTargetWindow = {
+  openWindow(game, 'koTargetWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     initialCount: opts.count || 1,
@@ -3163,7 +3392,8 @@ function openKoTargetWindow(game, playerId, opts) {
     // Phase-4 chain resume — when set, the KO_TARGET_SELECTED finishWindow
     // routes through resumePipeline instead of parseAndApply.
     pipelineResume: opts.pipelineResume || null,
-  };
+    pickRequirement: (opts.optional !== false) ? 'optional' : 'mandatory',
+  });
   log(game, `${opts.sourceCardName}: choose a K.O. target (${candidates.length} option(s)).`);
   return true;
 }
@@ -3193,7 +3423,7 @@ function tryOpenScryFromEffect(game, playerId, card, effect) {
   if (/place the rest at the bottom/i.test(effect)) placement = 'bottom';
   else if (/top or bottom/i.test(effect)) placement = 'either';
   else placement = 'top';
-  game.scryWindow = {
+  openWindow(game, 'scryWindow', {
     playerId,
     cards: p.deck.splice(0, lookCount),
     keepCount,
@@ -3202,7 +3432,7 @@ function tryOpenScryFromEffect(game, playerId, card, effect) {
     keepExcludeName,   // name to exclude (e.g. "Schola Montis Belli")
     cardName: card.name,
     placement,
-  };
+  });
   log(game, `${card.name}: looking at top ${lookCount} cards…`);
   return true;
 }
@@ -3634,14 +3864,15 @@ function openTrashFromHand(game, playerId, opts) {
     log(game, `${sourceCardName}: not enough eligible hand cards to trash (need ${count}, have ${candidates.length}). Effect skipped.`);
     return false;
   }
-  game.trashFromHandWindow = {
+  openWindow(game, 'trashFromHandWindow', {
     playerId, count, optional, sourceCardName,
     filterType, filterPowerMin,
     resumeTiming, resumeCardUid,
     candidateUids: candidates.map(c => c.uid),
     // Phase-4 chain resume (Batch 2) — set by agentPayCosts.
     pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   log(game, `${sourceCardName}: trash ${count} ${filterType ? filterType.toLowerCase() + ' ' : ''}card${count===1?'':'s'} from hand to fire effect.`);
   return true;
 }
@@ -3683,13 +3914,14 @@ function openAddFromTrash(game, playerId, opts) {
     log(game, `${sourceCardName}: no ${label} in trash.`);
     return false;
   }
-  game.addFromTrashWindow = {
+  openWindow(game, 'addFromTrashWindow', {
     playerId, max: count, optional, sourceCardName, filterType,
     candidateUids: candidates.map(c => c.uid),
     // Phase-4 chain resume — ADD_FROM_TRASH_SELECTED hands off to
     // resumePipeline when this is set.
     pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   const what = filterType ? `an ${filterType.toLowerCase()}` : 'a card';
   log(game, `${sourceCardName}: choose ${what} from your trash to add to your hand.`);
   return true;
@@ -3724,13 +3956,14 @@ function openBounceTarget(game, playerId, opts) {
     log(game, `${sourceCardName}: no valid bounce targets.`);
     return false;
   }
-  game.bounceTargetWindow = {
+  openWindow(game, 'bounceTargetWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     filterKind, filterValue, optional, sourceCardName,
     resumeTiming, resumeCardUid,
     pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   log(game, `${sourceCardName}: choose a Character to return (${candidates.length} option(s)).`);
   return true;
 }
@@ -3767,7 +4000,7 @@ function triggerOnKO(game, ownerId, card, killerId) {
 function applyTriggerEffect(game, playerId, card) {
   if (!card.ability || !card.ability.includes('[Trigger]')) return;
   // Task#1: don't auto-fire — open a window so the player can choose Activate/Skip.
-  game.triggerWindow = { playerId, card };
+  openWindow(game, 'triggerWindow', { playerId, card });
   log(game, `[Trigger] ${card.name} revealed off life — defender may activate.`);
 }
 
@@ -5767,14 +6000,15 @@ function agentApplyEffect(effect, ctx, resume) {
         log(ctx.game, `${ctx.card.name}: no eligible branches for Choose One.`);
         return { status: 'no-targets' };
       }
-      ctx.game.chooseOneWindow = {
+      openWindow(ctx.game, 'chooseOneWindow', {
         playerId: ctx.playerId,
         sourceCardName: ctx.card.name,
         sourceCardUid: ctx.card.uid,
         sourceCardId: ctx.card.id,
         branches,
         pipelineResume: resume || null,
-      };
+        pickRequirement: 'mandatory',
+      });
       log(ctx.game, `${ctx.card.name}: choose one branch (${branches.filter(b => b.available).length} available).`);
       return { status: 'window-open' };
     }
@@ -5853,12 +6087,13 @@ function agentApplyEffect(effect, ctx, resume) {
         candidates.push(c);
       }
       if (candidates.length === 0) return { status: 'no-targets' };
-      ctx.game.attackRedirectWindow = {
+      openWindow(ctx.game, 'attackRedirectWindow', {
         playerId: ctx.playerId,
         candidateUids: candidates.map(c => c.uid),
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
-      };
+        pickRequirement: 'optional',
+      });
       log(ctx.game, `${ctx.card.name}: choose a redirect target (${candidates.length} option(s)).`);
       return { status: 'window-open' };
     }
@@ -5961,13 +6196,14 @@ function agentApplyEffect(effect, ctx, resume) {
         ctx.card.attachedDon = (ctx.card.attachedDon || 0) + avail;
         return { status: 'applied' };
       }
-      ctx.game.giveDonTargetWindow = {
+      openWindow(ctx.game, 'giveDonTargetWindow', {
         playerId: ctx.playerId,
         candidateUids: candidates.map(c => c.uid),
         count: avail,
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
-      };
+        pickRequirement: 'mandatory',
+      });
       log(ctx.game, `${ctx.card.name}: choose a target for ${avail} DON!! (${candidates.length} option(s)).`);
       return { status: 'window-open' };
     }
@@ -6150,7 +6386,7 @@ function agentApplyEffect(effect, ctx, resume) {
         log(ctx.game, `${ctx.card.name}: no life cards to look at.`);
         return { status: 'no-targets' };
       }
-      ctx.game.lookAtLifeCardWindow = {
+      openWindow(ctx.game, 'lookAtLifeCardWindow', {
         playerId: ctx.playerId,
         step: 'choose-source',
         haveMine, haveOpp,
@@ -6159,7 +6395,7 @@ function agentApplyEffect(effect, ctx, resume) {
         sourceCardUid: ctx.card.uid,
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
-      };
+      });
       log(ctx.game, `${ctx.card.name}: choose whose life card to look at.`);
       return { status: 'window-open' };
     }
@@ -6251,7 +6487,7 @@ function agentApplyEffect(effect, ctx, resume) {
         }
         return opened ? { status: 'window-open' } : { status: 'applied' };
       }
-      ctx.game.opponentChoosesWindow = {
+      openWindow(ctx.game, 'opponentChoosesWindow', {
         // "playerId" here is the chooser (opponent of the card's controller).
         playerId: oppId,
         activePlayerId: ctx.playerId,
@@ -6264,7 +6500,8 @@ function agentApplyEffect(effect, ctx, resume) {
         // any branch whose index isn't listed.
         availableOptions,
         pipelineResume: resume || null,
-      };
+        pickRequirement: 'mandatory',
+      });
       log(ctx.game, `${ctx.card.name}: opponent must choose one (${availableOptions.length} of ${branches.length} options available).`);
       return { status: 'window-open' };
     }
@@ -6290,7 +6527,7 @@ function agentApplyEffect(effect, ctx, resume) {
         log(ctx.game, `${ctx.card.name}: no [${effect.name}] cards on your side to grant [${effect.keyword}].`);
         return { status: 'no-targets' };
       }
-      ctx.game.grantKeywordToNamedWindow = {
+      openWindow(ctx.game, 'grantKeywordToNamedWindow', {
         playerId: ctx.playerId,
         candidateUids: candidates.map(c => c.uid),
         keyword: kwNormalised,
@@ -6298,7 +6535,8 @@ function agentApplyEffect(effect, ctx, resume) {
         name: effect.name,
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
-      };
+        pickRequirement: 'mandatory',
+      });
       log(ctx.game, `${ctx.card.name}: choose a [${effect.name}] card to grant [${effect.keyword}] (${candidates.length}).`);
       return { status: 'window-open' };
     }
@@ -6311,14 +6549,15 @@ function agentApplyEffect(effect, ctx, resume) {
         log(ctx.game, `${ctx.card.name}: hand empty — cannot add to life.`);
         return { status: 'no-targets' };
       }
-      ctx.game.addHandToLifeWindow = {
+      openWindow(ctx.game, 'addHandToLifeWindow', {
         playerId: ctx.playerId,
         candidateUids: (ctx.player.hand || []).map(c => c.uid),
         max: effect.count || 1,
         optional: effect.optional !== false,
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
-      };
+        pickRequirement: (effect.optional !== false) ? 'optional' : 'mandatory',
+      });
       log(ctx.game, `${ctx.card.name}: choose a card from hand to put on top of life.`);
       return { status: 'window-open' };
     }
@@ -6333,14 +6572,15 @@ function agentApplyEffect(effect, ctx, resume) {
         log(ctx.game, `${ctx.card.name}: no Character with cost ${cost} in hand.`);
         return { status: 'no-targets' };
       }
-      ctx.game.addCharacterToLifeWindow = {
+      openWindow(ctx.game, 'addCharacterToLifeWindow', {
         playerId: ctx.playerId,
         candidateUids: candidates.map(c => c.uid),
         cost,
         faceUp: !!effect.faceUp,
         sourceCardName: ctx.card.name,
         pipelineResume: resume || null,
-      };
+        pickRequirement: 'mandatory',
+      });
       log(ctx.game, `${ctx.card.name}: choose a cost-${cost} Character from hand to add face-up to top of life (${candidates.length}).`);
       return { status: 'window-open' };
     }
@@ -6354,7 +6594,7 @@ function agentApplyEffect(effect, ctx, resume) {
       }
       const reveal = effect.reveal || {};
       const rFilter = reveal.filter || {};
-      ctx.game.scryWindow = {
+      openWindow(ctx.game, 'scryWindow', {
         playerId:       ctx.playerId,
         cards:          p.deck.splice(0, lookCount),
         keepCount:      reveal.count || 0,
@@ -6364,7 +6604,7 @@ function agentApplyEffect(effect, ctx, resume) {
         cardName:       ctx.card.name,
         placement:      effect.placement || 'top',
         pipelineResume: resume || null,
-      };
+      });
       console.log('[SCRY_OPEN]', {
         cardId: ctx.card.id,
         cardName: ctx.card.name,
@@ -6517,12 +6757,13 @@ function openSuppressionTarget(game, playerId, opts) {
     log(game, `${sourceCardName}: no valid suppression targets (kind=${kind}).`);
     return false;
   }
-  game.suppressionTargetWindow = {
+  openWindow(game, 'suppressionTargetWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     optional, sourceCardName, kind, duration, side, targetKind,
     alsoAttack, pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   log(game, `${sourceCardName}: choose a target to suppress (${kind}, ${candidates.length} option(s)).`);
   return true;
 }
@@ -6551,13 +6792,14 @@ function openPowerBuffTarget(game, playerId, opts) {
     log(game, `${sourceCardName}: no valid ${side === 'opponent' ? 'opponent' : 'own'} ${targetKind} targets for power buff.`);
     return false;
   }
-  game.powerBuffTargetWindow = {
+  openWindow(game, 'powerBuffTargetWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     optional, sourceCardName,
     amount, duration, side, targetKind,
     pipelineResume,
-  };
+    pickRequirement: optional ? 'optional' : 'mandatory',
+  });
   const sign = amount >= 0 ? '+' : '';
   log(game, `${sourceCardName}: choose a ${side === 'opponent' ? "opponent's " : ''}target for ${sign}${amount} power (${candidates.length} option(s)).`);
   return true;
@@ -6586,14 +6828,14 @@ function openPlaceAtBottomWindow(game, playerId, opts) {
     log(game, `${sourceCardName}: no valid targets to place at bottom of deck.`);
     return false;
   }
-  game.placeAtBottomWindow = {
+  openWindow(game, 'placeAtBottomWindow', {
     playerId,
     candidateUids: candidates.map(c => c.uid),
     max, optional,
     sourceCardName, sourceCardUid,
     filter,
     pipelineResume,
-  };
+  });
   log(game, `${sourceCardName}: choose a Character to place at the bottom of its owner's deck (${candidates.length} option(s)).`);
   return true;
 }
@@ -6607,12 +6849,12 @@ function openAddLifeCardToHand(game, playerId, opts) {
   const p = game.players[playerId];
   if (!p || (p.life || []).length === 0) return false;
   const { optional = true, sourceCardName = '', pipelineResume = null } = opts || {};
-  game.addLifeCardToHandWindow = {
+  openWindow(game, 'addLifeCardToHandWindow', {
     playerId,
     optional,
     sourceCardName,
     pipelineResume,
-  };
+  });
   log(game, `${sourceCardName}: choose a Life card (top or bottom) to add to your hand.`);
   return true;
 }
