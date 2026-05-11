@@ -528,7 +528,12 @@ test('Forgotten Monestary: ACTIVATE_MAIN opens addLifeCardToHand cost when hand 
   game.players[p1].life = [{ id: 'L', name: 'L', uid: 'lx' }];
 
   srv.handleAction(roomId, p1, { type: 'ACTIVATE_MAIN', cardUid: monestary.uid });
-  assert.equal(monestary.rested, true, 'stage rested on activate');
+  // window-lifecycle v2 — ACTIVATE_MAIN now opens confirm window without
+  // mutating state. ACTIVATE_MAIN_CONFIRM commits the activation.
+  assert.ok(game.activateMainConfirmWindow, 'confirm window opened');
+  assert.equal(monestary.rested, false, 'stage NOT rested before confirm');
+  srv.handleAction(roomId, p1, { type: 'ACTIVATE_MAIN_CONFIRM', cardUid: monestary.uid });
+  assert.equal(monestary.rested, true, 'stage rested on confirm');
   assert.ok(game.addLifeCardToHandWindow, 'addLifeCardToHand cost window opened');
 });
 

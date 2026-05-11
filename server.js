@@ -1408,9 +1408,69 @@ function handleAction(roomId, playerId, action) {
           return;
         }
       }
-      // Mark used + rest the card (stages rest too on activate).
+      // window-lifecycle v2 — two-phase ACTIVATE_MAIN. Do NOT mutate yet:
+      // open confirm window, await ACTIVATE_MAIN_CONFIRM. Rules §8-4-1
+      // commits cost only between 8-4-1-2 (specify) and 8-4-1-3 (pay).
+      // If a confirm window already exists for this player (mid-think
+      // retarget), overwrite it; if for a different player, ERROR.
+      if (game.activateMainConfirmWindow
+          && game.activateMainConfirmWindow.playerId !== playerId) {
+        send(playerId, {type:'ERROR', msg:'Opponent has a pending activation.'});
+        return;
+      }
+      if (game.activateMainConfirmWindow) {
+        // Same player re-targeting — close prior confirm.
+        closeWindow(game, 'activateMainConfirmWindow');
+      }
+      openWindow(game, 'activateMainConfirmWindow', {
+        playerId,
+        cardUid: card.uid,
+        cardName: card.name,
+        sourceCardUid: card.uid,
+        abilitySummary: card.ability,
+        openedAtTurn: game.turn,
+      });
+      log(game, `${card.name}: confirm [Activate: Main]?`);
+      break;
+    }
+
+    case 'ACTIVATE_MAIN_CONFIRM': {
+      const w = game.activateMainConfirmWindow;
+      if (!w || w.playerId !== playerId || w.cardUid !== action.cardUid) {
+        send(playerId, {type:'ERROR', msg:'No matching activation to confirm.'});
+        return;
+      }
+      // Re-resolve card by uid (defensive — card may have moved between
+      // open and confirm).
+      let card = null;
+      if (p.leader && p.leader.uid === w.cardUid) card = p.leader;
+      else card = (p.field || []).find(c => c.uid === w.cardUid);
+      if (!card) {
+        closeWindow(game, 'activateMainConfirmWindow');
+        send(playerId, {type:'ERROR', msg:'Card no longer eligible.'});
+        return;
+      }
+      // Re-run the eligibility gates — state may have changed.
+      if (card.rested
+          || (card.ability && card.ability.includes('[Once Per Turn]') && card.usedThisTurn)
+          || isEffectsSuppressed(card)) {
+        closeWindow(game, 'activateMainConfirmWindow');
+        send(playerId, {type:'ERROR', msg:'Card no longer eligible.'});
+        return;
+      }
+      // Re-run ST07-017 hand check (cost-3 character must still be in hand).
+      if (card.id === 'ST07-017') {
+        const hasCost3Character = (p.hand || []).some(c => c.type === 'CHARACTER' && (c.cost || 0) === 3);
+        if (!hasCost3Character) {
+          closeWindow(game, 'activateMainConfirmWindow');
+          send(playerId, {type:'ERROR', msg:'Forgotten Monestary requires a cost-3 Character in your hand.'});
+          return;
+        }
+      }
+      // Commit: rules-visible state mutation happens NOW.
       card.usedThisTurn = true;
       card.rested = true;
+      closeWindow(game, 'activateMainConfirmWindow');
       log(game, `${card.name}: [Activate: Main] activated.`);
       runPipeline('activateMain', game, playerId, card);
       break;
