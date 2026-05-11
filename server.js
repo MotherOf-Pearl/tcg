@@ -2127,12 +2127,46 @@ function handleAction(roomId, playerId, action) {
     case 'END_TURN': {
       console.log('END_TURN received', { playerId, activePlayer: game.activePlayer, isActive, phase: game.phase, turn: game.turn, counterWindow: !!game.counterWindow });
       if (!isActive) { console.log('END_TURN rejected: not active player'); return; }
-      // Auto-resolve counter window if active
+      // Legacy counterWindow auto-resolve path — unchanged.
       if (game.counterWindow) {
         console.log('END_TURN: auto-resolving counter window');
         game.counterDone[playerId] = true;
         if (Object.values(game.counterDone).every(v => v)) {
           resolveCounter(roomId);
+        }
+      }
+      // window-lifecycle v2 — walk descriptor table.
+      // Phase 1: reject if any blocking window is open.
+      const openWindows = Object.entries(WINDOW_DESCRIPTORS)
+        .filter(([field]) => game[field] != null && field !== 'counterWindow');
+      for (const [field, desc] of openWindows) {
+        if (desc.endTurnPolicy === 'reject') {
+          send(playerId, {
+            type: 'END_TURN_REJECTED',
+            reason: `${desc.kind} must resolve first.`,
+            blockingWindow: field,
+          });
+          return;
+        }
+      }
+      // Phase 2: drain cancellable + autoSkip windows.
+      for (const [field, desc] of openWindows) {
+        if (game[field] == null) continue;  // may have been closed by a prior iter
+        if (desc.endTurnPolicy === 'autoCancel') {
+          const payload = game[field];
+          const isPicker = ['targetPicker','modePicker','multiSelect'].includes(desc.kind);
+          if (isPicker && payload && payload.pickRequirement === 'mandatory') {
+            const picked = forcedPickHelper(game, field, payload);
+            broadcast(roomId, { type: 'WINDOW_AUTO_RESOLVED', windowField: field,
+              reason: 'endTurnMandatory', resolution: picked });
+          } else {
+            const aw = { field, descriptor: desc, playerId: payload && payload.playerId };
+            cancelWindow(game, aw, 'endTurn');
+            broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: field, reason: 'endTurn' });
+          }
+        } else if (desc.endTurnPolicy === 'autoSkip') {
+          autoSkipWindow(game, field);
+          broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: field, reason: 'endTurnAutoSkip' });
         }
       }
       doEnd(game);
