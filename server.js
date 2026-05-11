@@ -1749,6 +1749,18 @@ function handleAction(roomId, playerId, action) {
         send(playerId, {type:'ERROR', msg:'Cost has been paid — cannot cancel.'});
         return;
       }
+      // §8-4-1 — user-initiated cancel is permitted ONLY pre-cost. Once
+      // ACTIVATE_MAIN_CONFIRM has paid the activation cost per §8-4-1-3
+      // and entered §8-4-1-4, the effect must resolve per §8-4-1-5. Any
+      // cancellable window opened post-confirm (target pickers, multi-
+      // selects, scry, etc. — everything except the two pre-cost fields
+      // below) is rejected here. END_TURN still has its own autoCancel /
+      // forcedPickHelper fallbacks as a turn-ending backstop.
+      const PRE_COST_CANCELLABLE = new Set(['attackDeclarationWindow', 'activateMainConfirmWindow']);
+      if (!PRE_COST_CANCELLABLE.has(aw.field)) {
+        send(playerId, {type:'ERROR', msg:'Cannot cancel — effect already activated. Resolve to continue.'});
+        return;
+      }
       // §7-1-1-3 commit boundary — once [When Attacking] has fired during
       // attack declaration, cancel must be refused. The attack is past the
       // rules-visible mutation point even if SELECT_TARGET hasn't run yet

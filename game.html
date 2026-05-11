@@ -4906,8 +4906,19 @@ function renderGlobalWindowControls() {
       && game.activeWindow.descriptor.cancelKind === 'cancellable') {
     show = true;
     const field = game.activeWindow.field;
-    title = field === 'attackDeclarationWindow' ? 'Select a target to attack' : 'Action pending';
-    cancel = true;
+    // §8-4-1 — Cancel is only legal pre-cost. attackDeclarationWindow
+    // sits between §7-1-1-1 (rest attacker) and §7-1-1-3 ([When Attacking]
+    // fires) so cancel is rules-valid there. Every other cancellable
+    // window opens post-ACTIVATE_MAIN_CONFIRM, after §8-4-1-3 cost
+    // payment — per §8-4-1-5 the player must resolve. Show the label
+    // but no cancel button.
+    const PRE_COST_CANCELLABLE = new Set(['attackDeclarationWindow']);
+    if (field === 'attackDeclarationWindow') {
+      title = 'Select a target to attack';
+    } else {
+      title = 'Resolve to continue';
+    }
+    cancel = PRE_COST_CANCELLABLE.has(field);
   }
   root.style.display = show ? 'flex' : 'none';
   if (titleEl) titleEl.textContent = title;

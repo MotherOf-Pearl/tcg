@@ -5,7 +5,11 @@ const { srv, resetWorld, twoPlayerGame, messagesOfType } = require('./helpers');
 
 beforeEach(resetWorld);
 
-test('CANCEL_WINDOW clears a cancellable bounceTargetWindow', () => {
+test('CANCEL_WINDOW is REJECTED on a post-cost bounceTargetWindow (§8-4-1-5)', () => {
+  // Per §8-4-1, once the cost has been paid (§8-4-1-3) and the effect
+  // activated (§8-4-1-4), the player must resolve (§8-4-1-5). User-
+  // initiated cancel is only legal pre-cost. The engine rejects with
+  // an ERROR and leaves the window open.
   const { roomId, p1, p2, game } = twoPlayerGame();
   const ball = { ...srv.CARD_DB.find(c => c.id === 'ST03-014'),
     uid: 'ball-cancel', rested: false, attachedDon: 0 };
@@ -17,13 +21,15 @@ test('CANCEL_WINDOW clears a cancellable bounceTargetWindow', () => {
   assert.ok(game.bounceTargetWindow, 'window open');
   assert.ok(game.activeWindow, 'activeWindow tracked');
 
-  const oppFieldBefore = game.players[p2].field.length;
+  const p1Client = srv.clients.get(p1);
+  p1Client._sent.length = 0;
   srv.handleAction(roomId, p1, { type: 'CANCEL_WINDOW' });
 
-  assert.equal(game.bounceTargetWindow, null, 'window cleared');
-  assert.equal(game.activeWindow, null, 'activeWindow cleared');
-  assert.equal(game.players[p2].field.length, oppFieldBefore,
-    'no card bounced on cancel');
+  const errs = messagesOfType(p1Client, 'ERROR');
+  assert.ok(errs.some(e => /already activated/.test(e.msg)),
+    'ERROR fired with "already activated" message');
+  assert.ok(game.bounceTargetWindow, 'window still open after rejected cancel');
+  assert.ok(game.activeWindow, 'activeWindow still tracked');
 });
 
 test('CANCEL_WINDOW rejects when no window is open', () => {
