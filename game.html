@@ -4845,6 +4845,79 @@ document.addEventListener('click', e => {
   hideTooltip();
 });
 </script>
+
+<!-- window-lifecycle v2 — globalWindowControls: bottom-right confirm/cancel
+     surface for any active window owned by the local viewer. Populated by
+     renderGlobalWindowControls(); hidden when no window is open. -->
+<div id="globalWindowControls" style="display:none;position:fixed;right:18px;bottom:18px;z-index:9995;background:rgba(12,8,4,.93);border:2px solid #8b6914;border-radius:10px;padding:12px 14px;min-width:200px;max-width:280px;box-shadow:0 6px 24px rgba(0,0,0,.55);">
+  <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.8rem;color:#f0d896;text-align:center;letter-spacing:.04em;margin-bottom:8px;line-height:1.3;"></div>
+  <div id="gwcHint" style="font-family:'Barlow Condensed',sans-serif;font-size:.66rem;color:#8a7860;text-align:center;line-height:1.4;margin-bottom:10px;display:none;"></div>
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
+    <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
+  </div>
+</div>
+<script>
+// window-lifecycle v2 client surface — renders confirm/cancel CTAs in
+// the bottom-right slot for any open window owned by the local viewer.
+// Driven by GAME_STATE: reads game.activeWindow + game.activateMainConfirmWindow.
+function gwcCancel() {
+  if (!game) return;
+  send({ type: 'CANCEL_WINDOW' });
+}
+function gwcConfirm() {
+  if (!game || !game.activateMainConfirmWindow) return;
+  const w = game.activateMainConfirmWindow;
+  if (w.playerId !== myId) return;
+  send({ type: 'ACTIVATE_MAIN_CONFIRM', cardUid: w.cardUid });
+}
+function renderGlobalWindowControls() {
+  const root = document.getElementById('globalWindowControls');
+  if (!root || !game) return;
+  const titleEl = document.getElementById('gwcTitle');
+  const hintEl = document.getElementById('gwcHint');
+  const confirmBtn = document.getElementById('gwcConfirmBtn');
+  const cancelBtn = document.getElementById('gwcCancelBtn');
+  let show = false, title = '', hint = '', confirm = false, cancel = false;
+  // Activate Main confirm overlay takes priority.
+  const amc = game.activateMainConfirmWindow;
+  if (amc && amc.playerId === myId) {
+    show = true;
+    title = `Activate ${amc.cardName || 'card'}?`;
+    hint = 'Confirm to commit. Cancelling now refunds nothing not yet paid.';
+    confirm = true; cancel = true;
+  } else if (game.activeWindow && game.activeWindow.playerId === myId
+      && game.activeWindow.descriptor
+      && game.activeWindow.descriptor.cancelKind === 'cancellable') {
+    show = true;
+    const field = game.activeWindow.field;
+    if (field === 'attackDeclarationWindow') {
+      title = 'Attack pending — pick a target or cancel.';
+    } else {
+      title = 'Action pending — cancel to abort.';
+      hint = 'Cancelling now will end the ability; once-per-turn slot is already consumed.';
+    }
+    cancel = true;
+  }
+  root.style.display = show ? 'block' : 'none';
+  if (titleEl) titleEl.textContent = title;
+  if (hintEl) { hintEl.textContent = hint; hintEl.style.display = hint ? 'block' : 'none'; }
+  if (confirmBtn) confirmBtn.style.display = confirm ? 'block' : 'none';
+  if (cancelBtn) cancelBtn.style.display = cancel ? 'block' : 'none';
+}
+// Hook into the main render loop. The existing renderGame() is called
+// after every GAME_STATE; we just monkey-patch the tail.
+(function () {
+  const orig = window.renderGame;
+  if (typeof orig === 'function') {
+    window.renderGame = function () {
+      const r = orig.apply(this, arguments);
+      try { renderGlobalWindowControls(); } catch (e) { console.warn('gwc:', e); }
+      return r;
+    };
+  }
+})();
+</script>
 <script src="background.js?v=15"></script>
 </body>
 </html>
