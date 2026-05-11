@@ -1781,6 +1781,58 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // ─── ESCAPE HATCH ───────────────────────────────────────────────
+    // Recovery tool for "no-prompt freezes" — when a window is stuck
+    // open with no UI affordance to resolve it. Bypasses all cancel-
+    // kind / pre-cost / whenAttackingFired guards. Owner-only (the
+    // window's playerId must match the caller). Heavily logged so the
+    // opponent always sees it happened.
+    //
+    // NOT part of normal gameplay. The client surfaces this only after
+    // the player types the unlock code (1234<Enter>) and clicks the
+    // hidden Force Cancel button. Use sparingly.
+    case 'FORCE_CANCEL_WINDOW': {
+      const aw = game.activeWindow;
+      let targetField = null;
+      if (aw && aw.playerId === playerId) {
+        targetField = aw.field;
+      } else {
+        // activeWindow may have drifted. Scan known window slots for one
+        // owned by this caller.
+        for (const f of Object.keys(WINDOW_DESCRIPTORS)) {
+          if (game[f] && game[f].playerId === playerId) { targetField = f; break; }
+        }
+      }
+      if (!targetField) {
+        send(playerId, { type: 'ERROR', msg: 'No window of yours to force-cancel.' });
+        return;
+      }
+      // Attack-declaration rollback (unrest attacker, clear battleState,
+      // restore MAIN) regardless of whenAttackingFired — this is a
+      // recovery hatch, not a rules-clean cancel.
+      if (targetField === 'attackDeclarationWindow' && game.battleState) {
+        const attackerId = game.battleState.attackerId;
+        const attackerUid = game.battleState.attackerUid;
+        const pl = attackerId ? game.players[attackerId] : null;
+        let attacker = null;
+        if (pl) {
+          if (pl.leader && pl.leader.uid === attackerUid) attacker = pl.leader;
+          else attacker = (pl.field || []).find(c => c.uid === attackerUid);
+        }
+        if (attacker) attacker.rested = false;
+        game.battleState = null;
+        game.phase = 'MAIN';
+      }
+      // Discard pipelineResume on the payload so the chain dies.
+      const payload = game[targetField];
+      if (payload) payload.pipelineResume = null;
+      closeWindow(game, targetField);
+      log(game, `[FORCE] ${playerId.slice(0,6)} force-cancelled ${targetField} (recovery).`);
+      broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: targetField, reason: 'force' });
+      sendState(roomId);
+      break;
+    }
+
     // Deprecated alias — CANCEL_ATTACK routes through the unified path.
     // TODO(next sprint): remove after the client is fully migrated to
     // CANCEL_WINDOW.

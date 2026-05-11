@@ -4937,6 +4937,44 @@ function renderGlobalWindowControls() {
     };
   }
 })();
+
+// ─── ESCAPE HATCH ────────────────────────────────────────────────
+// Hidden recovery for "no-prompt freezes": typing 1234<Enter> at any
+// point reveals a Force Cancel button at top-right. Clicking it sends
+// FORCE_CANCEL_WINDOW to the server, which bypasses all cancel-kind
+// guards and clears whichever window is stuck. NOT documented in the
+// UI — purely for recovering from game-breaking bugs.
+let _fcSeq = [];
+const _fcCode = ['1','2','3','4','Enter'];
+document.addEventListener('keydown', (e) => {
+  // Ignore when typing into inputs/textareas so chat etc. doesn't trigger.
+  const tag = (e.target && e.target.tagName) || '';
+  if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+  _fcSeq.push(e.key);
+  if (_fcSeq.length > _fcCode.length) _fcSeq.shift();
+  if (_fcSeq.length === _fcCode.length && _fcSeq.every((k, i) => k === _fcCode[i])) {
+    _fcSeq = [];
+    showForceCancelBtn();
+  }
+});
+function showForceCancelBtn() {
+  let btn = document.getElementById('forceCancelBtn');
+  if (btn) { btn.style.display = 'block'; return; }
+  btn = document.createElement('button');
+  btn.id = 'forceCancelBtn';
+  btn.className = 'gb-pbtn gb-pbtn-lg';
+  btn.textContent = '⚠ Force Cancel';
+  btn.title = 'Recovery hatch — clears a stuck window. Logged for both players.';
+  btn.style.cssText =
+    'position:fixed;top:18px;right:18px;z-index:99999;' +
+    'background:#5a0d0d;color:#ffdcdc;border:2px solid #b81e1e;' +
+    'box-shadow:0 4px 16px rgba(120,0,0,.5);font-weight:700;';
+  btn.onclick = () => {
+    send({ type: 'FORCE_CANCEL_WINDOW' });
+    btn.style.display = 'none';
+  };
+  document.body.appendChild(btn);
+}
 </script>
 <script src="background.js?v=15"></script>
 </body>
