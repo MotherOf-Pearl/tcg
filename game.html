@@ -1453,16 +1453,13 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
       <span id="actionHint" class="gb-hint">Waiting…</span>
     </div>
     <!-- window-lifecycle v2 — globalWindowControls: confirm/cancel surface
-         for any active window owned by the local viewer. Sits just above
-         #cardInfoPanel so it never overlaps the ability description on
-         hover. Hidden when no window is open. -->
-    <div id="globalWindowControls" style="display:none;margin-top:auto;background:rgba(12,8,4,.93);border:2px solid #8b6914;border-radius:8px;padding:10px 12px;box-shadow:0 4px 16px rgba(0,0,0,.45);">
-      <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.78rem;color:#f0d896;text-align:center;letter-spacing:.04em;margin-bottom:6px;line-height:1.3;"></div>
-      <div id="gwcHint" style="font-family:'Barlow Condensed',sans-serif;font-size:.64rem;color:#8a7860;text-align:center;line-height:1.4;margin-bottom:8px;display:none;"></div>
-      <div style="display:flex;flex-direction:column;gap:5px;">
-        <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
-        <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
-      </div>
+         for any active window owned by the local viewer. Styled to match
+         the existing attacking/deploy button groups in this column (no
+         box, label + buttons in flex flow). -->
+    <div id="globalWindowControls" style="display:none;flex-direction:column;gap:4px;margin-top:auto;">
+      <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;"></div>
+      <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
+      <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
     </div>
     <!-- Hover-revealed card details (any card the cursor enters) -->
     <div id="cardInfoPanel" style="display:none;">
@@ -4894,33 +4891,25 @@ function renderGlobalWindowControls() {
   const root = document.getElementById('globalWindowControls');
   if (!root || !game) return;
   const titleEl = document.getElementById('gwcTitle');
-  const hintEl = document.getElementById('gwcHint');
   const confirmBtn = document.getElementById('gwcConfirmBtn');
   const cancelBtn = document.getElementById('gwcCancelBtn');
-  let show = false, title = '', hint = '', confirm = false, cancel = false;
+  let show = false, title = '', confirm = false, cancel = false;
   // Activate Main confirm overlay takes priority.
   const amc = game.activateMainConfirmWindow;
   if (amc && amc.playerId === myId) {
     show = true;
     title = `Activate ${amc.cardName || 'card'}?`;
-    hint = 'Confirm to commit. Cancelling now refunds nothing not yet paid.';
     confirm = true; cancel = true;
   } else if (game.activeWindow && game.activeWindow.playerId === myId
       && game.activeWindow.descriptor
       && game.activeWindow.descriptor.cancelKind === 'cancellable') {
     show = true;
     const field = game.activeWindow.field;
-    if (field === 'attackDeclarationWindow') {
-      title = 'Attack pending — pick a target or cancel.';
-    } else {
-      title = 'Action pending — cancel to abort.';
-      hint = 'Cancelling now will end the ability; once-per-turn slot is already consumed.';
-    }
+    title = field === 'attackDeclarationWindow' ? 'Select a target to attack' : 'Action pending';
     cancel = true;
   }
-  root.style.display = show ? 'block' : 'none';
+  root.style.display = show ? 'flex' : 'none';
   if (titleEl) titleEl.textContent = title;
-  if (hintEl) { hintEl.textContent = hint; hintEl.style.display = hint ? 'block' : 'none'; }
   if (confirmBtn) confirmBtn.style.display = confirm ? 'block' : 'none';
   if (cancelBtn) cancelBtn.style.display = cancel ? 'block' : 'none';
 }
