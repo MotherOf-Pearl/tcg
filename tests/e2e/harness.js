@@ -168,6 +168,22 @@ class Client {
   waitForState(pred, opts) {
     return this.waitFor((m, c) => m.type === 'GAME_STATE' && pred(m.game, c), opts);
   }
+  // Like waitForState, but ignores history — only considers messages
+  // received *after* the call. Use this when a previous matching state
+  // (e.g. pre-action) would otherwise satisfy the predicate immediately
+  // before the action-induced state arrives.
+  waitForNewState(pred, { timeoutMs = 4000, label = '' } = {}) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        const idx = this._waiters.indexOf(entry);
+        if (idx !== -1) this._waiters.splice(idx, 1);
+        reject(new Error(`waitForNewState timeout on ${this.label}: ${label} — last 10 msgs: ${JSON.stringify(this.inbox.slice(-10).map(m => m.type))}`));
+      }, timeoutMs).unref();
+      const predicate = (m, c) => m.type === 'GAME_STATE' && pred(m.game, c);
+      const entry = { predicate, resolve, reject, timer };
+      this._waiters.push(entry);
+    });
+  }
   close() {
     try { this.ws && this.ws.close(); } catch (_) {}
   }

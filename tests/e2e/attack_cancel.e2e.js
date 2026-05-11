@@ -82,8 +82,10 @@ async function scenario(serverPort) {
 
   // After cancel both clients should see: phase MAIN, battleState null,
   // attackDeclarationWindow null, attacker un-rested, activeWindow null.
-  await p1.waitForState(g => g.phase === 'MAIN' && g.battleState == null && g.attackDeclarationWindow == null, { label: 'post-cancel MAIN (p1)' });
-  await p2.waitForState(g => g.phase === 'MAIN' && g.battleState == null && g.attackDeclarationWindow == null, { label: 'post-cancel MAIN (p2)' });
+  // waitForNewState skips history — the pre-attack state had MAIN/null/null
+  // too, so a history-scanning waitForState would match it spuriously.
+  await p1.waitForNewState(g => g.phase === 'MAIN' && g.battleState == null && g.attackDeclarationWindow == null && !g.players[attacker.playerId].leader.rested, { label: 'post-cancel MAIN (p1)' });
+  await p2.waitForNewState(g => g.phase === 'MAIN' && g.battleState == null && g.attackDeclarationWindow == null && !g.players[attacker.playerId].leader.rested, { label: 'post-cancel MAIN (p2)' });
   for (const c of [p1, p2]) {
     const ld = c.lastState.players[attacker.playerId].leader;
     if (ld.rested) throw new Error(`${c.label}: attacker leader still rested after cancel`);
@@ -94,7 +96,8 @@ async function scenario(serverPort) {
   attacker.action({ type: 'DECLARE_ATTACK', attackerUid: attackerLeaderUid });
   await p1.waitForState(g => g.phase === 'ATTACKING' && !!g.attackDeclarationWindow, { label: 're-declare' });
   attacker.action({ type: 'CANCEL_ATTACK' });
-  await p1.waitForState(g => g.phase === 'MAIN' && g.attackDeclarationWindow == null, { label: 'CANCEL_ATTACK alias resolves' });
+  await p1.waitForNewState(g => g.phase === 'MAIN' && g.attackDeclarationWindow == null && !g.players[attacker.playerId].leader.rested, { label: 'CANCEL_ATTACK alias resolves (p1)' });
+  await p2.waitForNewState(g => g.phase === 'MAIN' && g.attackDeclarationWindow == null && !g.players[attacker.playerId].leader.rested, { label: 'CANCEL_ATTACK alias resolves (p2)' });
   for (const c of [p1, p2]) {
     const ld = c.lastState.players[attacker.playerId].leader;
     if (ld.rested) throw new Error(`${c.label}: attacker still rested after CANCEL_ATTACK alias`);

@@ -776,10 +776,11 @@ function cancelWindow(game, aw, reason) {
     // Drop resume chain. No card-state mutation.
     payload.pipelineResume = null;
   }
-  // Field-specific cleanup hooks.
-  if (field === 'attackDeclarationWindow' && reason === 'user') {
-    // User-initiated attack cancel: unrest attacker, clear battleState,
-    // restore MAIN phase.
+  // Field-specific cleanup hooks. The attackDeclarationWindow rollback
+  // fires for ANY cancel reason (user, endTurn): an unresolved attack
+  // must unrest the attacker, clear battleState, and restore MAIN regardless
+  // of who initiated the cancel.
+  if (field === 'attackDeclarationWindow') {
     if (game.battleState) {
       const attackerId = game.battleState.attackerId;
       const attackerUid = game.battleState.attackerUid;
@@ -1609,7 +1610,11 @@ function handleAction(roomId, playerId, action) {
         playerId,
         sourceCardUid: attacker.uid,
         attackerName: attacker.name,
-        pickRequirement: 'mandatory',
+        // Optional: an unresolved attack is an abandoned UX action, not a
+        // §8-4-4-1 mandatory pick. END_TURN auto-cancels via the field-
+        // specific rollback in cancelWindow (unrest attacker + clear
+        // battleState + restore MAIN phase). See e2e finding 2026-05-11.
+        pickRequirement: 'optional',
       });
       log(game, `\u2694\uFE0F ${attacker.name} declares an attack — choose a target.`);
       // Bug 9 — fire [When Attacking] effects through the central parser. The
@@ -1689,6 +1694,26 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // Test-mode hatch — only active when BOOHAW_TEST_HATCH=1 in the
+    // server environment. Lets e2e specs deterministically open a window
+    // (e.g. a blocking triggerWindow) to exercise paths that can't be
+    // reached via the normal protocol with preset decks. Disabled in
+    // production: env var must be set explicitly by the test harness.
+    case 'DEBUG_SET_WINDOW': {
+      if (process.env.BOOHAW_TEST_HATCH !== '1') {
+        send(playerId, { type: 'ERROR', msg: 'Debug actions disabled.' });
+        return;
+      }
+      const { field, payload } = action;
+      if (!field || !payload || !WINDOW_DESCRIPTORS[field]) {
+        send(playerId, { type: 'ERROR', msg: 'Invalid DEBUG_SET_WINDOW.' });
+        return;
+      }
+      openWindow(game, field, payload);
+      broadcast(roomId, { type: 'GAME_STATE', game });
+      return;
+    }
+
     // window-lifecycle v2 — unified cancel. Looks at game.activeWindow,
     // checks the descriptor's cancelKind, and routes through cancelWindow.
     // cancelWindow knows how to roll back attackDeclarationWindow (unrest
@@ -1713,6 +1738,10 @@ function handleAction(roomId, playerId, action) {
       log(game, `${aw.descriptor.kind} cancelled.`);
       // Notify both players so client can clear pending UI.
       broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: field, reason: 'user' });
+      // Broadcast the post-cancel state so clients see the rollback
+      // (unrest attacker, clear battleState, phase → MAIN for the
+      // attackDeclarationWindow case; in general, refreshed window slots).
+      sendState(roomId);
       break;
     }
 
@@ -1729,6 +1758,7 @@ function handleAction(roomId, playerId, action) {
         cancelWindow(game, aw, 'user');
         log(game, `Attack cancelled.`);
         broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: 'attackDeclarationWindow', reason: 'user' });
+        sendState(roomId);
         break;
       }
       // Fallback (legacy): unrest + clear battleState + restore MAIN.
@@ -1739,6 +1769,7 @@ function handleAction(roomId, playerId, action) {
       game.battleState = null;
       game.phase = 'MAIN';
       log(game, `Attack cancelled.`);
+      sendState(roomId);
       break;
     }
 
