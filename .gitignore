@@ -1,3 +1,5 @@
 node_modules/
 *.log
 .DS_Store
+# Derived rule-text extractions — PDFs in docs/rules/ are canonical.
+docs/rules/*.txt
