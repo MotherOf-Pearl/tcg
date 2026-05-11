@@ -1623,9 +1623,25 @@ function handleAction(roomId, playerId, action) {
       // boost), refresh battleState.attackerPower so the overlay/arrow reflect it.
       // P8 — effects suppression blocks the triggered ability; attack itself
       // still proceeds (attack suppression is a separate kind, checked above).
+      // §7-1-1-3 commit boundary — track whether runPipeline opens a
+      // sub-window. If it does, the [When Attacking] effect has fired
+      // rules-visible state (cost paid into a window, target picker
+      // open, etc.) that cannot be unwound by cancelling the attack.
+      // Window-state-delta avoids both false positives (text-mentions
+      // gated by [DON!! xN]) and false negatives (synchronous mutations
+      // typically can't be raced ahead of SELECT_TARGET in practice).
+      const windowFieldsBefore = Object.entries(WINDOW_DESCRIPTORS)
+        .filter(([f]) => game[f] != null).map(([f]) => f);
       if (isEffectsSuppressed(attacker)) {
         log(game, `${attacker.name}: [When Attacking] suppressed by opponent effect.`);
       } else runPipeline('whenAttacking', game, playerId, attacker);
+      const windowFieldsAfter = Object.entries(WINDOW_DESCRIPTORS)
+        .filter(([f]) => game[f] != null).map(([f]) => f);
+      const newSubWindowOpened = windowFieldsAfter
+        .some(f => f !== 'attackDeclarationWindow' && !windowFieldsBefore.includes(f));
+      if (newSubWindowOpened && game.battleState) {
+        game.battleState.whenAttackingFired = true;
+      }
       game.battleState.attackerPower = effectivePowerOf(attacker, game);
       // Bug 6/7/14 — any [When Attacking] pipeline effect may have opened a
       // window or mutated state only the actor saw. Broadcast now so the
@@ -1731,6 +1747,14 @@ function handleAction(roomId, playerId, action) {
       }
       if (aw.descriptor.cancelKind === 'committed') {
         send(playerId, {type:'ERROR', msg:'Cost has been paid — cannot cancel.'});
+        return;
+      }
+      // §7-1-1-3 commit boundary — once [When Attacking] has fired during
+      // attack declaration, cancel must be refused. The attack is past the
+      // rules-visible mutation point even if SELECT_TARGET hasn't run yet
+      // (a [When Attacking] sub-window may still be open).
+      if (aw.field === 'attackDeclarationWindow' && game.battleState?.whenAttackingFired) {
+        send(playerId, {type:'ERROR', msg:'Cannot cancel — [When Attacking] already resolved.'});
         return;
       }
       const field = aw.field;
@@ -2175,6 +2199,17 @@ function handleAction(roomId, playerId, action) {
           send(playerId, {
             type: 'END_TURN_REJECTED',
             reason: `${desc.kind} must resolve first.`,
+            blockingWindow: field,
+          });
+          return;
+        }
+        // §7-1-1-3 — attackDeclarationWindow becomes blocking once [When
+        // Attacking] has fired. END_TURN at this point would orphan a
+        // mid-battle attack into the opponent's turn.
+        if (field === 'attackDeclarationWindow' && game.battleState?.whenAttackingFired) {
+          send(playerId, {
+            type: 'END_TURN_REJECTED',
+            reason: '[When Attacking] effects must resolve first.',
             blockingWindow: field,
           });
           return;

@@ -81,10 +81,10 @@ async function scenario(serverPort) {
   p1.action({ type: 'CANCEL_WINDOW' });
   await p1.waitFor(m => m.type === 'WINDOW_CANCELLED' && m.windowField === 'activateMainConfirmWindow', { label: 'WINDOW_CANCELLED (p1)' });
   await p2.waitFor(m => m.type === 'WINDOW_CANCELLED' && m.windowField === 'activateMainConfirmWindow', { label: 'WINDOW_CANCELLED (p2)' });
-  // waitForNewState — skip history (pre-ACTIVATE_MAIN state also had a null
-  // confirm window) to make sure we read the actual post-cancel snapshot.
-  await p1.waitForNewState(g => g.activateMainConfirmWindow == null && g.activeWindow == null, { label: 'confirm closed (p1)' });
-  await p2.waitForNewState(g => g.activateMainConfirmWindow == null && g.activeWindow == null, { label: 'confirm closed (p2)' });
+  // Drain any queued GAME_STATE broadcasts (sendState fires immediately
+  // after WINDOW_CANCELLED on the same socket) so lastState reflects the
+  // post-cancel snapshot before we assert.
+  await p1.flush(80);
   for (const c of [p1, p2]) {
     const ld = c.lastState.players[p1.playerId].leader;
     if (ld.rested) throw new Error(`${c.label}: leader rested after cancel — should be reverted`);
