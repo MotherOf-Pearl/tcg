@@ -34,6 +34,7 @@ test('SELECT_TARGET fires defender [On Your Opponent\'s Attack] pipeline', () =>
   game.phase = 'MAIN';
   game.turn = 2;
   game.activePlayer = p1;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
 
   srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-1' });
   srv.handleAction(roomId, p1, {
@@ -57,6 +58,7 @@ test('Defender resolves onYourOpponentsAttack chain independent of attacker flow
   game.phase = 'MAIN';
   game.turn = 2;
   game.activePlayer = p1;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
 
   srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-2' });
   srv.handleAction(roomId, p1, {
@@ -88,6 +90,7 @@ test('Defender with no eligible hand cards: no cost window opened', () => {
   game.phase = 'MAIN';
   game.turn = 2;
   game.activePlayer = p1;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
 
   srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-3' });
   srv.handleAction(roomId, p1, {

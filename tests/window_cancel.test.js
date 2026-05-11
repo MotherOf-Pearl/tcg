@@ -64,6 +64,7 @@ test('attack cancel via CANCEL_WINDOW unrests attacker and restores MAIN', () =>
   game.phase = 'MAIN';
   game.activePlayer = p1;
   game.turn = 2; // bypass turn-1-no-attack rule
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
   // Give p1 a non-rested character that can attack.
   const attacker = { ...srv.CARD_DB.find(c => c.id === 'OP01-101'),
     uid: 'att-1', rested: false, playedThisTurn: false, attachedDon: 0 };

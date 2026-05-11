@@ -40,6 +40,7 @@ test('SELECT_TARGET fires Doflamingo redirect chain: DON cost window first', () 
   game.phase = 'MAIN';
   game.turn = 2;
   game.activePlayer = p1;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
 
   srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-a' });
   srv.handleAction(roomId, p1, {
@@ -65,6 +66,7 @@ test('ATTACK_REDIRECT_SELECTED mutates battleState.targetUid to picked card', ()
   game.phase = 'MAIN';
   game.turn = 2;
   game.activePlayer = p1;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
 
   srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-b' });
   srv.handleAction(roomId, p1, {
@@ -100,6 +102,7 @@ test('Doflamingo with non-matching leader or no candidates: skips redirect', () 
   game.phase = 'MAIN';
   game.turn = 2;
   game.activePlayer = p1;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
 
   srv.handleAction(roomId, p1, { type: 'DECLARE_ATTACK', attackerUid: 'atk-c' });
   srv.handleAction(roomId, p1, {

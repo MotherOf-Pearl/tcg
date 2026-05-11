@@ -158,6 +158,7 @@ test('SUPPRESSION_TARGET_SELECTED (blockerAbility) → USE_BLOCKER refused for p
   game.activePlayer = p1;
   game.phase = 'MAIN';
   game.turn = 2;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
   srv.handleAction(roomId, p1, {
     type: 'DECLARE_ATTACK', attackerUid: 'p1-att', targetUid: game.players[p2].leader.uid,
   });

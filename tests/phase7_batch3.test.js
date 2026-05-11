@@ -68,6 +68,7 @@ test('Gee Hound-Shlawg: onPlay Rush grant makes the new character attack this tu
   game.activePlayer = p1;
   game.phase = 'MAIN';
   game.turn = 2;
+  game.players[p1].hasTakenFirstTurn = true; // §6-5-6-1 bypass for test fixture
   srv.handleAction(roomId, p1, {
     type: 'DECLARE_ATTACK', attackerUid: 'gee-1', targetUid: game.players[p2].leader.uid,
   });
