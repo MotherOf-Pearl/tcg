@@ -1,194 +1,382 @@
-# Design: Uniform Interactive-Window Lifecycle
+# Window Lifecycle v2 — Cancel, Confirm, and Turn-Boundary Safety
 
-**Author:** solution-architect-agent
-**Status:** Approved — ready for implementation by coding-agent
-**Rules basis:** `docs/rules/rule_comprehensive.pdf` v1.2.0
+Status: DESIGN (solution-architect pass). Do not implement until reviewed against v1 (`window-lifecycle.md`) and audited by rules-compliance-agent.
 
 ## Problem
 
-The engine has multiple interactive windows (`restTargetWindow`, `koTargetWindow`, the implicit attack-target window, the implicit Activate-Main flow) but no uniform contract for their lifecycle. Three observed bugs are symptoms of the same gap:
+Three orthogonal bugs all stem from the same missing abstraction: BoohawTCG has no first-class concept of an **uncommitted interactive window**. The engine treats every action as immediately committed, so the user has no way out of a misclick, and the END_TURN handler has no way to tell whether the current player has rules-visible state that must resolve before the turn flips.
 
-1. Attack flow has no cancel — a misclick during target selection soft-locks the player.
-2. Activate Main has no confirmation/cancel — accidentally clicking `[Activate: Main]` commits the once-per-turn use with no escape.
-3. `END_TURN` is legal while a window is open — turn advances for the opponent while the previous player still has unresolved interactive state.
+1. **Attack flow has no visible cancel.** A `CANCEL_ATTACK` action exists server-side (server.js:1396) and a client `cancelAttack()` button exists (game.html:1269), but the button only renders inside `#attackingBtns`, which is part of the per-card control rail. After a misclick the rail's binding to the attacker can be lost and the user is stranded in `phase === 'ATTACKING'` with no UI affordance.
+2. **Activate Main has no cancel.** Today ACTIVATE_MAIN immediately rests the card, sets `usedThisTurn = true`, logs the activation, and calls `runPipeline('activateMain', …)` (server.js:1187-1190). The once-per-turn slot is burned the moment the player clicks the card — there is no confirm step, no rollback path.
+3. **END_TURN during an open window is legal.** END_TURN (server.js:1791) only auto-resolves the legacy `counterWindow`; every other window kind (~25 of them — restTargetWindow, koTargetWindow, bounceTargetWindow, trashFromHandWindow, chooseOneWindow, scryWindow, donReturnWindow, suppressionTargetWindow, powerBuffTargetWindow, placeAtBottomWindow, addFromTrashWindow, addLifeCardToHandWindow, lookAtLifeCardWindow, opponentChoosesWindow, grantKeywordToNamedWindow, attackRedirectWindow, selfSaveWindow, playFromHandWindow, playFromTrashWindow, giveDonTargetWindow, triggerWindow, etc.) survives the turn flip with the wrong `playerId` attached. State leaks across turn boundaries.
 
-Each is a missing invariant on the same lifecycle. Fix the lifecycle once → all three are fixed, and every future ability that opens a window is correct by default.
+The unifying defect is that the engine never categorises a window as *cancellable* or *blocking*, never models a *commit point* between "the player picked a card" and "rules-visible state has mutated", and never enforces "before the turn ends, every open window must be resolved or auto-cancelled".
 
 ## Scope
 
-**In scope:**
-- Define a uniform `WindowContract` shape for every interactive window in `server.js`.
-- Add two new actions: `WINDOW_CANCEL` (uniform across window types) and a precondition check on phase transitions.
-- Migrate existing windows (`restTargetWindow`, `koTargetWindow`, attack-target, Activate-Main entry) to the contract.
-- Insert an `activateMainConfirm` window as the entry point to every Activate-Main pipeline.
-- Update the UI in `game.html` to render a uniform cancel button per the contract.
+- **In scope:**
+  - A single lifecycle abstraction (`WindowDescriptor`) that classifies every interactive window with: `commitPoint`, `cancelKind`, `endTurnPolicy`, `confirmRequired`.
+  - A unified `CANCEL_WINDOW` action handler that knows how to roll back any cancellable window.
+  - An `ACTIVATE_MAIN_CONFIRM` two-phase flow that opens a confirmation window before any state mutation.
+  - END_TURN logic that walks the window descriptor table, auto-cancels cancellable windows, refuses (with reason) when a blocking window is open, and broadcasts a clear log line either way.
+  - A bottom-right UI region (the existing "ability description on hover" slot) that surfaces both confirm and cancel CTAs for any open window owned by the current viewer.
+- **Out of scope:**
+  - Refactoring `parseAndApply` legacy path or migrating non-pipeline cards. Both abstractions coexist; only the new pipeline gets the full descriptor table. Legacy `counterWindow` continues to use its existing auto-resolve.
+  - Touching the rules-resolution engine itself. Battle phase order (Attack/Block/Counter/Damage) is unchanged.
+  - Multi-window queue support. `effectQueue` is already reserved in game state (server.js:672) and we do not extend it here.
+  - Spectator UX, replay, or undo beyond the in-flight uncommitted window.
 
-**Out of scope:**
-- UI restyling beyond the cancel-button placement (placement spec: same spot as ability description on hover, bottom-right of screen).
-- Replacement-effect lifecycle (separate concern).
-- Counter Step interactions — already a distinct rules-defined phase, not a free-form window.
-- The `rule_manual.pdf` audit (defer to rules-compliance-agent before merge).
-
-**Cards/keywords/phases affected:** all current cards with interactive abilities (Anna of Brittany leader, KO-target effects, attack flows). Schema is forward-compatible — no card-specific code.
+- **Cards/keywords/phases affected:**
+  - Phases: MAIN (Activate Main confirm; attack cancel), ATTACKING (attack cancel — already present, surfaced properly), END (END_TURN gate). Battle subphases BLOCK_STEP / COUNTER_STEP unchanged — those are blocking by design (rules 7-1-2 / 7-1-3).
+  - Every card with `useNewPipeline: true` that opens any of the ~25 window kinds. Cancel rollback is handled centrally; no per-card change.
+  - Every card that exposes [Activate: Main] (rules 10-2-2): confirmation step inserted.
 
 ## Design
 
 ### Data model
 
-Every interactive window in `game.<windowField>` conforms to:
+#### `WINDOW_DESCRIPTORS` — single source of truth (engine constant)
 
-```js
-{
-  type: string,                  // 'attackingWindow' | 'restTargetWindow' | 'koTargetWindow' | 'activateMainConfirm' | ...
-  playerId: string,              // who owns the choice
-  candidateUids: string[],       // selectable targets (empty for confirmation-only windows)
-  pipelineResume: ResumeSpec,    // existing — chain to fire after resolve
-  cancellable: boolean,          // is WINDOW_CANCEL legal?
-  onCancel: (game) => void,      // refund/restore logic; called by WINDOW_CANCEL
-  blocksPhaseExit: boolean,      // is END_TURN/END_PHASE illegal while this is open?
-  meta: object,                  // window-specific data (e.g. cost preview for activateMainConfirm)
-}
+A const map keyed by window field name (the existing `*Window` slots on `game`). One descriptor per window kind. Adding a new window kind requires adding one row here; the engine refuses to open windows whose kind isn't registered.
+
+```
+const WINDOW_DESCRIPTORS = {
+  // ───── Cancellable, no rules-visible mutation yet ─────
+  restTargetWindow:        { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  koTargetWindow:          { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  bounceTargetWindow:      { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  powerBuffTargetWindow:   { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  suppressionTargetWindow: { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  giveDonTargetWindow:     { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  attackRedirectWindow:    { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false }, // see Note A
+  chooseOneWindow:         { kind: 'modePicker',      commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  opponentChoosesWindow:   { kind: 'modePicker',      commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false }, // see Note B
+  grantKeywordToNamedWindow:{kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  placeAtBottomWindow:     { kind: 'orderPicker',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  addFromTrashWindow:      { kind: 'multiSelect',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  scryWindow:              { kind: 'orderPicker',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  lookAtLifeCardWindow:    { kind: 'reveal',          commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+
+  // ───── Already half-committed: card moved or cost paid ─────
+  // These cannot be safely cancelled because rules-visible state has
+  // already mutated (cost paid, card moved). They are AUTO-RESOLVED
+  // on END_TURN by feeding the resolver the player's default choice.
+  playFromHandWindow:      { kind: 'targetPicker',    commitPoint: 'onOpen',    cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  playFromTrashWindow:     { kind: 'targetPicker',    commitPoint: 'onOpen',    cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  trashFromHandWindow:     { kind: 'multiSelect',     commitPoint: 'onConfirm', cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false }, // cost-leg; see Note C
+  donReturnWindow:         { kind: 'multiSelect',     commitPoint: 'onConfirm', cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  addLifeCardToHandWindow: { kind: 'orderPicker',     commitPoint: 'onConfirm', cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false },
+  selfSaveWindow:          { kind: 'binary',          commitPoint: 'onSelect',  cancelKind: 'committed',   endTurnPolicy: 'autoSkip',   confirmRequired: false }, // see Note D
+
+  // ───── Rules-required: blocking ─────
+  counterWindow:           { kind: 'reactive',        commitPoint: 'na',        cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false },
+  triggerWindow:           { kind: 'reactive',        commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false },
+
+  // ───── New: confirmation gate ─────
+  activateMainConfirmWindow: { kind: 'confirm',       commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: true },
+};
 ```
 
-Invariants:
-- `cancellable === true` ⟹ `onCancel` is non-null and idempotent.
-- `blocksPhaseExit === true` ⟹ `END_TURN` rejects with a UX error message.
-- `cancellable === true && blocksPhaseExit === false` is the canonical "pre-commit" state — `END_TURN` auto-fires `WINDOW_CANCEL` then transitions.
-- `cancellable === false && blocksPhaseExit === true` is the canonical "post-commit, mid-resolution" state.
+Notes:
+- **Note A — attackRedirectWindow** is blocking because it fires in the middle of `onYourOpponentsAttack` while a battleState is mid-resolution (rules 7-1-1-3). Cancelling would orphan the battle. END_TURN cannot occur during battle anyway, so `endTurnPolicy:'reject'` is precautionary.
+- **Note B — opponentChoosesWindow** is owned by the non-active player; we cannot let the active player end-turn around it. Reject with "opponent must choose first".
+- **Note C — trashFromHandWindow** is the cost leg of an effect (rule 8-4-1-3). It is `'committed'` once opened because the effect-activation procedure (8-4-1) has reached the cost-payment step; aborting now without paying would re-open the question of whether 8-3-1-3 applies. We rely on the existing "skip" path inside the resolver.
+- **Note D — selfSaveWindow** is owned by the defender mid-KO. The KO has already been declared. Opting in/out has no "uncommitted" sense.
 
-The `meta` field is intentionally an open object so future window types can carry shape-specific data (e.g. cost preview, choice prompts) without engine changes.
+#### `game` shape additions
+
+```
+// New: which window the descriptor table considers currently open, for
+// O(1) cancel/end-turn checks. NEVER trusted as primary state — always
+// reconstructed from the *Window slots by openWindow()/closeWindow().
+game.activeWindow = null;
+// Shape: { field: 'restTargetWindow', playerId, sourceCardUid, openedAtTurn,
+//          descriptor: <ref into WINDOW_DESCRIPTORS> }
+
+// New: activateMainConfirmWindow — a small descriptor before any state
+// mutation. Pre-mutation snapshot is implicit (no mutation has happened
+// yet); cancel = clear window, no rollback needed.
+game.activateMainConfirmWindow = null;
+// Shape: { playerId, cardUid, cardName, abilitySummary, isOnceUsed: boolean,
+//          donCost: number, openedAtTurn }
+```
+
+#### WS message protocol additions
+
+Client → server:
+- `CANCEL_WINDOW` — `{ type: 'CANCEL_WINDOW' }` (no payload; server resolves which window is open via `game.activeWindow`). Replaces the existing one-off `CANCEL_ATTACK` going forward, though CANCEL_ATTACK is kept as a deprecated alias for one release to avoid client/server skew during deploy.
+- `ACTIVATE_MAIN_CONFIRM` — `{ type: 'ACTIVATE_MAIN_CONFIRM', cardUid }`. Sent when the user clicks Confirm in the activate-main confirm overlay. Server runs the real activation logic (rest card, runPipeline). Without a matching open `activateMainConfirmWindow` for the same `cardUid`, the action is ignored.
+
+Server → client:
+- `GAME_STATE` already broadcasts `game.activateMainConfirmWindow` and `game.activeWindow` via the existing JSON serialisation — no schema change beyond the new fields.
+- `WINDOW_CANCELLED` — `{ type: 'WINDOW_CANCELLED', windowField, reason }`. Sent to both players when a window is auto-cancelled by END_TURN. Lets the client surface a toast like "Once Per Turn slot refunded".
+- `END_TURN_REJECTED` — `{ type: 'END_TURN_REJECTED', reason, blockingWindow }`. Sent only to the requester. Client surfaces the reason in the existing error toast slot.
 
 ### Engine changes
 
-**New action handlers** in `handleAction`:
+#### 1. Window-open and window-close get a single bottleneck
 
-```js
-// Uniform across all window types.
-case 'WINDOW_CANCEL': {
-  const w = game.activeWindow;  // see below
-  if (!w || w.playerId !== playerId) return reject('no window');
-  if (!w.cancellable) return reject('window not cancellable');
-  w.onCancel(game);
-  clearWindow(game);
-  return ok();
+Today every opener (`openRestTargetWindow`, `openBounceTarget`, …) writes directly to its named slot. We add two thin helpers and rewrite each opener to go through them:
+
+```
+function openWindow(game, field, payload) {
+  const desc = WINDOW_DESCRIPTORS[field];
+  if (!desc) throw new Error(`Unknown window kind: ${field}`);
+  if (game[field]) {
+    // Defensive — should never happen; engine is single-window today.
+    console.warn(`[WINDOW] Overwriting existing ${field}`);
+  }
+  game[field] = payload;
+  game.activeWindow = {
+    field, playerId: payload.playerId,
+    sourceCardUid: payload.sourceCardUid || payload._sourceCardUid || null,
+    openedAtTurn: game.turn,
+    descriptor: desc,
+  };
+}
+
+function closeWindow(game, field) {
+  game[field] = null;
+  if (game.activeWindow && game.activeWindow.field === field) {
+    game.activeWindow = null;
+  }
 }
 ```
 
-**New helper:** `game.activeWindow` — a getter that returns the currently open window regardless of which field it lives in (`restTargetWindow`, `koTargetWindow`, etc.). Implementation: scan known window fields; assert at most one is non-null. Long-term migration target: collapse to a single `game.activeWindow` field and drop the per-type fields.
+Existing window resolvers (e.g. `KO_TARGET_SELECTED` at server.js:1808) replace the line `game.koTargetWindow = null;` with `closeWindow(game, 'koTargetWindow');`. Existing openers (e.g. `openRestTargetWindow` at server.js:3118) replace `game.restTargetWindow = { … }` with `openWindow(game, 'restTargetWindow', { … })`. Mechanical refactor, no behaviour change for happy-path cards.
 
-**Phase-transition guard:** every phase-transition action (currently `END_TURN`, future `END_PHASE`) calls:
+#### 2. `CANCEL_WINDOW` handler — central rollback
 
-```js
-function canEndPhase(game, playerId) {
-  const w = game.activeWindow;
-  if (!w) return { ok: true };
-  if (w.playerId !== playerId) return { ok: true }; // opponent's window doesn't block you
-  if (w.blocksPhaseExit) return { ok: false, reason: `resolve ${w.type} first or cancel it` };
-  if (w.cancellable) { w.onCancel(game); clearWindow(game); return { ok: true }; }
-  // cancellable === false && blocksPhaseExit === false is malformed — log and treat as blocking.
-  return { ok: false, reason: 'inconsistent window state' };
+```
+case 'CANCEL_WINDOW': {
+  const aw = game.activeWindow;
+  if (!aw) { send(playerId, { type:'ERROR', msg:'No window to cancel.' }); return; }
+  if (aw.playerId !== playerId) {
+    send(playerId, { type:'ERROR', msg:'That window is not yours to cancel.' });
+    return;
+  }
+  if (aw.descriptor.cancelKind === 'blocking') {
+    send(playerId, { type:'ERROR', msg:'This step cannot be cancelled — resolve it first.' });
+    return;
+  }
+  if (aw.descriptor.cancelKind === 'committed') {
+    send(playerId, { type:'ERROR', msg:'Cost has been paid — cannot cancel.' });
+    return;
+  }
+  cancelWindow(game, aw, /*reason*/ 'user');
+  log(game, `${aw.descriptor.kind} cancelled.`);
+  broadcastAll(game, room);
+  break;
 }
 ```
 
-**New window: `activateMainConfirm`**. Every `srv.runPipeline('activateMain', ...)` opens this window first, *before* any cost payment or state mutation. Shape:
+`cancelWindow(game, aw, reason)` does:
+1. Discard the window's `pipelineResume` (the chain dies, no resume is fired).
+2. Call descriptor-specific rollback hook, if any. For most pickers there's nothing to undo. Two specific rollbacks:
+   - **activateMainConfirmWindow:** nothing to undo (we deliberately have not yet rested, marked used, or called runPipeline).
+   - **suppressionTargetWindow** and other windows opened post-cost: we explicitly do not allow cancel here — those windows belong to `committed` cards in the table above. The descriptor table is the gate.
+3. `closeWindow(game, aw.field)`.
 
-```js
-{
-  type: 'activateMainConfirm',
+The key invariant — and the reason this is safe — is that **`cancelKind: 'cancellable'` is only assigned to windows where the only state mutation between "user clicked the source card" and "window opened" is creating the window object itself**. No costs paid, no cards moved, no `usedThisTurn` flips. This is what rule 8-4-1 calls the post-8-4-1-2 / pre-8-4-1-3 boundary — the effect has been *specified* but the *cost has not yet been paid*. The original ACTIVATE_MAIN handler violates this by setting `card.usedThisTurn = true; card.rested = true;` *before* runPipeline (server.js:1187). The two-phase confirm flow below fixes that.
+
+#### 3. Two-phase ACTIVATE_MAIN
+
+Existing `ACTIVATE_MAIN` (server.js:1140) splits in two:
+
+```
+case 'ACTIVATE_MAIN': {
+  // (all existing eligibility checks unchanged — owner, isActive, phase,
+  //  card resolution, [Activate: Main] keyword check, rested check,
+  //  [Once Per Turn] check, isEffectsSuppressed, ST07-017 hand check)
+  // (NO MUTATION — do not rest, do not mark used, do not log "activated")
+  openWindow(game, 'activateMainConfirmWindow', {
+    playerId,
+    cardUid: card.uid,
+    cardName: card.name,
+    sourceCardUid: card.uid,
+    abilitySummary: card.ability,
+    donCost: activateMainDonCost(card),
+    openedAtTurn: game.turn,
+  });
+  log(game, `${card.name}: confirm [Activate: Main]?`);
+  break;
+}
+
+case 'ACTIVATE_MAIN_CONFIRM': {
+  const w = game.activateMainConfirmWindow;
+  if (!w || w.playerId !== playerId || w.cardUid !== action.cardUid) {
+    send(playerId, {type:'ERROR', msg:'No matching activation to confirm.'});
+    return;
+  }
+  // Re-resolve the card (it might have moved between open and confirm —
+  // unlikely in single-player flow, but defensive).
+  let card = null;
+  if (p.leader && p.leader.uid === w.cardUid) card = p.leader;
+  else card = (p.field || []).find(c => c.uid === w.cardUid);
+  if (!card) {
+    closeWindow(game, 'activateMainConfirmWindow');
+    send(playerId, {type:'ERROR', msg:'Card no longer eligible.'});
+    return;
+  }
+  // Re-run the eligibility gates — state may have changed.
+  if (card.rested || (card.ability.includes('[Once Per Turn]') && card.usedThisTurn)
+      || isEffectsSuppressed(card)) {
+    closeWindow(game, 'activateMainConfirmWindow');
+    send(playerId, {type:'ERROR', msg:'Card no longer eligible.'});
+    return;
+  }
+  // NOW commit: this is the rules-visible state mutation.
+  card.usedThisTurn = true;
+  card.rested = true;
+  closeWindow(game, 'activateMainConfirmWindow');
+  log(game, `${card.name}: [Activate: Main] activated.`);
+  runPipeline('activateMain', game, playerId, card);
+  break;
+}
+```
+
+Rules citations on the commit point:
+- **Rule 8-4-1** is the canonical activation procedure: 8-4-1-2 *specify* the effect, 8-4-1-3 *pay activation costs*. The current code commits before 8-4-1-2 finishes. The two-phase split puts the commit precisely between 8-4-1-2 and 8-4-1-3.
+- **Rule 10-2-13-3** (`[Once Per Turn]`) — the slot is consumed only after the effect has *been activated and resolved*. Pre-confirm, no activation has occurred under the rules' meaning of the word; the `usedThisTurn` flag is purely an engine bookkeeping flag that must NOT be set until 8-4-1-4 begins.
+
+#### 4. Attack cancel — surface the existing handler
+
+Server-side `CANCEL_ATTACK` (server.js:1396) is retained as an alias for `CANCEL_WINDOW` during the deploy migration. But the attack flow needs a descriptor so END_TURN can see it:
+
+```
+// During DECLARE_ATTACK, set phase = ATTACKING (existing line 1320) and
+// also open a synthetic window descriptor so the unified table covers it:
+openWindow(game, 'attackDeclarationWindow', {
   playerId,
-  candidateUids: [],
-  pipelineResume: { kind: 'beginActivateMain', cardUid, abilityIdx },
-  cancellable: true,
-  onCancel: () => {},  // no state change to revert — nothing has happened yet.
-  blocksPhaseExit: false,
-  meta: { cardUid, abilityDescription, costPreview },
+  sourceCardUid: attacker.uid,
+  attackerName: attacker.name,
+});
+// game.attackDeclarationWindow is purely a descriptor for the cancel /
+// end-turn machinery — battleState remains the source of truth for the
+// attack itself.
+WINDOW_DESCRIPTORS.attackDeclarationWindow = {
+  kind: 'targetPicker', commitPoint: 'onSelect',
+  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel',
+  confirmRequired: false,
+};
+// SELECT_TARGET closes it (cancellable up through target selection per
+// rule 7-1-1-3 — the [When Attacking] fire is the first rules-visible
+// mutation outside attacker.rested, and attacker.rested is reversible).
+```
+
+Why this is safe per the rules:
+- **Rule 7-1-1-1** declares attack by resting the attacker. Engine inverts: `attacker.rested = true` *is* reversible — `CANCEL_ATTACK` already unrests (server.js:1402).
+- **Rule 7-1-1-3** fires `[When Attacking]` effects. The current code fires these in `DECLARE_ATTACK` (server.js:1330) *before* `SELECT_TARGET`, which is technically order-correct for 7-1-1 but means any [When Attacking] effect that opened its own window has already mutated rules-visible state by the time the player wants to cancel. **We tighten cancel scope:** `attackDeclarationWindow.cancelKind` flips to `'committed'` the moment any [When Attacking] effect opens a sub-window, OR completes a synchronous mutation. A flag `game.battleState.whenAttackingFired = true` (set right after the runPipeline call at server.js:1330) drives this. Cancel is permitted between 7-1-1-1 and 7-1-1-3 because no rules-visible state mutation has occurred yet beyond resting the attacker; once 7-1-1-3 has fired, cancellation would require unwinding visible effects.
+
+Net rule: **cancel is permitted from DECLARE_ATTACK until either (a) [When Attacking] has fired a state mutation or (b) SELECT_TARGET has chosen.**
+
+#### 5. END_TURN window-aware gate
+
+```
+case 'END_TURN': {
+  if (!isActive) return;
+  // Legacy counterWindow path (unchanged) — auto-resolve.
+  if (game.counterWindow) { /* existing logic */ }
+  // New: walk every window descriptor and apply its endTurnPolicy.
+  const openWindows = Object.entries(WINDOW_DESCRIPTORS)
+    .filter(([field]) => game[field] != null);
+  for (const [field, desc] of openWindows) {
+    if (desc.endTurnPolicy === 'reject') {
+      send(playerId, { type: 'END_TURN_REJECTED',
+        reason: `${desc.kind} must resolve first.`,
+        blockingWindow: field });
+      return;
+    }
+  }
+  for (const [field, desc] of openWindows) {
+    if (desc.endTurnPolicy === 'autoCancel') {
+      cancelWindow(game, { field, descriptor: desc, playerId: game[field].playerId }, 'endTurn');
+      broadcast(roomId, { type:'WINDOW_CANCELLED', windowField: field, reason:'endTurn' });
+    } else if (desc.endTurnPolicy === 'autoSkip') {
+      // committed window: feed it a no-op resolver (e.g. select 0 cards,
+      // skip the optional pick). Each window kind owns one autoSkip
+      // helper, registered alongside its opener.
+      autoSkipWindow(game, field);
+    }
+  }
+  doEnd(game);
+  break;
 }
 ```
 
-Player action `ACTIVATE_MAIN_CONFIRM` advances to step 8-4-1-3 (cost payment) → 8-4-1-4 (activate) → 8-4-1-5 (resolve). Player action `WINDOW_CANCEL` discards the window with zero side effects.
+`autoSkipWindow` is a small dispatch by `field` — for `playFromHandWindow` it's "skip = decline play"; for `donReturnWindow` it's "return required count from whichever pool has enough"; etc. Each is a few lines and lives next to its opener.
 
-**Migrate existing windows** to set the new flags:
+#### Reference existing patterns
 
-| Window | `cancellable` | `blocksPhaseExit` | Notes |
-|---|---|---|---|
-| `attackingWindow` (between 7-1-1-1 and 7-1-1-2) | `true` | `false` | `onCancel` un-rests the attacker. Cancel is rules-safe because [When Attacking] hasn't fired. |
-| `attackingWindow` (after target selected, 7-1-1-3+) | `false` | `true` | Should be a different window state entirely — `attackResolving`. Coding-agent: split this into two windows. |
-| `restTargetWindow` (Anna of Brittany) | `false` | `true` | The Activate-Main use has been committed by this point per 8-4-1-3. No backing out. |
-| `koTargetWindow` | `false` | `true` | Same reasoning — the parent effect has already been activated per 8-4-1-4. |
-| `activateMainConfirm` (new) | `true` | `false` | Pre-commit by construction. |
+- `pipelineResume` chain (server.js:1815, 2078, 2103, …): unchanged. Cancel discards the resume; END_TURN's autoCancel also discards.
+- The `*Window` interactive shape (server.js:649-672): augmented with `activeWindow` + `activateMainConfirmWindow`. No existing window struct fields are renamed.
+- `broadcastAll(game, room)` (server.js:736): used after every cancel and after END_TURN to keep both clients in sync.
 
 ### Generalization check
 
-**Card universe:** the contract is data-only. Every existing card with an interactive window fits — `cancellable` / `blocksPhaseExit` are flags on the window definition, not card-specific branches. No engine code references card IDs.
-
-**Future-proofing:** new ability types (e.g. "choose one of two", "scry-N then pick", "redirect attack") declare a new window `type` + the standard contract fields. The engine handles `WINDOW_CANCEL` and phase-exit guards uniformly. No engine changes per new ability.
-
-**Edge cases enumerated:**
-
-- *Both players have a window open simultaneously* — rules permit opponent windows (e.g. blocker decision during Block Step per 7-1-2). The contract's `playerId` field handles this; `canEndPhase` checks only the current player's windows.
-- *Window references a card that gets removed mid-window* (e.g. attacker is KO'd by a [Trigger] before target selection) — `onCancel` and the resume chain must handle missing-card cases. Standard pattern: if `cardUid` no longer exists in any open area per 8-1-3-1-3, `onCancel(game)` is called and the window is force-cleared. The pipeline's resume gets a "no-op" signal.
-- *Cost payment fails mid-way* (per 10-2-13-5) — this is *not* a cancel. Once-per-turn is still consumed. Surface as a separate `payment-failed` outcome, not via `WINDOW_CANCEL`.
-- *Player disconnects with window open* — preserve the window in game state. On reconnect, the window is still there. (Existing behavior; this design doesn't change it.)
-- *[Once Per Turn] interaction* — `activateMainConfirm` does NOT consume the once-per-turn use; only successful confirmation + cost payment does. This matches 10-2-13-3 (consumption happens at resolution, not at specification).
+- **Card universe:** every existing pipeline window kind is classified in `WINDOW_DESCRIPTORS`. Adding a new card with a new window kind requires one row in the descriptor table — the engine refuses to open a window not registered there (defensive throw in `openWindow`). This forces every new card author to make a deliberate choice about cancellability and end-turn behaviour. Zero card-ID branching anywhere; classification is by window kind, not by card. ABU [Activate: Main]: ALL such cards route through `ACTIVATE_MAIN_CONFIRM`, no per-card opt-in.
+- **Future-proofing:** if a card needs a variant (e.g. "an activate-main that has no confirm step because it has no rules effect — purely a phase advance"), the variant is expressed in `WINDOW_DESCRIPTORS` (`confirmRequired: false`) or by registering a new window kind. Card data never embeds a "skipConfirm" flag.
+- **Edge cases enumerated:**
+  - Player A activates main → confirm window open → opponent triggers [Opponent's Turn] effect from their own side → ACTIVATE_OPP_TURN runs on opponent's slot. Both windows reference different `playerId`s. `activeWindow` would be overwritten — bug. **Mitigation:** `game.activeWindow` becomes a small map keyed by playerId rather than a single field. Both descriptor table queries and the END_TURN sweep iterate over both entries.
+  - Source card moves between window-open and window-resolve (counter K.O.s the activator mid-window). The confirm handler re-resolves card by uid; if gone, cancel quietly and ERROR.
+  - User mashes Cancel twice. First call closes the window and clears `activeWindow`; second call hits "No window to cancel" and ERRORs. Idempotent.
+  - Disconnect mid-window. Existing reconnect path replays `GAME_STATE`; client sees the open window and re-renders the cancel button. No engine change.
+  - Auto-cancel during END_TURN of a window that was opened by the **non-active** player (opponentChoosesWindow). The descriptor pins this to `reject` — END_TURN bounces with `"opponent must choose first"`. Good.
+  - Activate Main that was already used this turn ([Once Per Turn]) — eligibility check at ACTIVATE_MAIN open path rejects with the existing error message; no confirm window opens. The user is never able to enter a state where the slot is silently burned by misclicking.
+  - Multiple ACTIVATE_MAIN attempts in succession before confirming the first: second open hits `openWindow`'s overwrite warning. **Mitigation:** in ACTIVATE_MAIN, if `game.activateMainConfirmWindow` already exists for the same player, replace it (the user is changing their mind about which card to activate). If for a different player, ERROR.
+- **Performance:** see below — the descriptor table is at most ~25 entries; END_TURN's sweep is O(N) over that constant, not over card count.
 
 ### Performance
 
-**Hot paths:** `handleAction` is called once per player action. The added cost is:
-- `O(1)` lookup of `game.activeWindow` (constant-time field scan).
-- `O(1)` flag check on `cancellable` / `blocksPhaseExit`.
-
-No new per-tick or per-frame cost. No new data-structure changes that scale with card count.
-
-**Data structures:** window fields remain plain objects on `game`. No indexing required — there is at most one active window per game by construction (asserted in `activeWindow` getter).
+- **Hot paths:**
+  - `openWindow` / `closeWindow` — called once per interactive effect, not per action. New work: a hashmap lookup in `WINDOW_DESCRIPTORS` + a small object construction for `activeWindow`. O(1).
+  - `END_TURN` — `Object.entries(WINDOW_DESCRIPTORS).filter(…)` is O(W) where W ≈ 25 (the descriptor count, not the card count). One scan per END_TURN; END_TURN fires at most once per turn. Negligible.
+  - `CANCEL_WINDOW` — single descriptor lookup. O(1).
+  - `sendState` / `broadcastAll` — serialises the game state. New fields `activeWindow` and `activateMainConfirmWindow` add ~100 bytes per broadcast. No structural change.
+- **Data structures:**
+  - `WINDOW_DESCRIPTORS` is a frozen const Map (or plain object) — engine never mutates it. O(1) lookup by key.
+  - `game.activeWindow` (or `game.activeWindows` if we adopt the per-player map for the edge case above) — single object or 2-entry object; constant time everywhere.
+  - We do *not* introduce a linear scan of `*Window` slots into hot paths — only END_TURN, which is cold.
 
 ### Test strategy
 
-**Unit tests** (`tests/`):
-
-- `pipeline_anna_of_brittany.test.js` — extend with:
-  - `activateMainConfirm` window opens on activate-main trigger, `cancellable: true`, no state mutation yet.
-  - `WINDOW_CANCEL` during `activateMainConfirm` → no once-per-turn consumed, no rest fired.
-  - `ACTIVATE_MAIN_CONFIRM` after the window → existing rest-target-window flow runs (unchanged).
-  - `END_TURN` during `activateMainConfirm` → window auto-cancels, turn advances.
-  - `END_TURN` during `restTargetWindow` → rejected, turn does not advance.
-- `tests/window_lifecycle.test.js` (new) — pure contract tests:
-  - `WINDOW_CANCEL` invariants per window type.
-  - `canEndPhase` matrix across `{cancellable, blocksPhaseExit}` combinations.
-  - Opponent-window does not block current player's phase exit.
-- `tests/attack_cancel.test.js` (new) — cancel between declaration and target selection un-rests the attacker; no [When Attacking] effects fired.
-
-**E2E scenarios** (e2e-test-agent):
-
-- Two clients: p1 starts attack → p1 cancels mid-target → both clients see attacker un-rest cleanly.
-- Two clients: p1 starts Activate Main → p1 cancels at confirmation → both clients see no state change, p1 can re-activate.
-- Two clients: p1 opens `restTargetWindow` → p1 tries `END_TURN` → both clients see the rejection message; p1 must resolve.
-
-**Rules-compliance audit** (rules-compliance-agent):
-- Verify the `attackingWindow` split (cancellable pre-target vs. blocking post-target) against 7-1-1-1 through 7-1-1-3.
-- Verify `activateMainConfirm` is rules-compliant per 8-4-1 (it sits between 8-4-1-2 and 8-4-1-3, doesn't violate 10-2-13-3).
-- Cross-check `rule_manual.pdf` for any player-facing rules that contradict.
+- **Unit tests** (`tests/pipeline_*.test.js` and new files):
+  - `tests/window_cancel.test.js` — open `restTargetWindow` via Anna of Brittany (existing canonical card), assert `CANCEL_WINDOW` clears it without firing the chained draw, asserts `usedThisTurn` is **false** on the leader (rollback), assert pipelineResume is discarded.
+  - `tests/window_activate_main_confirm.test.js` — ACTIVATE_MAIN on Anna of Brittany opens `activateMainConfirmWindow`, leader is **not** rested, `usedThisTurn` is **false**, no `restTargetWindow` yet. Then ACTIVATE_MAIN_CONFIRM commits — rested + used + restTargetWindow opens. Plus a cancel branch.
+  - `tests/window_end_turn_gate.test.js` — open a cancellable window (restTarget), END_TURN, assert window cancelled + turn flipped + WINDOW_CANCELLED message broadcast. Then open a blocking window (counterWindow surrogate or opponentChoosesWindow), END_TURN, assert END_TURN_REJECTED + state unchanged.
+  - `tests/window_descriptor_coverage.test.js` — enumerate every `*Window` field that appears as a key on `game` at construction (`gameInit`) and assert it has an entry in `WINDOW_DESCRIPTORS`. Prevents future card authors from adding a window kind without classifying it. This is the scalability guard.
+  - `tests/window_activate_main_reentry.test.js` — open confirm window for card A, then send ACTIVATE_MAIN for card B; assert the confirm window now references card B (re-targeted) and card A is untouched.
+  - Touch up `pipeline_anna_of_brittany.test.js`: the test at line 30 (`srv.runPipeline('activateMain', …)`) bypasses the action handler so it's unaffected. But any test that goes through `handleAction({type:'ACTIVATE_MAIN'})` will need an `ACTIVATE_MAIN_CONFIRM` follow-up. Audit needed.
+- **E2E scenarios** (`.claude/agents/e2e-test-agent.md`):
+  - Two-WS-client flow: P1 clicks character, clicks Attack, clicks misclick zone, asserts attackDeclarationWindow open, clicks Cancel (in bottom-right slot), asserts phase back to MAIN, attacker un-rested.
+  - P1 clicks [Activate: Main] card, sees confirm overlay, clicks Cancel, asserts no state change. Then clicks again, clicks Confirm, asserts normal activation.
+  - P1 opens restTarget via Anna, doesn't pick, clicks End Turn, asserts auto-cancel toast + turn passes to P2 + Anna leader is NOT rested and NOT marked used (rollback complete because activation never committed past confirm — but wait, this scenario only triggers if v2 makes Anna's activation cancellable post-confirm too; see Risks).
+- **Rules-compliance audit needed: YES.** Sections to audit:
+  - 6 (Game Progression) — END_TURN policy.
+  - 7-1-1 — attack cancel commit point.
+  - 8-4-1 — Activate Main commit point.
+  - 10-2-13 — [Once Per Turn] consumption point.
+  - Recommended: also pass `docs/rules/rule_manual.pdf` to the rules-compliance-agent for player-expectation cross-check on the confirm dialog wording (the manual phrases activation in user-facing terms; the dialog copy should match).
 
 ## Risks and tradeoffs
 
-- **One extra click on every Activate Main.** Conscious choice — eliminates the misclick footgun. Inconsistency-with-paper-game cost is low; misclicks don't exist on paper.
-- **Migration of existing windows touches `server.js` in many places.** Coding-agent should grep for every `game.<x>Window` assignment site and ensure the new flags are set. Unit tests catch missed sites.
-- **Splitting `attackingWindow` into pre/post-target windows is a larger refactor than a flag flip.** Acceptable — keeps the state machine honest. Coding-agent: confirm the test surface around attacks before splitting.
-- **`onCancel` correctness is per-card-author burden.** Mitigation: the migration table above covers all current windows; future authors get unit-test patterns and a checklist in CLAUDE.md.
-- **`game.activeWindow` as a getter scanning fields is a transitional hack.** Long-term, consolidate to a single field. Out of scope for this design — flagged for follow-up.
+- **The confirm-then-pipeline split moves Activate Main's `card.rested = true` and `card.usedThisTurn = true` to the confirm step.** This is the right semantic per rules 8-4-1 and 10-2-13, but it means: between confirm-window-open and confirm-window-close, an opponent's [Opponent's Turn] effect cannot legally observe the card as "used" yet. Confirm whether any current card depends on the *current* (incorrect) early-set timing. Faustian-Jack-style trigger windows and Schola Montis Belli (the card cited in the ACTIVATE_MAIN comment at server.js:1142) are the suspects. **Mitigation:** rules-compliance-agent must verify this is the intended timing before coding starts. If a card needs the legacy timing, that card is bugged at the rules level and the fix is correct.
+- **After ACTIVATE_MAIN_CONFIRM, the rest of the pipeline (sub-windows like restTarget) is still cancellable.** The descriptor table says so — `restTargetWindow.cancelKind = 'cancellable'`. This means a player could cancel Anna's rest-target picker *after* paying the [Once Per Turn] slot, effectively burning the activation. **Tradeoff:** this matches rule 8-4-4 (the player has not yet "chosen" — rule 8-4-1-5 hasn't resolved). The user has decided per the spec that confirm appears on every activation; cancelling mid-resolution is an additional rules-compliant safety net but does consume the [Once Per Turn] slot. **Recommendation:** confirm-step cancel = full rollback (no cost paid yet). Mid-resolution cancel = window closes, pipeline aborts via 'abort-block', `usedThisTurn` remains true (slot consumed). Document this clearly in the UI cancel-confirmation copy: "Cancelling now will end the ability; the once-per-turn use is already consumed."
+- **The `activeWindow` field is duplicate state** — it's derived from the `*Window` slots. If `openWindow`/`closeWindow` is bypassed somewhere, `activeWindow` and the slot drift apart. **Mitigation:** the descriptor-coverage test catches missing entries; we also add a state invariant check (`assertWindowsConsistent(game)`) in dev mode at the end of every `handleAction`. Production builds skip it.
+- **Existing tests that call `handleAction({type:'ACTIVATE_MAIN'})` and then look at state will all break.** They need an `ACTIVATE_MAIN_CONFIRM` follow-up. This is a one-shot migration cost. Worth it.
+- **CANCEL_ATTACK alias.** Keeping the old action name for one release is brittle — coding-agent should add a TODO to remove it next sprint.
+- **What we're choosing not to optimize:** multi-window queues. `effectQueue` is reserved in game state (server.js:672) for the future; we don't fill it now. The current "one window at a time" invariant continues to hold under v2.
 
 ## Handoff
 
-**Coding-agent:** implement per the data model and engine changes above. Order:
+Coding-agent: implement per the data model and engine changes above. Specifically:
+1. Add `WINDOW_DESCRIPTORS` const map at the top of the windows section of server.js (after the gameInit function so it's visible to openers).
+2. Add `openWindow` / `closeWindow` / `cancelWindow` / `autoSkipWindow` helpers. Refactor every existing `*Window` opener and resolver to route through them (mechanical change).
+3. Split `ACTIVATE_MAIN` into ACTIVATE_MAIN (open confirm) + ACTIVATE_MAIN_CONFIRM (commit + pipeline).
+4. Replace `CANCEL_ATTACK` body with a call to the unified `CANCEL_WINDOW` path; keep the action name as alias for one release.
+5. Rewrite the `END_TURN` handler to walk the descriptor table.
+6. Client (`game.html`): move the cancel button out of the per-card `#attackingBtns` panel and into a dedicated bottom-right region (`#globalWindowControls`) that surfaces (a) the cancel CTA for any `cancellable` window owned by viewer, (b) the confirm CTA for `activateMainConfirmWindow`. Place it where the ability-description-on-hover popup already lives (per user spec).
+7. Tests as listed under Test Strategy.
+8. Do not deviate without updating this doc.
 
-1. Add `WindowContract` flags to every existing window assignment site. Don't change behavior yet — just attach the metadata.
-2. Add `WINDOW_CANCEL` action handler + `game.activeWindow` getter.
-3. Add `canEndPhase` guard to `END_TURN`.
-4. Add `activateMainConfirm` window as the entry point to `runPipeline('activateMain', ...)`. Existing flows now route through it.
-5. Split `attackingWindow` into declaration vs. resolving phases (last because biggest blast radius).
-6. UI: render the cancel button when `game.activeWindow?.cancellable && game.activeWindow.playerId === me`. Placement: bottom-right of screen, above the ability description on hover.
-
-Do not deviate from this design without updating this doc.
-
-**Unit-test-agent + e2e-test-agent:** add the tests listed under "Test strategy" before merge.
-
-**Rules-compliance-agent:** run the audit listed above against both `rule_comprehensive.pdf` and `rule_manual.pdf` before merge.
+Pre-deploy gate: unit tests, e2e, rules-compliance-agent run. All must be green.
