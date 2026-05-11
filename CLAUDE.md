@@ -46,10 +46,11 @@ If either fails, fix it or surface the failure to the user — never push red.
 
 Specialized subagents in `.claude/agents/`. Invoke by name when the work matches:
 
-- **coding-agent** — implements features/bugfixes. Default for code changes.
+- **solution-architect-agent** — designs the approach BEFORE code is written. Hard constraint: scalability — every design must generalize to all cards/abilities/keywords. Invoke first for any non-trivial change.
+- **coding-agent** — implements features/bugfixes per the architect's design. Default for code changes.
 - **unit-test-agent** — writes and runs `node --test` files.
 - **e2e-test-agent** — spins server + two WS clients, runs full game flows.
 - **ui-test-agent** — Playwright against `game.html` / `deck-editor.html`.
 - **rules-compliance-agent** — cross-checks player workflows against `rule_comprehensive.pdf` and `rule_manual.pdf`.
 
-Before pushing to prod, run unit-test-agent and e2e-test-agent. For rules-sensitive changes (new card, phase logic, win condition), also run rules-compliance-agent.
+**Workflow for non-trivial work:** solution-architect-agent → coding-agent → unit-test-agent → e2e-test-agent → (rules-compliance-agent for rules-sensitive changes) → push. Before pushing to prod, unit-test-agent and e2e-test-agent must be green. For rules-sensitive changes (new card, phase logic, win condition), also run rules-compliance-agent.
