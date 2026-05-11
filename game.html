@@ -794,10 +794,7 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 
 /* ═══ RIGHT 1/3 — LOG + BUTTONS ═══ */
 .gb-right-col{display:flex;flex-direction:column;padding:10px;gap:8px;position:relative;overflow:hidden;}
-/* Hover-revealed card detail panel — sits at the bottom of the right
-   column. When #globalWindowControls is visible above it, gwc's
-   margin-top:auto claims the slack; when gwc is hidden, cardInfoPanel's
-   own margin-top:auto puts it at the bottom. */
+/* Hover-revealed card detail panel — sticks to bottom of right column. */
 #cardInfoPanel{
   margin-top:auto;flex-shrink:0;
   background:rgba(0,0,0,.32);border:1px solid rgba(180,140,50,.28);
@@ -1266,10 +1263,15 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <button class="gb-pbtn gb-pbtn-sm" id="btnAttachDon" onclick="attachDon()">Attach DON!!</button>
         <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
       </div>
-      <!-- Phase 1: attacking, waiting for target -->
-      <div id="attackingBtns" style="display:none;flex-direction:column;gap:4px;">
-        <div style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;">Select a target to attack</div>
-        <button class="gb-pbtn gb-pbtn-sm" onclick="cancelAttack()">Cancel</button>
+      <!-- window-lifecycle v2 — globalWindowControls: replaces the
+           legacy #attackingBtns. Driven by server state via
+           renderGlobalWindowControls(); shows for attackDeclarationWindow
+           AND activateMainConfirmWindow (and any other cancellable
+           window owned by the local viewer). -->
+      <div id="globalWindowControls" style="display:none;flex-direction:column;gap:4px;">
+        <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;"></div>
+        <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
+        <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
       </div>
       <!-- Phase 1: BLOCK_STEP info for the attacker -->
       <div id="blockStepInfo" style="display:none;flex-direction:column;gap:4px;">
@@ -1451,15 +1453,6 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <button class="gb-pbtn gb-pbtn-lg" id="btnResolve" onclick="passCounter()">Resolve Attack</button>
       </div>
       <span id="actionHint" class="gb-hint">Waiting…</span>
-    </div>
-    <!-- window-lifecycle v2 — globalWindowControls: confirm/cancel surface
-         for any active window owned by the local viewer. Styled to match
-         the existing attacking/deploy button groups in this column (no
-         box, label + buttons in flex flow). -->
-    <div id="globalWindowControls" style="display:none;flex-direction:column;gap:4px;margin-top:auto;">
-      <div id="gwcTitle" style="font-family:'Cinzel',serif;font-size:.8rem;color:var(--gold);text-align:center;"></div>
-      <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
-      <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
     </div>
     <!-- Hover-revealed card details (any card the cursor enters) -->
     <div id="cardInfoPanel" style="display:none;">
@@ -2293,7 +2286,7 @@ function renderGame() {
   // panels (like Resolve Attack) stick around after the phase transitions back to MAIN.
   const inBattlePhase = bs && (game.phase === 'ATTACKING' || game.phase === 'BLOCK_STEP' || game.phase === 'COUNTER_STEP');
   if (!inBattlePhase) {
-    ['attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo'].forEach(id => {
+    ['blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.style.display = 'none';
     });
@@ -2303,7 +2296,10 @@ function renderGame() {
 
   if (bs && game.phase === 'ATTACKING' && bs.attackerId === myId) {
     hideAllBtnGroups();
-    document.getElementById('attackingBtns').style.display = 'flex';
+    // globalWindowControls (rendered in renderGlobalWindowControls after
+    // this function returns) shows the "Select a target to attack" label
+    // + Cancel button in this slot. Old #attackingBtns div has been
+    // removed; this comment is its tombstone.
     highlightTargets();
     // Gold pulse on the attacker so the player can see which card is
     // mid-attack while picking a target. Cleared at the top of every
@@ -3850,7 +3846,7 @@ function makeBrowserCard(card, onClick) {
 
 // ─── SELECTION & ACTIONS ───
 function hideAllBtnGroups() {
-  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','attackingBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','suppressionTargetBtns','chooseOneBtns','giveDonTargetBtns','selfSaveBtns','oppTurnActivateBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns','addLifeCardToHandBtns','lookAtLifeCardBtns','opponentChoosesBtns','grantKeywordToNamedBtns','addCharacterToLifeBtns','addHandToLifeBtns'].forEach(id => {
+  ['mulliganBtns','drawBtns','playBtns','handSelBtns','battleBtns','counterBtns','blockStepInfo','blockBtns','counterStepDefBtns','counterStepAtkInfo','triggerWindowBtns','playFromHandBtns','donReturnBtns','koTargetBtns','restTargetBtns','placeAtBottomBtns','powerBuffTargetBtns','suppressionTargetBtns','chooseOneBtns','giveDonTargetBtns','selfSaveBtns','oppTurnActivateBtns','trashFromHandBtns','bounceTargetBtns','addFromTrashBtns','addLifeCardToHandBtns','lookAtLifeCardBtns','opponentChoosesBtns','grantKeywordToNamedBtns','addCharacterToLifeBtns','addHandToLifeBtns'].forEach(id => {
     document.getElementById(id).style.display = 'none';
   });
   document.getElementById('mulliganWait').style.display = 'none';
@@ -4078,8 +4074,13 @@ function selectTarget(defUid) {
   act({ type: 'SELECT_TARGET', targetUid: defUid });
 }
 
+// cancelAttack — legacy client entry point. The DOM button that called
+// this was removed when globalWindowControls took over the attack-cancel
+// slot. Kept defined as a no-op stub so any straggler caller doesn't
+// throw; the server-side CANCEL_ATTACK alias is still wired through
+// cancelWindow for older clients during the deploy migration.
 function cancelAttack() {
-  act({ type: 'CANCEL_ATTACK' });
+  act({ type: 'CANCEL_WINDOW' });
 }
 
 // ─── Phase 2 block step ───
