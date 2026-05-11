@@ -39,21 +39,33 @@ The unifying defect is that the engine never categorises a window as *cancellabl
 
 A const map keyed by window field name (the existing `*Window` slots on `game`). One descriptor per window kind. Adding a new window kind requires adding one row here; the engine refuses to open windows whose kind isn't registered.
 
+**Picker variant.** Every `targetPicker` / `modePicker` / `multiSelect` row sets `pickRequirement` at *payload time*, not in the static descriptor — because the same window field (e.g. `restTargetWindow`) can be opened in a mandatory variant by one card and an optional variant by another. The two variants are:
+
+- `'optional'` — the card text says "up to N" or "may choose"; rule §4-8 / §8-4-4-1 / §8-4-4-2 permit choosing 0. On END_TURN the engine cancels the window (per `endTurnPolicy: 'autoCancel'`).
+- `'mandatory'` — the card text says "choose 1" or similar; rule §8-4-4-1 requires picking as many as legally possible. On END_TURN the engine does **not** silently drop the resolution — instead it routes through `forcedPickHelper(field, payload)`, which selects the first legal candidate deterministically (or closes the window cleanly if no legal candidate exists). Coding-agent owns one helper per picker field; helpers live next to their openers.
+
+Coding-agent must audit each opener call site and pass `pickRequirement` based on the card's ability text. The default (if the opener forgets) is `'mandatory'` — strictest rules-alignment, fails loudly via the descriptor-coverage test.
+
 ```
 const WINDOW_DESCRIPTORS = {
-  // ───── Cancellable, no rules-visible mutation yet ─────
-  restTargetWindow:        { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
-  koTargetWindow:          { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
-  bounceTargetWindow:      { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
-  powerBuffTargetWindow:   { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
-  suppressionTargetWindow: { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
-  giveDonTargetWindow:     { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  // ───── Cancellable group — pipeline can be aborted on END_TURN, ─────
+  // but for windows opened *post-confirm* the cost has already been paid
+  // per §8-4-1-3 and §8-4-1-4. autoCancel discards the in-flight pipeline
+  // and pipelineResume chain; it does NOT refund `usedThisTurn`, paid
+  // DON, or rested attackers. See Note E.
+  // The pre-cost cancellable case is activateMainConfirmWindow below.
+  restTargetWindow:        { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
+  koTargetWindow:          { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
+  bounceTargetWindow:      { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
+  powerBuffTargetWindow:   { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
+  suppressionTargetWindow: { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
+  giveDonTargetWindow:     { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
   attackRedirectWindow:    { kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false }, // see Note A
-  chooseOneWindow:         { kind: 'modePicker',      commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  chooseOneWindow:         { kind: 'modePicker',      commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
   opponentChoosesWindow:   { kind: 'modePicker',      commitPoint: 'onSelect',  cancelKind: 'blocking',    endTurnPolicy: 'reject',     confirmRequired: false }, // see Note B
-  grantKeywordToNamedWindow:{kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  grantKeywordToNamedWindow:{kind: 'targetPicker',    commitPoint: 'onSelect',  cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
   placeAtBottomWindow:     { kind: 'orderPicker',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
-  addFromTrashWindow:      { kind: 'multiSelect',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
+  addFromTrashWindow:      { kind: 'multiSelect',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false }, // pickRequirement set at payload time
   scryWindow:              { kind: 'orderPicker',     commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
   lookAtLifeCardWindow:    { kind: 'reveal',          commitPoint: 'onConfirm', cancelKind: 'cancellable', endTurnPolicy: 'autoCancel', confirmRequired: false },
 
@@ -82,6 +94,8 @@ Notes:
 - **Note B — opponentChoosesWindow** is owned by the non-active player; we cannot let the active player end-turn around it. Reject with "opponent must choose first".
 - **Note C — trashFromHandWindow** is the cost leg of an effect (rule 8-4-1-3). It is `'committed'` once opened because the effect-activation procedure (8-4-1) has reached the cost-payment step; aborting now without paying would re-open the question of whether 8-3-1-3 applies. We rely on the existing "skip" path inside the resolver.
 - **Note D — selfSaveWindow** is owned by the defender mid-KO. The KO has already been declared. Opting in/out has no "uncommitted" sense.
+- **Note E — post-cost cancellable windows.** All `cancellable` rows above (every entry from `restTargetWindow` through `lookAtLifeCardWindow`) open *after* `ACTIVATE_MAIN_CONFIRM` has paid the cost per §8-4-1-3 (or after equivalent on-play cost for [On Play] effects). `autoCancel` here means "abort the in-flight pipeline / discard `pipelineResume`" — it does **not** refund `usedThisTurn`, paid DON, or any cost that was paid to reach the picker. The user-facing cancel copy must reflect this: "Cancelling now will end the ability; the once-per-turn use is already consumed." Rules basis: §8-4-1 treats activation as a five-step procedure where cost (§8-4-1-3) precedes resolution (§8-4-1-5); cancelling mid-resolution is the engine's affordance for §8-4-4-2 ("a player can decide not to choose"), not a §8-4-1-3 refund.
+- **Note F — picker `pickRequirement`.** Every `targetPicker` / `modePicker` / `multiSelect` row carries a `pickRequirement: 'optional' | 'mandatory'` field in its *payload* (not in the static descriptor). The opener call site sets this based on the card's ability text. `'optional'` = autoCancel on END_TURN. `'mandatory'` = autoSkip on END_TURN via `forcedPickHelper(field, payload)`, which picks the first legal candidate deterministically or closes the window if none. Default if omitted: `'mandatory'` (rules-stricter; failure surfaces in tests).
 
 #### `game` shape additions
 
@@ -290,8 +304,19 @@ case 'END_TURN': {
   }
   for (const [field, desc] of openWindows) {
     if (desc.endTurnPolicy === 'autoCancel') {
-      cancelWindow(game, { field, descriptor: desc, playerId: game[field].playerId }, 'endTurn');
-      broadcast(roomId, { type:'WINDOW_CANCELLED', windowField: field, reason:'endTurn' });
+      // Picker rows respect the payload-time pickRequirement (Note F).
+      // Mandatory pickers don't silently drop a §8-4-4-1 resolution —
+      // they route through forcedPickHelper instead of cancel.
+      const payload = game[field];
+      const isPicker = ['targetPicker','modePicker','multiSelect'].includes(desc.kind);
+      if (isPicker && payload && payload.pickRequirement === 'mandatory') {
+        const picked = forcedPickHelper(game, field, payload);
+        broadcast(roomId, { type:'WINDOW_AUTO_RESOLVED', windowField: field,
+                            reason:'endTurnMandatory', resolution: picked });
+      } else {
+        cancelWindow(game, { field, descriptor: desc, playerId: payload.playerId }, 'endTurn');
+        broadcast(roomId, { type:'WINDOW_CANCELLED', windowField: field, reason:'endTurn' });
+      }
     } else if (desc.endTurnPolicy === 'autoSkip') {
       // committed window: feed it a no-op resolver (e.g. select 0 cards,
       // skip the optional pick). Each window kind owns one autoSkip
@@ -305,6 +330,13 @@ case 'END_TURN': {
 ```
 
 `autoSkipWindow` is a small dispatch by `field` — for `playFromHandWindow` it's "skip = decline play"; for `donReturnWindow` it's "return required count from whichever pool has enough"; etc. Each is a few lines and lives next to its opener.
+
+`forcedPickHelper(game, field, payload)` is the parallel mechanism for **mandatory pickers** that get hit by END_TURN. It must:
+1. Compute the picker's legal candidates from `payload` (each picker already enumerates these — reuse the existing function).
+2. If `legal.length === 0`, close the window cleanly (the §1-3-2 "impossible action is not carried out" rule applies — no resolution needed).
+3. Otherwise, deterministically select `legal[0]` (or `legal.slice(0, requiredCount)` for multi-select) and call the picker's normal `SELECT_TARGET` resolver as if the player had clicked. This routes through the same pipelineResume path as a user pick — no special-case state.
+
+The deterministic first-legal pick matches §1-3-4 (turn player chooses first when forced) and §8-4-4-1 (pick as many as legally possible). The user is not stranded; the rules are not violated.
 
 #### Reference existing patterns
 
@@ -345,6 +377,8 @@ case 'END_TURN': {
   - `tests/window_activate_main_confirm.test.js` — ACTIVATE_MAIN on Anna of Brittany opens `activateMainConfirmWindow`, leader is **not** rested, `usedThisTurn` is **false**, no `restTargetWindow` yet. Then ACTIVATE_MAIN_CONFIRM commits — rested + used + restTargetWindow opens. Plus a cancel branch.
   - `tests/window_end_turn_gate.test.js` — open a cancellable window (restTarget), END_TURN, assert window cancelled + turn flipped + WINDOW_CANCELLED message broadcast. Then open a blocking window (counterWindow surrogate or opponentChoosesWindow), END_TURN, assert END_TURN_REJECTED + state unchanged.
   - `tests/window_descriptor_coverage.test.js` — enumerate every `*Window` field that appears as a key on `game` at construction (`gameInit`) and assert it has an entry in `WINDOW_DESCRIPTORS`. Prevents future card authors from adding a window kind without classifying it. This is the scalability guard.
+  - `tests/window_mandatory_pick.test.js` — open a mandatory `restTargetWindow` (Anna of Brittany, "Rest 1 of your opponent's Characters" — mandatory per §8-4-4-1) with exactly one legal candidate. END_TURN. Assert: window closed via `forcedPickHelper`, the candidate was rested, the draw chain fired, `WINDOW_AUTO_RESOLVED` broadcast. Parallel test with zero legal candidates: window closes cleanly per §1-3-2, no rest, no draw, no error.
+  - `tests/window_optional_pick.test.js` — open an optional `addFromTrashWindow` ("up to 2 cards", `pickRequirement: 'optional'`). END_TURN. Assert: window auto-cancelled, no pick made, no card moved (§4-8 / §8-4-4-1 — optional zero is legal).
   - `tests/window_activate_main_reentry.test.js` — open confirm window for card A, then send ACTIVATE_MAIN for card B; assert the confirm window now references card B (re-targeted) and card A is untouched.
   - Touch up `pipeline_anna_of_brittany.test.js`: the test at line 30 (`srv.runPipeline('activateMain', …)`) bypasses the action handler so it's unaffected. But any test that goes through `handleAction({type:'ACTIVATE_MAIN'})` will need an `ACTIVATE_MAIN_CONFIRM` follow-up. Audit needed.
 - **E2E scenarios** (`.claude/agents/e2e-test-agent.md`):
@@ -371,7 +405,7 @@ case 'END_TURN': {
 
 Coding-agent: implement per the data model and engine changes above. Specifically:
 1. Add `WINDOW_DESCRIPTORS` const map at the top of the windows section of server.js (after the gameInit function so it's visible to openers).
-2. Add `openWindow` / `closeWindow` / `cancelWindow` / `autoSkipWindow` helpers. Refactor every existing `*Window` opener and resolver to route through them (mechanical change).
+2. Add `openWindow` / `closeWindow` / `cancelWindow` / `autoSkipWindow` / `forcedPickHelper` helpers. Refactor every existing `*Window` opener and resolver to route through them (mechanical change). Each picker opener call site must pass `pickRequirement: 'optional' | 'mandatory'` in the payload based on the card's ability text — `'mandatory'` is the default if omitted (Note F).
 3. Split `ACTIVATE_MAIN` into ACTIVATE_MAIN (open confirm) + ACTIVATE_MAIN_CONFIRM (commit + pipeline).
 4. Replace `CANCEL_ATTACK` body with a call to the unified `CANCEL_WINDOW` path; keep the action name as alias for one release.
 5. Rewrite the `END_TURN` handler to walk the descriptor table.
