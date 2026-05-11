@@ -625,6 +625,9 @@ function createPlayerState(leaderId, deckList) {
     trash: [], field: [],
     donDeck: 10, donActive: 0, donRested: 0,
     mulliganed: false,
+    // §6-5-6-1: neither player can battle on their first turn. Flips to
+    // true in doEnd the moment this player first ends a turn.
+    hasTakenFirstTurn: false,
   };
 }
 
@@ -1022,6 +1025,9 @@ function doEnd(game) {
   // Bug 11 — One Piece TCG has NO hand-size limit. Never auto-trash cards
   // at end of turn, regardless of hand size. The hand display handles
   // visual compression client-side.
+  // §6-5-6-1 — mark the ending player as having taken their first turn.
+  // Read by isAttackerOnTheirFirstTurn at the DECLARE_ATTACK / ATTACK gates.
+  game.players[endingPlayerId].hasTakenFirstTurn = true;
   const ids = Object.keys(game.players);
   game.activePlayer = ids.find(id => id !== game.activePlayer);
   game.turn++;
@@ -1509,9 +1515,9 @@ function handleAction(roomId, playerId, action) {
       if (action.attackerUid === p.leader.uid) attacker = p.leader;
       else attacker = p.field.find(c => c.uid === action.attackerUid);
       if (!attacker || attacker.rested) { send(playerId, {type:'ERROR', msg:'That card is rested or invalid'}); return; }
-      // Cannot attack on turn 1
-      if (game.turn === 1 && game.activePlayer === game.firstPlayer) {
-        send(playerId, {type:'ERROR', msg:'Cannot attack on turn 1'});
+      // §6-5-6-1 — neither player can battle on their first turn.
+      if (isAttackerOnTheirFirstTurn(game, playerId)) {
+        send(playerId, {type:'ERROR', msg:'Cannot attack on your first turn (§6-5-6-1).'});
         return;
       }
       // Characters cannot attack the turn they are played (unless Rush)
@@ -1580,8 +1586,9 @@ function handleAction(roomId, playerId, action) {
       if (!attacker) { send(playerId, {type:'ERROR', msg:'Invalid attacker'}); return; }
       if (attacker.rested) { send(playerId, {type:'ERROR', msg:'That card is rested'}); return; }
       if (attacker.type === 'STAGE') { send(playerId, {type:'ERROR', msg:'Stages cannot attack'}); return; }
-      if (game.turn === 1 && game.activePlayer === game.firstPlayer) {
-        send(playerId, {type:'ERROR', msg:'Cannot attack on turn 1'}); return;
+      // §6-5-6-1 — neither player can battle on their first turn.
+      if (isAttackerOnTheirFirstTurn(game, playerId)) {
+        send(playerId, {type:'ERROR', msg:'Cannot attack on your first turn (§6-5-6-1).'}); return;
       }
       if (attacker.playedThisTurn && !(attacker.ability && attacker.ability.includes('[Rush]'))) {
         send(playerId, {type:'ERROR', msg:'This character cannot attack this turn'}); return;
@@ -3426,6 +3433,18 @@ function hasBanish(card) {
   if (Array.isArray(card.tempKeywords)
       && card.tempKeywords.some(k => k.keyword === 'banish')) return true;
   return false;
+}
+
+// §6-5-6-1 — "Neither player can battle on their first turn." Returns true
+// iff the given player has not yet finished their first turn (no doEnd has
+// flipped their hasTakenFirstTurn flag). Fail-closed: an unknown playerId
+// is treated as "first turn" so attacks from a bogus id are rejected.
+// TODO: any future auto-attack mechanism (e.g. a card that forces a
+// Character to attack at the start of its controller's turn) MUST call
+// this helper before resolving the attack, or §6-5-6-1 will silently break.
+function isAttackerOnTheirFirstTurn(game, playerId) {
+  const p = game && game.players && game.players[playerId];
+  return !p || !p.hasTakenFirstTurn;
 }
 
 // Helper: check if card has [Rush]. Phase 7 — also considers temporary
@@ -7161,6 +7180,8 @@ module.exports = {
   handleAction, doRefresh, doDraw, doEnd, nextPhase,
   // Keyword detectors
   hasBlocker, hasRush, hasDoubleAttack, hasBanish,
+  // §6-5-6-1 first-turn battle prohibition
+  isAttackerOnTheirFirstTurn,
   effectivePowerOf, effectiveCostOf, handPlayCostFor,
   counterValueOf,
   // Broadcast plumbing (tests replace clients.get(id).send with a spy)
