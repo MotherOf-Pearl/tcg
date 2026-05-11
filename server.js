@@ -1603,6 +1603,14 @@ function handleAction(roomId, playerId, action) {
         counterBonus: 0,
       };
       game.phase = 'ATTACKING';
+      // window-lifecycle v2 — synthetic descriptor for cancel/end-turn
+      // table. battleState remains the source of truth.
+      openWindow(game, 'attackDeclarationWindow', {
+        playerId,
+        sourceCardUid: attacker.uid,
+        attackerName: attacker.name,
+        pickRequirement: 'mandatory',
+      });
       log(game, `\u2694\uFE0F ${attacker.name} declares an attack — choose a target.`);
       // Bug 9 — fire [When Attacking] effects through the central parser. The
       // parser checks any [DON!! xN] gate and may open trash-from-hand / DON-cost
@@ -1656,6 +1664,9 @@ function handleAction(roomId, playerId, action) {
       game.battleState.targetPower = targetPower;
       game.battleState.targetIsLeader = targetIsLeader;
       game.phase = 'BLOCK_STEP';
+      // window-lifecycle v2 — close synthetic attackDeclarationWindow now
+      // that the target is locked in.
+      if (game.attackDeclarationWindow) closeWindow(game, 'attackDeclarationWindow');
       log(game, `\uD83C\uDFAF ${game.battleState.attackerName} (${game.battleState.attackerPower}) \u2192 ${target.name} (${targetPower})`);
       // Track-P — fire [On Your Opponent's Attack] on defender's side
       // AFTER target is set. This unifies timing so redirect-style
@@ -1678,9 +1689,49 @@ function handleAction(roomId, playerId, action) {
       break;
     }
 
+    // window-lifecycle v2 — unified cancel. Looks at game.activeWindow,
+    // checks the descriptor's cancelKind, and routes through cancelWindow.
+    // cancelWindow knows how to roll back attackDeclarationWindow (unrest
+    // attacker, clear battleState) and how to no-op for pickers.
+    case 'CANCEL_WINDOW': {
+      const aw = game.activeWindow;
+      if (!aw) { send(playerId, {type:'ERROR', msg:'No window to cancel.'}); return; }
+      if (aw.playerId !== playerId) {
+        send(playerId, {type:'ERROR', msg:'That window is not yours to cancel.'});
+        return;
+      }
+      if (aw.descriptor.cancelKind === 'blocking') {
+        send(playerId, {type:'ERROR', msg:'This step cannot be cancelled — resolve it first.'});
+        return;
+      }
+      if (aw.descriptor.cancelKind === 'committed') {
+        send(playerId, {type:'ERROR', msg:'Cost has been paid — cannot cancel.'});
+        return;
+      }
+      const field = aw.field;
+      cancelWindow(game, aw, 'user');
+      log(game, `${aw.descriptor.kind} cancelled.`);
+      // Notify both players so client can clear pending UI.
+      broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: field, reason: 'user' });
+      break;
+    }
+
+    // Deprecated alias — CANCEL_ATTACK routes through the unified path.
+    // TODO(next sprint): remove after the client is fully migrated to
+    // CANCEL_WINDOW.
     case 'CANCEL_ATTACK': {
       if (game.phase !== 'ATTACKING' || !game.battleState) return;
       if (game.battleState.attackerId !== playerId) return;
+      // Route through cancelWindow on attackDeclarationWindow if open;
+      // fall back to legacy behaviour if not (shouldn't happen post-v2).
+      if (game.activeWindow && game.activeWindow.field === 'attackDeclarationWindow') {
+        const aw = game.activeWindow;
+        cancelWindow(game, aw, 'user');
+        log(game, `Attack cancelled.`);
+        broadcast(roomId, { type: 'WINDOW_CANCELLED', windowField: 'attackDeclarationWindow', reason: 'user' });
+        break;
+      }
+      // Fallback (legacy): unrest + clear battleState + restore MAIN.
       let attacker = null;
       if (game.battleState.attackerUid === p.leader.uid) attacker = p.leader;
       else attacker = p.field.find(c => c.uid === game.battleState.attackerUid);
