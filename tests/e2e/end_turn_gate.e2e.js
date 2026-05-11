@@ -58,16 +58,21 @@ async function subB_autoCancelAttackDeclaration(serverPort) {
   const clients = await lobby(serverPort);
   const { p1, p2 } = clients;
   await advanceToMain(clients);
+  // §6-5-6-1 — neither player can battle on their first turn. P1's first
+  // turn is turn 1; P2's first turn is turn 2. Advance to turn 3 (P1's
+  // second turn) before the attack-declaration test can fire legally.
+  for (let target = 2; target <= 3; target++) {
+    const cur = activeClient(clients);
+    cur.action({ type: 'END_TURN' });
+    await p1.waitForState(g => g.turn >= target, { label: `turn ${target} (p1)` });
+    await p2.waitForState(g => g.turn >= target, { label: `turn ${target} (p2)` });
+    const next = activeClient(clients);
+    next.action({ type: 'DRAW_CARD' });
+    next.action({ type: 'DRAW_DON' });
+    await p1.waitForState(g => g.phase === 'MAIN' && g.turn === target, { label: `turn ${target} MAIN (p1)` });
+    await p2.waitForState(g => g.phase === 'MAIN' && g.turn === target, { label: `turn ${target} MAIN (p2)` });
+  }
   let active = activeClient(clients);
-  active.action({ type: 'END_TURN' });
-  await p1.waitForState(g => g.turn >= 2, { label: 'turn 2' });
-  await p2.waitForState(g => g.turn >= 2, { label: 'turn 2 (p2)' });
-  active = activeClient(clients);
-  active.action({ type: 'DRAW_CARD' });
-  active.action({ type: 'DRAW_DON' });
-  await p1.waitForState(g => g.phase === 'MAIN', { label: 'turn 2 MAIN (p1)' });
-  await p2.waitForState(g => g.phase === 'MAIN', { label: 'turn 2 MAIN (p2)' });
-  active = activeClient(clients);
   const attackerUid = active.lastState.players[active.playerId].leader.uid;
   const turnBefore = active.lastState.turn;
   const activePlayerBefore = active.playerId;

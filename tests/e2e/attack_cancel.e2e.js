@@ -18,37 +18,28 @@ async function endTurn(client) {
   client.action({ type: 'END_TURN' });
 }
 
-async function advancePastTurn1(clients) {
-  // Turn 1 first player can't attack. End turn 1 (first player presses
-  // END_TURN immediately after entering MAIN). The new active player can
-  // attack on turn 2 with their leader (leaders are not playedThisTurn).
-  const active = activeClient(clients);
-  endTurn(active);
-  await clients.p1.waitForState(g => g.turn >= 2, { label: 'turn 2 reached' });
-  await clients.p2.waitForState(g => g.turn >= 2, { label: 'turn 2 reached' });
-  // New active player must DRAW_DON before MAIN.
-  const newActive = activeClient(clients);
-  // The phase flow turn 2: DRAW (with refresh) → DON → MAIN. The active
-  // player needs to draw a card too. Let me check what doRefresh+doDraw
-  // does — doEnd flips active, sets phase='DRAW' (which doRefresh ran).
-  // Actually nextPhase: DRAW → DON triggers doDraw. We're at DRAW. The
-  // active player sends NEXT_PHASE? No — see doRefresh in mulligan: it's
-  // called inline. Easier: NEXT_PHASE while at DRAW would advance to DON,
-  // which triggers doDraw side-effect. Then NEXT_PHASE again from DON
-  // triggers addDon. Let's drive via NEXT_PHASE / explicit actions.
-  // Look at handleAction NEXT_PHASE: if MAIN -> doEnd, if DON -> addDon,
-  // else nextPhase. Simplest: send DRAW_CARD then DRAW_DON.
-  newActive.action({ type: 'DRAW_CARD' });
-  newActive.action({ type: 'DRAW_DON' });
-  await clients.p1.waitForState(g => g.phase === 'MAIN', { label: 'turn 2 MAIN' });
-  await clients.p2.waitForState(g => g.phase === 'MAIN', { label: 'turn 2 MAIN' });
+async function advancePastFirstTurns(clients) {
+  // §6-5-6-1 — neither player can battle on their first turn. P1's first
+  // turn is turn 1; P2's first turn is turn 2. We need turn 3 (P1's
+  // SECOND turn) before any attack is legal.
+  for (let target = 2; target <= 3; target++) {
+    const active = activeClient(clients);
+    endTurn(active);
+    await clients.p1.waitForState(g => g.turn >= target, { label: `turn ${target} reached (p1)` });
+    await clients.p2.waitForState(g => g.turn >= target, { label: `turn ${target} reached (p2)` });
+    const newActive = activeClient(clients);
+    newActive.action({ type: 'DRAW_CARD' });
+    newActive.action({ type: 'DRAW_DON' });
+    await clients.p1.waitForState(g => g.phase === 'MAIN' && g.turn === target, { label: `turn ${target} MAIN (p1)` });
+    await clients.p2.waitForState(g => g.phase === 'MAIN' && g.turn === target, { label: `turn ${target} MAIN (p2)` });
+  }
 }
 
 async function scenario(serverPort) {
   const clients = await lobby(serverPort);
   const { p1, p2 } = clients;
   await advanceToMain(clients);
-  await advancePastTurn1(clients);
+  await advancePastFirstTurns(clients);
   const attacker = activeClient(clients);
   const defender = inactiveClient(clients);
   const attackerState = attacker.lastState.players[attacker.playerId];
