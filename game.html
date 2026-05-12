@@ -1273,6 +1273,17 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
         <button id="gwcConfirmBtn" class="gb-pbtn gb-pbtn-lg" style="display:none;" onclick="gwcConfirm()">Confirm</button>
         <button id="gwcCancelBtn" class="gb-pbtn gb-pbtn-sm" style="display:none;" onclick="gwcCancel()">Cancel</button>
       </div>
+      <!-- Client-side fallback Cancel. Shown whenever any local
+           selection state is active (sel, attackMode, donAttachMode,
+           blockerMode, counterMode) and no other button group is
+           already providing a Cancel CTA. Bridges the gap when
+           selectCard() shows no contextual button group (e.g. clicking
+           a rested character, or a leader on the first turn). Renderer
+           is renderSelectionFallbackControls(), hooked into the
+           renderGame monkey-patch tail next to renderGlobalWindowControls. -->
+      <div id="selectionFallbackControls" style="display:none;flex-direction:column;gap:4px;">
+        <button class="gb-pbtn gb-pbtn-sm" onclick="cancelSel()">Cancel</button>
+      </div>
       <!-- Phase 1: BLOCK_STEP info for the attacker -->
       <div id="blockStepInfo" style="display:none;flex-direction:column;gap:4px;">
         <div style="font-family:'Cinzel',serif;font-size:.72rem;color:var(--gold);text-align:center;line-height:1.35;" id="blockStepText"></div>
@@ -1529,6 +1540,10 @@ body.has-random-bg .wood-bg{background:rgba(0,0,0,0.55) !important;}
 <!-- ════════════════════════════════════════════════════
      JAVASCRIPT
 ════════════════════════════════════════════════════ -->
+<!-- Pure client predicates extracted so tests/ can require() them
+     without a DOM. Functions land on window for use by the inline
+     scripts below. -->
+<script src="client_predicates.js?v=1"></script>
 <script>
 // ─── BUNDLE VERSION TAG (loud so you can tell which build the browser is running) ───
 console.log('%c[BUNDLE v2025-04-20-SINGLE-PILE]', 'color:#ffcc00;font-weight:bold;font-size:14px;background:#201000;padding:2px 6px;');
@@ -3960,14 +3975,40 @@ function selectCard(uid, source) {
     }
 
     // Leader / Character
-    const cannotAttackTurn1 = game.turn === 1;
+    //
+    // ─── Client–server gate parity ──────────────────────────────────
+    // Each contextual button below mirrors a server-side gate so the
+    // client never surfaces an action the server will reject (§1-3-2
+    // corollary). When adding a new gate, update both sides.
+    //
+    //   #btnAttack       — server.js:1590 DECLARE_ATTACK
+    //                       · §6-5-6-1 isAttackerOnTheirFirstTurn (server.js:3445)
+    //                       · §7-1-1-1 attacker must be active (!rested)
+    //                       · §6-5-3-2 played-this-turn unless [Rush]
+    //   #btnActivateMain — server-side [Activate: Main] handler
+    //                       · own turn + MAIN phase
+    //                       · not OPT-used this turn
+    //                       · DON!! cost affordable
+    //   #btnAttachDon    — server-side ATTACH_DON handler
+    //                       · target not rested
+    //                       · own donActive >= 1
+    // ────────────────────────────────────────────────────────────────
+    // Bug 1 — mirror server-side §6-5-6-1 (isAttackerOnTheirFirstTurn,
+    // server.js:3445). The old `game.turn === 1` check only caught P1's
+    // first turn (game-turn 1); it missed P2's first turn (game-turn 2
+    // with hasTakenFirstTurn still false), so the Attack button rendered
+    // and the server's §6-5-6-1 toast was the only protection.
+    const cannotAttackFirstTurn = clientIsAttackerOnTheirFirstTurn(myId);
     const cannotAttackJustPlayed = source === 'field' && card.playedThisTurn && !ab.includes('[Rush]');
-    const canAttack = !card.rested && !cannotAttackTurn1 && !cannotAttackJustPlayed;
+    const canAttack = !card.rested && !cannotAttackFirstTurn && !cannotAttackJustPlayed;
     const canActivate = !card.rested && hasActivateMain && !usedUp && canAffordActivate;
+    // Bug 3 — #btnAttachDon parity gap: server-side ATTACH_DON requires
+    // donActive >= 1. The old check only gated on !card.rested.
+    const canAttachDon = !card.rested && (me.donActive || 0) >= 1;
 
     if (!canAttack && !canActivate) {
       hint(card.rested ? `${card.name} is rested.`
-           : cannotAttackTurn1 ? 'Cannot attack on turn 1.'
+           : cannotAttackFirstTurn ? 'Cannot attack on your first turn.'
            : cannotAttackJustPlayed ? `${card.name} cannot attack the turn it was played.`
            : (hasActivateMain && !canAffordActivate)
               ? `${card.name}: need ${activateCost} DON!! to activate (have ${myAvailableDon}).`
@@ -3980,14 +4021,28 @@ function selectCard(uid, source) {
     // (defence in depth alongside the server-side validation).
     const myActivePhase = isMyTurn() && game.phase === 'MAIN';
     document.getElementById('btnActivateMain').style.display = (canActivate && myActivePhase) ? 'block' : 'none';
-    document.getElementById('btnAttack').style.display       = canAttack   ? 'block' : 'none';
-    document.getElementById('btnAttachDon').style.display    = !card.rested ? 'block' : 'none';
+    document.getElementById('btnAttack').style.display       = canAttack    ? 'block' : 'none';
+    document.getElementById('btnAttachDon').style.display    = canAttachDon ? 'block' : 'none';
     const parts = [];
-    if (canActivate) parts.push('Activate');
-    if (canAttack)   parts.push('Attack');
-    parts.push('Attach DON!!');
+    if (canActivate)  parts.push('Activate');
+    if (canAttack)    parts.push('Attack');
+    if (canAttachDon) parts.push('Attach DON!!');
     hint(`${card.name} — ${parts.join(' / ')}`);
   }
+}
+// Wrap selectCard so the always-reachable Cancel fallback refreshes
+// after every click (selectCard has many early-returns; this avoids
+// sprinkling renderSelectionFallbackControls() at each one). Internal
+// callers use the bare `selectCard` name which resolves to whatever
+// the binding holds at call time — this reassignment captures them
+// all without touching the function body.
+{
+  const _origSelectCard = selectCard;
+  // eslint-disable-next-line no-func-assign
+  selectCard = function (uid, source) {
+    try { return _origSelectCard(uid, source); }
+    finally { try { renderSelectionFallbackControls(); } catch (e) {} }
+  };
 }
 
 // Cost of the [Activate: Main] block, in DON!! to return — 0 if no cost or no
@@ -4399,6 +4454,9 @@ function cancelSel() {
       document.getElementById('drawBtns').style.display = 'flex';
     }
   }
+  // Selection just cleared — refresh the always-reachable Cancel
+  // fallback so it disappears immediately (no waiting for GAME_STATE).
+  try { renderSelectionFallbackControls(); } catch (e) {}
 }
 // BUG 5 — while an opponent-driven window is open and I'm the active
 // player waiting on the chooser, I must not be able to take any action
@@ -4419,6 +4477,21 @@ function isMyTurn()  {
   return game?.activePlayer === myId;
 }
 function myPlayer()  { return game?.players[myId]; }
+// Mirrors server-side isAttackerOnTheirFirstTurn (server.js:3445) on the
+// §6-5-6-1 "Neither player can battle on their first turn" gate. The
+// pure form lives in client_predicates.js (exposed as
+// window.__clientPredicates) so the same logic is unit-testable without
+// a DOM. This wrapper takes a playerId, reads the current `game`, and
+// fails-closed if the player or flag is missing.
+function clientIsAttackerOnTheirFirstTurn(playerId) {
+  const id = (playerId !== undefined && playerId !== null) ? playerId : myId;
+  const pure = (typeof window !== 'undefined' && window.__clientPredicates)
+    ? window.__clientPredicates.clientIsAttackerOnTheirFirstTurn
+    : null;
+  if (pure) return pure(game, id);
+  const p = game && game.players && game.players[id];
+  return !p || !p.hasTakenFirstTurn;
+}
 function oppPlayer() { const id = Object.keys(game.players).find(i => i !== myId); return game.players[id]; }
 function findCard(uid, player) {
   if (!player) return null;
@@ -4925,6 +4998,36 @@ function renderGlobalWindowControls() {
   if (confirmBtn) confirmBtn.style.display = confirm ? 'block' : 'none';
   if (cancelBtn) cancelBtn.style.display = cancel ? 'block' : 'none';
 }
+
+// True iff anything is selected — a hand card, a field card, a leader,
+// a DON-attach in progress, an attack target picker open, a blocker
+// pick in progress, or a counter pick in progress. Drives
+// renderSelectionFallbackControls(); future selection modes only need
+// to add their flag here to inherit the fallback Cancel.
+function anySelectionActive() {
+  return !!(sel || attackMode || donAttachMode || blockerMode || counterMode);
+}
+
+// Always-reachable Cancel for client-side selection states. The
+// existing #globalWindowControls handles server-owned interactive
+// windows; this fallback bridges the gap for selections that show no
+// contextual button group (e.g. clicking a rested character, or a
+// leader on the first turn after Bug 1 fix). The `!provided` guard
+// reads the existing groups' display state directly so we never
+// double-render a Cancel.
+function renderSelectionFallbackControls() {
+  const root = document.getElementById('selectionFallbackControls');
+  if (!root) return;
+  const gwc = document.getElementById('globalWindowControls');
+  const battleBtns = document.getElementById('battleBtns');
+  const handSelBtns = document.getElementById('handSelBtns');
+  const gwcVisible = !!gwc && gwc.style.display !== 'none';
+  const battleVisible = !!battleBtns && battleBtns.style.display !== 'none';
+  const handSelVisible = !!handSelBtns && handSelBtns.style.display !== 'none';
+  const provided = gwcVisible || battleVisible || handSelVisible;
+  root.style.display = (anySelectionActive() && !provided) ? 'flex' : 'none';
+}
+
 // Hook into the main render loop. The existing renderGame() is called
 // after every GAME_STATE; we just monkey-patch the tail.
 (function () {
@@ -4933,6 +5036,7 @@ function renderGlobalWindowControls() {
     window.renderGame = function () {
       const r = orig.apply(this, arguments);
       try { renderGlobalWindowControls(); } catch (e) { console.warn('gwc:', e); }
+      try { renderSelectionFallbackControls(); } catch (e) { console.warn('sfc:', e); }
       return r;
     };
   }
