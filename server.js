@@ -523,7 +523,7 @@ const CARD_DB = [
 
   { id:'ST07-014', name:'Gypsy the Crusader', type:'CHARACTER', color:'Yellow', attribute:'Strike', affiliation:'Apostles High Council',
     power:5000, cost:3, counter:1000, image:IMG('ST07','ST07-014','png'), useNewPipeline:true,
-    ability:"" },
+    ability:"\"no stranger to me is this wanderer: may years ago passed he by.\"" },
 
   { id:'ST07-015', name:'Blasphemous Technology', type:'EVENT', color:'Yellow', attribute:'', affiliation:'Apostles High Council',
     power:0, cost:5, counter:0, image:IMG('ST07','ST07-015','png'), useNewPipeline:true,
