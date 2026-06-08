@@ -22,17 +22,31 @@ When adding a card, follow the pattern in `tests/pipeline_anna_of_brittany.test.
 
 ## Deploy
 
-Push to `github.com/MotherOf-Pearl/tcg` `main`, then on `192.168.1.3`:
+Push to `github.com/MotherOf-Pearl/tcg` `main`. `192.168.1.3` pulls within 60s via cron and restarts the container only on actual change. No manual step.
 
 ```
-ssh root@192.168.1.3 'cd /mnt/user/appdata/onepiece-game && \
-  curl -sO https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/server.js && \
-  curl -sO https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/game.html && \
-  curl -sO https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/index.html && \
-  curl -sO https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/deck-editor.html && \
-  curl -sO https://raw.githubusercontent.com/MotherOf-Pearl/tcg/main/background.js && \
-  docker restart onepiece-game'
+git push origin main
 ```
+
+Watch `/mnt/user/appdata/onepiece-game/auto-deploy.log` if anything looks wrong.
+
+### One-time setup on 192.168.1.3 (enables auto-deploy)
+
+```
+# Replace curl-fetched dir with a proper git clone
+cd /mnt/user/appdata
+mv onepiece-game onepiece-game.bak
+git clone https://github.com/MotherOf-Pearl/tcg.git onepiece-game
+# If the container needs node_modules from the old dir:
+cp -r onepiece-game.bak/node_modules onepiece-game/ 2>/dev/null || true
+chmod +x onepiece-game/auto-deploy.sh
+docker restart onepiece-game   # confirm it boots from the cloned layout
+
+# Install cron
+(crontab -l 2>/dev/null; echo "* * * * * /mnt/user/appdata/onepiece-game/auto-deploy.sh") | crontab -
+```
+
+`auto-deploy.sh` ships in repo root. After verification, `rm -rf onepiece-game.bak`.
 
 ## Pre-deploy gate (HARD RULE)
 
