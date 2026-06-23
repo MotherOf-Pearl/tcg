@@ -2,6 +2,7 @@
 # Auto-deploy: pull latest main and restart container if HEAD changed.
 # Install via cron:
 #   * * * * * /mnt/user/appdata/onepiece-game/auto-deploy.sh
+# Verified end-to-end 2026-06-23.
 set -euo pipefail
 
 REPO_DIR=/mnt/user/appdata/onepiece-game
