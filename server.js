@@ -430,7 +430,7 @@ const CARD_DB = [
     power:6000, cost:5, counter:1000, image:IMG('ST04','ST04-005','png'), useNewPipeline:true,
     ability:"[Blocker] [On Play] DON!! -1: Draw 2 cards and trash 1 card from your hand." },
 
-  { id:'ST04-004', name:'Chris the Visually Impaired', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
+  { id:'ST04-004', name:'Commander Hendersonian', type:'CHARACTER', color:'Purple', attribute:'Strike', affiliation:'Holy Roman Empire',
     power:7000, cost:6, counter:0, image:IMG('ST04','ST04-004','png'), useNewPipeline:true,
     ability:"[On Play] DON!! -1: K.O. up to 1 of your opponent's Characters with a cost of 4 or less." },
 
